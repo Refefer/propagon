@@ -1,0 +1,9 @@
+[package]
+name = "pairwizer"
+version = "0.1.0"
+authors = ["Andrew Stanton <refefer@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.26.0"
+random = "0.12.2"

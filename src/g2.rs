@@ -1,0 +1,215 @@
+use std::collections::HashMap;
+use std::hash::Hash;
+
+/// Stats of a Player
+#[derive(Debug,Clone,Copy)]
+pub struct Player {
+
+    /// Skill rating of a player
+    pub rating: f64,
+
+    /// Variance of a player's skill
+    pub rd: f64,
+
+    /// Measurement
+    pub sigma: f64
+}
+
+impl Player {
+    pub fn create( rating: f64, rd: f64, sigma: f64) -> Self {
+        Player { rating: rating, rd: rd, sigma: sigma }
+    }
+
+    pub fn mu(&self, env: &Env) -> f64 {
+        (self.rating - env.rating) / env.scale_factor
+    }
+
+    pub fn phi(&self, env: &Env) -> f64 {
+        self.rd / env.scale_factor
+    }
+
+    pub fn bounds(&self) -> (f64, f64) {
+        (self.rating - 2. * self.rd, self.rating + 2. * self.rd)
+    }
+}
+
+/// Initializes a new Glicko2 environment
+pub struct Env {
+    rating: f64,
+    rd: f64,
+    sigma: f64,
+    scale_factor: f64
+}
+
+impl Env {
+    pub fn new(rating: f64, rd: f64, sigma: f64, scale_factor: f64) -> Self {
+        Env {
+            rating: rating,
+            rd: rd,
+            sigma: sigma,
+            scale_factor: scale_factor
+        }
+    }
+
+    pub fn new_match_set<'a, H: Clone + Hash + Eq>(&'a self, tau: f64) -> Series<'a, H> {
+        Series::new(self, tau)
+    }
+}
+
+impl Default for Env {
+    fn default() -> Self {
+        Env::new(1500., 350., 0.6, 173.7178f64)
+    }
+}
+
+/// An updateable set of matches or series
+pub struct Series<'a, ID: Hash + Eq> {
+    env: &'a Env,
+    tau: f64,
+    teams: HashMap<ID, Player>
+}
+
+impl <'a, ID: Clone + Hash + Eq> Series<'a, ID> {
+    /// Creates a new series using the provided environment 
+    pub fn new(env: &'a Env, tau: f64) -> Self {
+        Series {
+            env: env,
+            tau: tau,
+            teams: HashMap::new()
+        }
+    }
+
+    /// Updates the internal matches with the new set of results
+    /// The first ID is a winner, the second one is the loser
+    pub fn update(&mut self, games: Vec<(ID, ID)>) {
+        // Compute v and delta for all matches
+        let mut v = HashMap::new();
+        let mut delta = HashMap::new();
+        for (win_team, loser_team) in games {
+
+            // If we haven't seen the team before, add it to the mapping
+            for t in [&win_team, &loser_team].iter() {
+                if !self.teams.contains_key(t) {
+                    let p = Player::create(self.env.rating, self.env.rd, self.env.sigma);
+                    self.teams.insert((*t).clone(), p);
+                }
+            }
+
+            // Insert winner and loser if not in teams
+            for (w, l, s) in &[(&win_team, &loser_team, 1f64), 
+                               (&loser_team, &win_team, 0.)] {
+                let (vij, delta_i_j) = compute_vij_d(
+                    &self.env, &self.teams[w], &self.teams[l], *s);
+
+                *v.entry((*w).clone()).or_insert(0f64) += vij;
+                *delta.entry((*w).clone()).or_insert(0f64) += delta_i_j;
+            }
+        }
+
+        // Compute new ratings, confidence, and volatility
+        let mut new_teams = HashMap::new();
+        for (team_id, team) in self.teams.iter_mut() {
+            if v.contains_key(team_id) {
+                let v_t = 1. / v[team_id];
+                let delta_t = v_t * delta[team_id];
+                let sigma_prime = compute_volatility(&self.env, team, delta_t, v_t, self.tau);
+                let phi_star = (team.phi(&self.env).powi(2) + sigma_prime.powi(2)).powf(0.5);
+
+                let phi_prime = 1. / (1. / phi_star.powi(2) + 1. / v_t).powf(0.5);
+                let mu_prime = team.mu(&self.env) + phi_prime.powi(2) * delta[team_id];
+                let r_prime = mu_prime * self.env.scale_factor + self.env.rating;
+                let rd_prime = phi_prime * self.env.scale_factor;
+                new_teams.insert(team_id.clone(), Player::create(r_prime, rd_prime, sigma_prime));
+            } else {
+                // We need to do a bit more here, but ignore for now
+                new_teams.insert(team_id.clone(), team.clone());
+            }
+        }
+        self.teams = new_teams;
+    }
+
+    pub fn teams(&self) -> &HashMap<ID,Player> {
+        &self.teams
+    }
+}
+
+
+#[inline]
+fn g_of_phi(phi: f64) -> f64 {
+    1. / (1. + 3. * phi.powi(2) / (std::f64::consts::PI).powi(2)).powf(0.5)
+}
+
+#[inline]
+fn e(mu: f64, mu_j: f64, phi: f64) -> f64 {
+    1. / (1. + (-g_of_phi(phi) * (mu - mu_j)).exp())
+}
+
+// Compute vi_j and \delta_i_j
+fn compute_vij_d(env: &Env, winner: &Player, loser: &Player, score: f64) -> (f64, f64) {
+    let mu_w = winner.mu(env);
+    let mu_l = loser.mu(env);
+    let phi_l = loser.phi(env);
+
+    let g_phi = g_of_phi(phi_l);
+    let expected_score =  e(mu_w, mu_l, phi_l);
+    let vij = g_phi.powi(2) * expected_score * (1. - expected_score);
+    let delta_i_j = g_phi * (score - expected_score);
+    (vij, delta_i_j)
+}
+
+// Algorithm defined: 
+// https://www.researchgate.net/profile/Mark_Glickman/publication/267801528_Example_of_the_Glicko-2_system/links/556c3d4408aefcb861d633e2/Example-of-the-Glicko-2-system.pdf
+#[allow(non_snake_case)] 
+fn compute_volatility(env: &Env, team: &Player, delta: f64, v: f64, tau: f64) -> f64 {
+    let phi = team.phi(env);
+    let eps = 1e-7;
+    let a = team.sigma.powi(2).ln();
+
+    let f = |x: f64| -> f64 {
+        let nom1 = x.exp() * (delta.powi(2) - phi.powi(2) - v - x.exp()); 
+        let denom1 = 2. * (phi.powi(2) + v + x.exp());
+
+        nom1 / denom1 - (x - a) / tau.powi(2)
+
+    };
+
+    // We find the brackets for the algorithm below
+    let mut A = a;
+    let mut B = if delta.powi(2) > phi.powi(2) + v {
+        delta.powi(2) - phi.powi(2) - v
+    } else {
+        let mut k = 1.;
+        loop {
+            let bp = f(a - k * tau.powf(0.5));
+            if bp >= 0. {
+                break
+            } else {
+                k += 1.;
+            }
+        }
+        a - k * tau.powf(0.5)
+    };
+
+    // Find the first zero
+    let mut fa = f(A);
+    let mut fb = f(B);
+    loop {
+        if (B - A) > eps { break }
+        let C = A + (A - B) * fa / fb;
+        let fc = f(C);
+        if fc * fb < 0. {
+            A = B;
+            fa = fb;
+        } else {
+            fa /= 2.;
+        }
+
+        B = C;
+        fb = fc;
+    }
+
+    // New volatility
+    (A / 2.).exp()
+}
+
+
