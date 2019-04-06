@@ -146,7 +146,7 @@ fn parse<'a>() -> ArgMatches<'a> {
              .long("groups-are-separate")
              .help("Treats separate files and groups as separate datasets to process"))
 
-        .subcommand(SubCommand::with_name("minor-maxim")
+        .subcommand(SubCommand::with_name("btm-mm")
             .arg(Arg::with_name("min-graph-size")
                  .long("min-graph-size")
                  .takes_value(true)
@@ -220,7 +220,7 @@ fn main() {
                 eprintln!("Post Filter - Set {}: Read in {} games", i, g.len());
             }
 
-            if let Some(ref sub_args) = args.subcommand_matches("minor-maxim") {
+            if let Some(ref sub_args) = args.subcommand_matches("btm-mm") {
                 // Flatten games
                 let all_games = games.into_iter().flatten().collect();
                 mm::minor_maxim(sub_args, all_games, min_count);
