@@ -42,6 +42,7 @@ pub struct Env {
 }
 
 impl Env {
+    /// Creates a new environment with the provided values as defaults
     pub fn new(rating: f64, rd: f64, sigma: f64, scale_factor: f64) -> Self {
         Env {
             rating: rating,
@@ -51,6 +52,7 @@ impl Env {
         }
     }
 
+    /// Creates a new data series.
     pub fn new_match_set<'a, H: Clone + Hash + Eq>(&'a self, tau: f64) -> Series<'a, H> {
         Series::new(self, tau)
     }
@@ -83,8 +85,7 @@ impl <'a, ID: Clone + Hash + Eq> Series<'a, ID> {
     /// The first ID is a winner, the second one is the loser
     pub fn update(&mut self, games: Vec<(ID, ID)>) {
         // Compute v and delta for all matches
-        let mut v = HashMap::new();
-        let mut delta = HashMap::new();
+        let mut dv = HashMap::new();
         for (win_team, loser_team) in games {
 
             // If we haven't seen the team before, add it to the mapping
@@ -101,31 +102,30 @@ impl <'a, ID: Clone + Hash + Eq> Series<'a, ID> {
                 let (vij, delta_i_j) = compute_vij_d(
                     &self.env, &self.teams[w], &self.teams[l], *s);
 
-                *v.entry((*w).clone()).or_insert(0f64) += vij;
-                *delta.entry((*w).clone()).or_insert(0f64) += delta_i_j;
+                let (di, vi) = dv.entry((*w).clone()).or_insert((0f64, 0f64));
+                *di += vij;
+                *vi += delta_i_j;
             }
         }
 
         // Compute new ratings, confidence, and volatility
-        let mut new_teams = HashMap::new();
         for (team_id, team) in self.teams.iter_mut() {
-            if v.contains_key(team_id) {
-                let v_t = 1. / v[team_id];
-                let delta_t = v_t * delta[team_id];
+            if dv.contains_key(team_id) {
+                let (v_i, d_i) = dv[team_id];
+                let v_t = 1. / v_i;
+                let delta_t = v_t * d_i;
                 let sigma_prime = compute_volatility(&self.env, team, delta_t, v_t, self.tau);
                 let phi_star = (team.phi(&self.env).powi(2) + sigma_prime.powi(2)).powf(0.5);
 
                 let phi_prime = 1. / (1. / phi_star.powi(2) + 1. / v_t).powf(0.5);
-                let mu_prime = team.mu(&self.env) + phi_prime.powi(2) * delta[team_id];
+                let mu_prime = team.mu(&self.env) + phi_prime.powi(2) * d_i;
                 let r_prime = mu_prime * self.env.scale_factor + self.env.rating;
                 let rd_prime = phi_prime * self.env.scale_factor;
-                new_teams.insert(team_id.clone(), Player::create(r_prime, rd_prime, sigma_prime));
+                *team = Player::create(r_prime, rd_prime, sigma_prime);
             } else {
                 // We need to do a bit more here, but ignore for now
-                new_teams.insert(team_id.clone(), team.clone());
             }
         }
-        self.teams = new_teams;
     }
 
     pub fn teams(&self) -> &HashMap<ID,Player> {
