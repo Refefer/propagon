@@ -85,7 +85,7 @@ impl <'a, ID: Clone + Hash + Eq> Series<'a, ID> {
     /// The first ID is a winner, the second one is the loser
     pub fn update(&mut self, games: Vec<(ID, ID)>) {
         // Compute v and delta for all matches
-        let mut dv = HashMap::new();
+        let mut dv = HashMap::with_capacity(self.teams.capacity());
         for (win_team, loser_team) in games {
 
             // If we haven't seen the team before, add it to the mapping
@@ -109,7 +109,11 @@ impl <'a, ID: Clone + Hash + Eq> Series<'a, ID> {
         }
 
         // Compute new ratings, confidence, and volatility
-        for (team_id, team) in self.teams.iter_mut() {
+        //for (team_id, team) in self.teams.iter_mut() {
+        for team_id in dv.keys() {
+            let team = self.teams.get_mut(team_id)
+                .expect("This should have been added in the first pass");
+
             if dv.contains_key(team_id) {
                 let (v_i, d_i) = dv[team_id];
                 let v_t = 1. / v_i;
@@ -193,7 +197,7 @@ fn compute_volatility(env: &Env, team: &Player, delta: f64, v: f64, tau: f64) ->
     // Find the first zero
     let mut fa = f(A);
     let mut fb = f(B);
-    loop {
+    for _ in 0..100 {
         if (B - A) > eps { break }
         let C = A + (A - B) * fa / fb;
         let fc = f(C);
@@ -206,6 +210,9 @@ fn compute_volatility(env: &Env, team: &Player, delta: f64, v: f64, tau: f64) ->
 
         B = C;
         fb = fc;
+    }
+    if (B - A) <= eps {
+        eprintln!("Couldn't find a zero: {},{},{}", A, B, eps);
     }
 
     // New volatility

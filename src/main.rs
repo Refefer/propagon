@@ -111,7 +111,8 @@ fn glicko(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
     let use_mu = args.is_present("use-mu");
     let env = g2::Env::default();
     let mut series = env.new_match_set(tau);
-    for game_set in games {
+    for (i, game_set) in games.into_iter().enumerate() {
+        eprintln!("Game set {}, Known teams: {}", i, series.teams().len());
         let gs = game_set.into_iter().map(|(w,l,_)| (w, l)).collect();
         series.update(gs);
     }
