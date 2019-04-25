@@ -132,8 +132,8 @@ fn glicko(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 }
 
 fn btm_lr(args: &&clap::ArgMatches<'_>, games: Games) {
-    let alpha = value_t!(args, "alpha", f32).unwrap_or(10.);
-    let passes = value_t!(args, "passes", usize).unwrap_or(10);
+    let alpha = value_t!(args, "alpha", f32).unwrap_or(1.);
+    let passes = value_t!(args, "passes", usize).unwrap_or(100);
     let mut scores = lr::lr(&games, passes, alpha);
     
     scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).unwrap());
