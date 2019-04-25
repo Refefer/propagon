@@ -99,7 +99,7 @@ fn rate(args: &&clap::ArgMatches<'_>, games: Games) {
             let range = z * (p_t / n_t * (1. - p_t)).powf(0.5);
             scores.push((team, p_t - range));
         }
-        scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).unwrap());
+        scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).expect("Shouldn't blow up!"));
         emit_scores(scores.into_iter());
     }
            
@@ -125,7 +125,7 @@ fn glicko(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
             }
         }).collect();
 
-    scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).unwrap());
+    scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).expect("blew up in sort"));
     emit_scores(scores.into_iter());
 
 }
