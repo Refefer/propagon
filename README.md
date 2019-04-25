@@ -9,7 +9,7 @@ Algorithms Implemented
 - [x] Bradley-Terry Model (Using MM Method)
 - [x] Glicko2
 - [x] Rate
-- [ ] Bradley-Terry Model (Logistic Method)
+- [x] Bradley-Terry Model (Logistic Method)
 - [ ] ELO
 - [ ] TrueSkill
 - [ ] Blade/Chest

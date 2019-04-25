@@ -26,8 +26,7 @@ impl BtmLr {
     }
 
     pub fn update(&mut self, games: &Games, passes: usize, alpha: f32) {
-        // Normalize the weights
-        self.norm();
+
         // We need to remap all values to a vector
         for (w, l, _) in games {
             for id in &[*w,*l] {
@@ -56,5 +55,7 @@ impl BtmLr {
                 *e -= g / weights;
             }
         }
+        // Normalize the weights
+        self.norm();
     }
 }
