@@ -1,4 +1,5 @@
 mod mm;
+mod lr;
 mod g2;
 mod reader;
 
@@ -130,6 +131,15 @@ fn glicko(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 
 }
 
+fn btm_lr(args: &&clap::ArgMatches<'_>, games: Games) {
+    let alpha = value_t!(args, "alpha", f32).unwrap_or(10.);
+    let passes = value_t!(args, "passes", usize).unwrap_or(10);
+    let mut scores = lr::lr(&games, passes, alpha);
+    
+    scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).unwrap());
+    emit_scores(scores.into_iter());
+}
+
 fn parse<'a>() -> ArgMatches<'a> {
     App::new("btm")
         .version("0.0.1")
@@ -175,6 +185,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("random-subgraph-weight")
                  .takes_value(true)
                  .help("Weight of the games.  Defaults to 1e-3")))
+
         .subcommand(SubCommand::with_name("rate")
             .arg(Arg::with_name("confidence-interval")
                  .long("confidence-interval")
@@ -190,6 +201,16 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("use-mu")
                  .long("use-mu")
                  .help("If provided, uses mu instead of 95% lower-bound")))
+
+        .subcommand(SubCommand::with_name("btm-lr")
+            .arg(Arg::with_name("alpha")
+                 .long("alpha")
+                 .takes_value(true)
+                 .help("Learning rate for each pass.  Defaults to 1e-2."))
+            .arg(Arg::with_name("passes")
+                 .long("passes")
+                 .takes_value(true)
+                 .help("Number of passes to perform SGD.  Default is 10")))
 
         .get_matches()
 }
@@ -230,6 +251,9 @@ fn main() {
                 rate(sub_args, all_games);
             } else if let Some(ref sub_args) = args.subcommand_matches("glicko2") {
                 glicko(sub_args, games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("btm-lr") {
+                let all_games = games.into_iter().flatten().collect();
+                btm_lr(sub_args, all_games);
             }
             // print a separator
             println!("");
