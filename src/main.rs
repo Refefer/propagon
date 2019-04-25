@@ -131,10 +131,17 @@ fn glicko(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 
 }
 
-fn btm_lr(args: &&clap::ArgMatches<'_>, games: Games) {
+fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
     let alpha = value_t!(args, "alpha", f32).unwrap_or(1.);
     let passes = value_t!(args, "passes", usize).unwrap_or(100);
-    let mut scores = lr::lr(&games, passes, alpha);
+    let mut btm = lr::BtmLr::new();
+    for (i, games_set) in games.into_iter().enumerate() {
+
+        eprintln!("Processing GameSet {}", i);
+        btm.update(&games_set, passes, alpha);
+    }
+
+    let mut scores: Vec<_> = btm.scores.into_iter().collect();
     
     scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).unwrap());
     emit_scores(scores.into_iter());
@@ -252,8 +259,7 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("glicko2") {
                 glicko(sub_args, games);
             } else if let Some(ref sub_args) = args.subcommand_matches("btm-lr") {
-                let all_games = games.into_iter().flatten().collect();
-                btm_lr(sub_args, all_games);
+                btm_lr(sub_args, games);
             }
             // print a separator
             println!("");
