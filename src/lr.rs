@@ -1,7 +1,12 @@
 extern crate random;
-use super::Games;
+extern crate rayon;
+
+use rayon::prelude::*;
 
 use std::collections::HashMap;
+
+use super::Games;
+
 
 pub struct BtmLr {
     pub scores: HashMap<u32, f32>
@@ -36,23 +41,25 @@ impl BtmLr {
             }
         }
 
-        let mut grads = Vec::with_capacity(games.len() * 2);
-        for i in 0..passes {
-            let mut weights = 0.;
-            for (j, (w, l, weight)) in games.iter().enumerate() {
+        let weights: f32 = games.par_iter()
+            .map(|(_,_,w)| w).sum();
+        let mut grads = Vec::new();
+        for _i in 0..passes {
+
+            games.par_iter().map(|(w, l, weight)| {
                 let w_x = self.scores[w];
                 let l_x = self.scores[l];
                 let y_hat = sigmoid(w_x - l_x);
-                weights += weight;
                 let denom = alpha * weight * (y_hat - 1.0);
-                grads.push((w, denom));
-                grads.push((l, -denom));
-            }
+                (w, denom, l, -denom)
+            }).collect_into_vec(&mut grads);
 
             // Update games
-            for (idx, g) in grads.drain(0..) {
-                let e = self.scores.entry(*idx).or_insert(0.);
+            for (w, g, l, g2) in grads.drain(0..) {
+                let e = self.scores.entry(*w).or_insert(0.);
                 *e -= g / weights;
+                let e = self.scores.entry(*l).or_insert(0.);
+                *e -= g2 / weights;
             }
         }
         // Normalize the weights
