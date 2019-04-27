@@ -9,7 +9,10 @@ use super::Games;
 
 
 pub struct BtmLr {
-    pub scores: HashMap<u32, f32>
+    pub scores: HashMap<u32, f32>,
+    pub passes: usize,
+    pub alpha: f32,
+    pub decay: f32
 }
 
 #[inline]
@@ -19,47 +22,42 @@ fn sigmoid(x: f32) -> f32 {
 
 impl BtmLr {
 
-    pub fn new() -> Self {
-        BtmLr { scores: HashMap::new() }
+    pub fn new(passes: usize, alpha: f32, decay: f32) -> Self {
+        BtmLr { 
+            scores: HashMap::new(), 
+            passes: passes, 
+            alpha: alpha, 
+            decay: decay 
+        }
     }
 
     fn norm(&mut self) {
         let norm = self.scores.values().map(|x| x.powi(2)).sum::<f32>().powf(0.5);
-        for w in self.scores.values_mut() {
-            *w /= norm;
+        for wi in self.scores.values_mut() {
+            *wi = self.decay * *wi / norm;
         }
     }
 
-    pub fn update(&mut self, games: &Games, passes: usize, alpha: f32) {
+    pub fn update(&mut self, games: &Games) {
 
-        // We need to remap all values to a vector
-        for (w, l, _) in games {
-            for id in &[*w,*l] {
-                if !self.scores.contains_key(id) {
-                    self.scores.insert(*id, 0f32);
-                }
-            }
-        }
-
-        let weights: f32 = games.par_iter()
-            .map(|(_,_,w)| w).sum();
+        let weights: f32 = games.par_iter().map(|(_,_,w)| w).sum();
         let mut grads = Vec::new();
-        for _i in 0..passes {
+        for _i in 0..self.passes {
 
             games.par_iter().map(|(w, l, weight)| {
                 let w_x = self.scores[w];
                 let l_x = self.scores[l];
                 let y_hat = sigmoid(w_x - l_x);
-                let denom = alpha * weight * (y_hat - 1.0);
-                (w, denom, l, -denom)
+                let denom = self.alpha * weight * (y_hat - 1.0);
+                (w, denom / weights, l, -denom / weights)
             }).collect_into_vec(&mut grads);
 
             // Update games
             for (w, g, l, g2) in grads.drain(0..) {
                 let e = self.scores.entry(*w).or_insert(0.);
-                *e -= g / weights;
+                *e -= g;
                 let e = self.scores.entry(*l).or_insert(0.);
-                *e -= g2 / weights;
+                *e -= g2;
             }
         }
         // Normalize the weights

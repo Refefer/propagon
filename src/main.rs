@@ -133,12 +133,13 @@ fn glicko(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 
 fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
     let alpha = value_t!(args, "alpha", f32).unwrap_or(1.);
-    let passes = value_t!(args, "passes", usize).unwrap_or(100);
-    let mut btm = lr::BtmLr::new();
+    let decay = value_t!(args, "decay", f32).unwrap_or(1.);
+    let passes = value_t!(args, "passes", usize).unwrap_or(10);
+    let mut btm = lr::BtmLr::new(passes, alpha, decay);
     for (i, games_set) in games.into_iter().enumerate() {
 
         eprintln!("Processing GameSet {}", i);
-        btm.update(&games_set, passes, alpha);
+        btm.update(&games_set);
     }
 
     let mut scores: Vec<_> = btm.scores.into_iter().collect();
@@ -214,6 +215,10 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("alpha")
                  .takes_value(true)
                  .help("Learning rate for each pass.  Defaults to 1e-2."))
+            .arg(Arg::with_name("decay")
+                 .long("decay")
+                 .takes_value(true)
+                 .help("Decays weights each pass."))
             .arg(Arg::with_name("passes")
                  .long("passes")
                  .takes_value(true)
