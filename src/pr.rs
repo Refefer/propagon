@@ -17,17 +17,23 @@ impl PageRank {
     }
 
     pub fn compute(&self, games: Games) -> Vec<(u32, f32)> {
-        // Build dag, set initial policy
+        // Build dag
         let mut dag = HashMap::new();
-        let mut policy = HashMap::new();
-        for (winner, loser, _) in games {
+        for (winner, loser, _) in games.into_iter() {
             // Add edge to dag
-            let e = dag.entry(loser).or_insert_with(|| HashSet::new());
+            let e = dag.entry(loser).or_insert_with(|| HashSet::with_capacity(2));
             e.insert(winner);
-
+        }
+        eprintln!("Finished building DAG");
+        dag.shrink_to_fit();
+        let mut policy = HashMap::new();
+        for (from_node, to_nodes) in dag.iter_mut() {
+            to_nodes.shrink_to_fit();
             // Add initial items to policy
-            policy.insert(winner, 0f32);
-            policy.insert(loser, 0f32);
+            policy.insert(*from_node, 0f32);
+            for node in to_nodes.iter() {
+                policy.insert(*node, 0f32);
+            }
         }
 
         // set initial policy parameters
@@ -36,7 +42,7 @@ impl PageRank {
             *v = 1. / n_docs as f32;
         }
 
-        let mut new_policy = HashMap::new();
+        let mut new_policy = HashMap::with_capacity(policy.capacity());
         for iter in 0..self.iterations {
             eprintln!("Iteration: {}", iter);
 

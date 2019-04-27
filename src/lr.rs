@@ -42,7 +42,8 @@ impl BtmLr {
 
         let weights: f32 = games.par_iter().map(|(_,_,w)| w).sum();
         let mut grads = Vec::new();
-        for _i in 0..self.passes {
+        for it in 0..self.passes {
+            eprintln!("Iteration: {}", it);
 
             games.par_iter().map(|(w, l, weight)| {
                 let w_x = self.scores.get(w).unwrap_or(&0.);
