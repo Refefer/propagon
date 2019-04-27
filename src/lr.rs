@@ -45,8 +45,8 @@ impl BtmLr {
         for _i in 0..self.passes {
 
             games.par_iter().map(|(w, l, weight)| {
-                let w_x = self.scores[w];
-                let l_x = self.scores[l];
+                let w_x = self.scores.get(w).unwrap_or(&0.);
+                let l_x = self.scores.get(l).unwrap_or(&0.);
                 let y_hat = sigmoid(w_x - l_x);
                 let denom = self.alpha * weight * (y_hat - 1.0);
                 (w, denom / weights, l, -denom / weights)

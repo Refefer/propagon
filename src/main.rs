@@ -2,6 +2,7 @@ mod mm;
 mod lr;
 mod g2;
 mod reader;
+mod pr;
 
 #[macro_use]
 extern crate clap;
@@ -148,6 +149,14 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
     emit_scores(scores.into_iter());
 }
 
+fn page_rank(args: &&clap::ArgMatches<'_>, games: Games) {
+    let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
+    let df = value_t!(args, "damping-factor", f32).unwrap_or(0.85);
+    let page_rank = pr::PageRank::new(df, iterations);
+    let scores = page_rank.compute(games);
+    emit_scores(scores.into_iter());
+}
+
 fn parse<'a>() -> ArgMatches<'a> {
     App::new("btm")
         .version("0.0.1")
@@ -223,6 +232,16 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("passes")
                  .takes_value(true)
                  .help("Number of passes to perform SGD.  Default is 10")))
+        .subcommand(SubCommand::with_name("page-rank")
+            .arg(Arg::with_name("iterations")
+                 .long("iterations")
+                 .takes_value(true)
+                 .help("Number of iterations to compute on the graph"))
+            .arg(Arg::with_name("damping-factor")
+                 .long("damping-factor")
+                 .takes_value(true)
+                 .help("Damping Factor to use.  Default is 0.85")))
+
 
         .get_matches()
 }
@@ -265,6 +284,9 @@ fn main() {
                 glicko(sub_args, games);
             } else if let Some(ref sub_args) = args.subcommand_matches("btm-lr") {
                 btm_lr(sub_args, games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("page-rank") {
+                let all_games = games.into_iter().flatten().collect();
+                page_rank(sub_args, all_games);
             }
             // print a separator
             println!("");
