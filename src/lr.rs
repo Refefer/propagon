@@ -1,9 +1,10 @@
 extern crate random;
 extern crate rayon;
+extern crate hashbrown;
 
 use rayon::prelude::*;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use super::Games;
 

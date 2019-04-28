@@ -152,7 +152,15 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 fn page_rank(args: &&clap::ArgMatches<'_>, games: Games) {
     let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
     let df = value_t!(args, "damping-factor", f32).unwrap_or(0.85);
-    let page_rank = pr::PageRank::new(df, iterations);
+    let sd = value_t!(args, "sink-dispersion", String).unwrap_or("reverse".into());
+
+    let sink = match sd.as_ref() {
+        "reverse" => pr::Sink::Reverse,
+        "all"     => pr::Sink::All,
+        _         => pr::Sink::None
+    };
+
+    let page_rank = pr::PageRank::new(df, iterations, sink);
     let scores = page_rank.compute(games);
     emit_scores(scores.into_iter());
 }
@@ -232,6 +240,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("passes")
                  .takes_value(true)
                  .help("Number of passes to perform SGD.  Default is 10")))
+
         .subcommand(SubCommand::with_name("page-rank")
             .arg(Arg::with_name("iterations")
                  .long("iterations")
@@ -240,8 +249,12 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("damping-factor")
                  .long("damping-factor")
                  .takes_value(true)
-                 .help("Damping Factor to use.  Default is 0.85")))
-
+                 .help("Damping Factor to use.  Default is 0.85"))
+            .arg(Arg::with_name("sink-dispersion")
+                 .long("sink-dispersion")
+                 .takes_value(true)
+                 .possible_values(&["none", "reverse", "all"])
+                 .help("How sink nodes are dispersed.  Default is reverse")))
 
         .get_matches()
 }
