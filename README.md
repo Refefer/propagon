@@ -10,6 +10,7 @@ Algorithms Implemented
 - [x] Glicko2
 - [x] Rate
 - [x] Bradley-Terry Model (Logistic Method)
+- [x] Page Rank
 - [ ] ELO
 - [ ] TrueSkill
 - [ ] Blade/Chest
