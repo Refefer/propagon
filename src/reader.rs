@@ -84,6 +84,7 @@ fn read_edges(path: &str) -> Result<Vec<Games>,ReadErr> {
             .expect("Failed to read line!");
 
         if line.trim().len() == 0 && v.len() > 0 {
+            v.shrink_to_fit();
             sets.push(v);
             // Create a new set
             v = Vec::new();

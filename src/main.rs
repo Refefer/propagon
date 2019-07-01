@@ -136,7 +136,8 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
     let alpha = value_t!(args, "alpha", f32).unwrap_or(1.);
     let decay = value_t!(args, "decay", f32).unwrap_or(1.);
     let passes = value_t!(args, "passes", usize).unwrap_or(10);
-    let mut btm = lr::BtmLr::new(passes, alpha, decay);
+    let thrifty = args.is_present("thrifty");
+    let mut btm = lr::BtmLr::new(passes, alpha, decay, thrifty);
     for (i, games_set) in games.into_iter().enumerate() {
 
         eprintln!("Processing GameSet {}", i);
@@ -239,7 +240,12 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("passes")
                  .long("passes")
                  .takes_value(true)
-                 .help("Number of passes to perform SGD.  Default is 10")))
+                 .help("Number of passes to perform SGD.  Default is 10"))
+            .arg(Arg::with_name("thrifty")
+                 .long("thrifty")
+                 .help("Reduces allocations by processing each record 
+                        independently")))
+
 
         .subcommand(SubCommand::with_name("page-rank")
             .arg(Arg::with_name("iterations")
