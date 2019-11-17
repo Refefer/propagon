@@ -4,14 +4,18 @@ def main(fname, delim=None):
     with open(fname + '.remap', 'w') as mout, open(fname) as f:
         m = {}
         for line in f:
-            w, l = line.strip().split(delim)
+            pieces = line.strip().split(delim)
+            w, l = pieces[0], pieces[1]
             if w not in m:
                 m[w] = len(m)
 
             if l not in m:
                 m[l] = len(m)
 
-            mout.write('{} {}\n'.format(m[w], m[l]))
+            pieces[0] = str(m[w])
+            pieces[1] = str(m[l])
+            mout.write(' '.join(pieces))
+            mout.write('\n')
 
     with open(fname + '.ids', 'w') as iout:
         for name, idx in sorted(m.items()):

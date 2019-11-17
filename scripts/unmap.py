@@ -5,7 +5,9 @@ def main(index_file, score_file):
     mapping = {}
     with open(index_file) as f:
         for line in f:
-            num, label = line.strip().split(None, 1)
+            pieces = line.strip().split(None, 1)
+            num = pieces[0]
+            label = "" if len(pieces) == 1 else pieces[1]
             mapping[num] = label
 
     with open(score_file) as f:

@@ -3,14 +3,16 @@ mod lr;
 mod g2;
 mod reader;
 mod pr;
+mod birank;
 
 #[macro_use]
 extern crate clap;
+extern crate hashbrown;
 
 use clap::{Arg, App, ArgMatches, SubCommand};
 
 use std::fmt::Display;
-use std::collections::{HashMap,HashSet};
+use hashbrown::{HashMap,HashSet};
 
 type Match = (u32, u32, f32);
 type Games = Vec<Match>;
@@ -166,6 +168,25 @@ fn page_rank(args: &&clap::ArgMatches<'_>, games: Games) {
     emit_scores(scores.into_iter());
 }
 
+fn birank(args: &&clap::ArgMatches<'_>, games: Games) {
+    let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
+    let alpha      = value_t!(args, "alpha", f32).unwrap_or(1.0);
+    let beta       = value_t!(args, "beta", f32).unwrap_or(1.0);
+
+    let settings = birank::Settings {
+        n_iters: iterations,
+        alpha,
+        beta,
+        seed: 2019
+    };
+
+    let mut birank = birank::BiRank::build(games.into_iter());
+    birank.randomize(&settings);
+    birank.compute(&settings, HashMap::new(), HashMap::new());
+    birank.emit();
+}
+
+
 fn parse<'a>() -> ArgMatches<'a> {
     App::new("btm")
         .version("0.0.1")
@@ -246,7 +267,6 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Reduces allocations by processing each record 
                         independently")))
 
-
         .subcommand(SubCommand::with_name("page-rank")
             .arg(Arg::with_name("iterations")
                  .long("iterations")
@@ -261,6 +281,20 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .possible_values(&["none", "reverse", "all"])
                  .help("How sink nodes are dispersed.  Default is reverse")))
+
+        .subcommand(SubCommand::with_name("birank")
+            .arg(Arg::with_name("iterations")
+                 .long("iterations")
+                 .takes_value(true)
+                 .help("Number of iterations to compute on the graph"))
+            .arg(Arg::with_name("alpha")
+                 .long("alpha")
+                 .takes_value(true)
+                 .help("Blend coefficiant for p_0 vector"))
+            .arg(Arg::with_name("beta")
+                 .long("beta")
+                 .takes_value(true)
+                 .help("Blend coefficiant for u_0 vector")))
 
         .get_matches()
 }
@@ -306,7 +340,11 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("page-rank") {
                 let all_games = games.into_iter().flatten().collect();
                 page_rank(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("birank") {
+                let all_games = games.into_iter().flatten().collect();
+                birank(sub_args, all_games);
             }
+
             // print a separator
             println!("");
         } else {
