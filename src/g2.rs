@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+extern crate hashbrown;
+use hashbrown::HashMap;
 use std::hash::Hash;
 
 /// Stats of a Player

@@ -19,7 +19,8 @@ def main(fname, delim=None):
 
     with open(fname + '.ids', 'w') as iout:
         for name, idx in sorted(m.items()):
-            iout.write('{} {}\n'.format(idx, name))
+            line = '{} {}\n'.format(idx, name)
+            iout.write(line)
 
 if __name__ == '__main__':
     if len(sys.argv) not in (2, 3):

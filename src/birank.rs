@@ -81,15 +81,14 @@ impl <K: Hash + Eq> BiRank<K> {
     pub fn randomize(&mut self, settings: &Settings) {
         let mut source = random::default().seed([1234, settings.seed]);
         for (_, v) in self.u.iter_mut() {
-            *v = source.read::<f32>().abs();
+            *v = source.read_f64() as f32;
         }
         for (_, v) in self.p.iter_mut() {
-            *v = source.read::<f32>().abs();
+            *v = source.read_f64() as f32;
         }
 
     }
 
-    
     pub fn compute(
         &mut self, 
         settings: &Settings, 
