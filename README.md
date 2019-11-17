@@ -1,16 +1,22 @@
 Pairwizer
 ===
 
-Pairwizer is a binary which computes a variety of rankings using a few different algorithms.  It can scale up to 100s of millions of matches and 10s of millions of teams.
+Pairwizer is a library which computes a variety of rankings using different algorithms.  It can scale up to 100s of millions of edges and 10s of millions of ids.
+
+It contains two classes of algorithms: comparison methods and graph density methods.  The former lets the user compute rankings based on some understanding of competition: such as team 1 beatiing team 2.  Graph density methods instead compute rankings of the nodes through some understanding of density, largely algorithm dependent.  For example, PageRank attempts to produce rankings benefiting nodes with a high in-degree of connections.
 
 Algorithms Implemented
 ---
 
-- [x] Bradley-Terry Model (Using MM Method)
+- [x] Bradley-Terry Model (MM Method)
+- [x] Bradley-Terry Model (Logistic Method)
 - [x] Glicko2
 - [x] Rate
-- [x] Bradley-Terry Model (Logistic Method)
 - [x] Page Rank
+- [x] BiRank
+
+Not Yet Implemented
+---
 - [ ] ELO
 - [ ] TrueSkill
 - [ ] Blade/Chest
@@ -29,7 +35,6 @@ Data Format
 Data is expected in the following, line delimited format:
 
 ```
-    ID_OF_WINNER ID_OF_LOSER [WEIGHT]
     ID_OF_WINNER ID_OF_LOSER [WEIGHT]
     ID_OF_WINNER ID_OF_LOSER [WEIGHT]
     
