@@ -4,6 +4,7 @@ mod g2;
 mod reader;
 mod pr;
 mod birank;
+mod vp;
 
 #[macro_use]
 extern crate clap;
@@ -186,6 +187,46 @@ fn birank(args: &&clap::ArgMatches<'_>, games: Games) {
     birank.emit();
 }
 
+fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
+    let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
+    let alpha      = value_t!(args, "alpha", f32).unwrap_or(0.9);
+    let prior      = value_t!(args, "prior", String).expect("Required");
+    let max_terms  = value_t!(args, "max-terms", usize).unwrap_or(100);
+    let error      = value_t!(args, "error", f32).unwrap_or(1e-5);
+
+    let reg = match args.value_of("regularizer").unwrap() {
+        "l1" => vp::Regularizer::L1,
+        _    => vp::Regularizer::L2
+    };
+
+    let vp = vp::VecProp {
+        n_iters: iterations,
+        regularizer: reg,
+        alpha,
+        max_terms,
+        error,
+        seed: 2019
+    };
+
+    // Load priors
+    let priors = vp::load_priors(prior.as_str());
+    let embeddings = vp.fit(games.into_iter(), &priors);
+
+    let it = embeddings.into_iter().map(|(id, emb)| {
+        let mut string = String::new();
+        string.push_str("{");
+        if emb.0.len() > 0 {
+            emb.0.into_iter().for_each(|(f, v)| {
+                string.push_str(format!("\"{}\":{},", f, v).as_str());
+            });
+            string.pop();
+        }
+        string.push_str("}");
+        (id, string)
+    });
+    emit_scores(it);
+}
+
 
 fn parse<'a>() -> ArgMatches<'a> {
     App::new("btm")
@@ -296,6 +337,34 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Blend coefficiant for u_0 vector")))
 
+        .subcommand(SubCommand::with_name("vec-prop")
+            .arg(Arg::with_name("prior")
+                 .long("prior")
+                 .takes_value(true)
+                 .required(true)
+                 .help("Number of iterations to compute on the graph"))
+            .arg(Arg::with_name("regularizer")
+                 .long("regularizer")
+                 .takes_value(true)
+                 .possible_values(&["l1", "l2"])
+                 .help("Number of iterations to compute on the graph"))
+            .arg(Arg::with_name("iterations")
+                 .long("iterations")
+                 .takes_value(true)
+                 .help("Number of iterations to compute on the graph"))
+            .arg(Arg::with_name("alpha")
+                 .long("alpha")
+                 .takes_value(true)
+                 .help("Blend coefficiant for prior vector"))
+            .arg(Arg::with_name("max-terms")
+                 .long("max-terms")
+                 .takes_value(true)
+                 .help("Max terms to keep between propagations"))
+            .arg(Arg::with_name("error")
+                 .long("error")
+                 .takes_value(true)
+                 .help("Max error rate before suppressing the data")))
+
         .get_matches()
 }
 
@@ -343,6 +412,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("birank") {
                 let all_games = games.into_iter().flatten().collect();
                 birank(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("vec-prop") {
+                let all_games = games.into_iter().flatten().collect();
+                vec_prop(sub_args, all_games);
             }
 
             // print a separator
