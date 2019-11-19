@@ -193,6 +193,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     let prior      = value_t!(args, "prior", String).expect("Required");
     let max_terms  = value_t!(args, "max-terms", usize).unwrap_or(100);
     let error      = value_t!(args, "error", f32).unwrap_or(1e-5);
+    let chunks     = value_t!(args, "chunks", usize).unwrap_or(10);
 
     let reg = match args.value_of("regularizer").unwrap() {
         "l1" => vp::Regularizer::L1,
@@ -205,6 +206,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
         alpha,
         max_terms,
         error,
+        chunks,
         seed: 2019
     };
 
@@ -212,10 +214,11 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     let priors = vp::load_priors(prior.as_str());
     let embeddings = vp.fit(games.into_iter(), &priors);
 
-    let it = embeddings.into_iter().map(|(id, emb)| {
+    let it = embeddings.into_iter().map(|(id, mut emb)| {
         let mut string = String::new();
         string.push_str("{");
         if emb.0.len() > 0 {
+            emb.0.sort_by(|a,b| (b.1).partial_cmp(&a.1).unwrap());
             emb.0.into_iter().for_each(|(f, v)| {
                 string.push_str(format!("\"{}\":{},", f, v).as_str());
             });
@@ -363,7 +366,11 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("error")
                  .long("error")
                  .takes_value(true)
-                 .help("Max error rate before suppressing the data")))
+                 .help("Max error rate before suppressing the data"))
+            .arg(Arg::with_name("chunks")
+                 .long("chunks")
+                 .takes_value(true)
+                 .help("Number of vertices to perform in parallel.  Default is 10")))
 
         .get_matches()
 }

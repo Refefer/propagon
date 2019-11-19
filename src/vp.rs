@@ -1,9 +1,10 @@
 extern crate hashbrown;
 extern crate rand;
+extern crate rayon;
 
 use std::ops::*;
 use std::hash::Hash;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -11,6 +12,7 @@ use std::io::BufReader;
 
 use hashbrown::HashMap;
 use rand::prelude::*;
+use rayon::prelude::*;
 
 #[derive(Clone)]
 pub struct Embedding<F>(pub Vec<(F, f32)>);
@@ -40,12 +42,13 @@ pub struct VecProp {
     pub error: f32,
     pub max_terms: usize,
     pub alpha: f32,
+    pub chunks: usize,
     pub seed: u64
 }
 
 impl VecProp {
 
-    pub fn fit<K: Hash + Eq + Clone, F: std::fmt::Debug + Hash + Eq + Clone + Ord>(
+    pub fn fit<K: Hash + Eq + Clone + Send + Sync, F: Hash + Eq + Clone + Ord + Send + Sync>(
         &self, 
         graph: impl Iterator<Item=(K,K,f32)>, 
         prior: &HashMap<K,Embedding<F>>
@@ -76,68 +79,75 @@ impl VecProp {
         for n_iter in 0..self.n_iters {
             eprintln!("Iteration: {}", n_iter);
             keys.shuffle(&mut rng);
-            for key in keys.iter() {
-                let mut features = HashMap::new();
-                for (t_node, wi) in &edges[key] {
-
-                    // Compute weighted sum of inbound
-                    for (f, v) in verts[&t_node].0.iter() {
-                        if let Some(nv) = features.get_mut(f) {
-                            *nv += v * wi;
-                        } else {
-                            features.insert(f.clone(), v * wi);
-                        }
-                    }
-
-                }
-
-                // Check for the prior
-                if let Some(p) = prior.get(key) {
-
-                    // Scale the data by alpha
-                    features.values_mut().for_each(|v| {
-                        *v *= self.alpha;
-                    });
-
-                    // add the prior
-                    for (k, v) in (p.0).iter() {
-                        let nv = (1. - self.alpha) * (*v);
-                        if features.contains_key(k) {
-                            if let Some(v) = features.get_mut(k) {
-                                *v += nv;
+            for key_subset in keys.as_slice().chunks(self.chunks) {
+                let new_entries: Vec<_> = key_subset.par_iter().map(|key| {
+                    let mut features = HashMap::new();
+                    let total_weight: f32 = edges[key].iter().map(|(_, wi)| wi).sum();
+                    for (t_node, wi) in &edges[key] {
+                        // Compute weighted sum of inbound
+                        for (f, v) in verts[&t_node].0.iter() {
+                            if let Some(nv) = features.get_mut(f) {
+                                *nv += v * wi;
+                            } else {
+                                features.insert(f.clone(), v * wi);
                             }
-                        } else {
-                            features.insert(k.clone(), nv);
                         }
                     }
-                }
 
-                // Normalize
-                match self.regularizer {
-                    Regularizer::L1 => {
-                        let sum: f32 = features.values().map(|v| (*v).abs()).sum();
-                        features.values_mut().for_each(|v| *v /= sum);
-                    },
-                    Regularizer::L2 => {
-                        let sum: f32 = features.values().map(|v| (*v).powi(2)).sum();
-                        features.values_mut().for_each(|v| *v /= sum.powf(0.5));
+                    // Scale
+                    features.values_mut().for_each(|v| *v /= total_weight);
+
+                    // Check for the prior
+                    if let Some(p) = prior.get(key) {
+
+                        // Scale the data by alpha
+                        features.values_mut().for_each(|v| {
+                            *v *= self.alpha;
+                        });
+
+                        // add the prior
+                        for (k, v) in (p.0).iter() {
+                            let nv = (1. - self.alpha) * (*v);
+                            if features.contains_key(k) {
+                                if let Some(v) = features.get_mut(k) {
+                                    *v += nv;
+                                }
+                            } else {
+                                features.insert(k.clone(), nv);
+                            }
+                        }
                     }
-                }
 
-                // Clean up data
-                let mut features: Vec<_> = features.into_iter()
-                    .filter(|(k, v)| v.abs() > self.error)
-                    .collect();
-
-                if features.len() > self.max_terms {
-                    features.sort_by(|a,b| (b.1).partial_cmp(&a.1).unwrap());
-                    while features.len() > self.max_terms {
-                        features.pop();
+                    // Normalize
+                    match self.regularizer {
+                        Regularizer::L1 => {
+                            let sum: f32 = features.values().map(|v| (*v).abs()).sum();
+                            features.values_mut().for_each(|v| *v /= sum);
+                        },
+                        Regularizer::L2 => {
+                            let sum: f32 = features.values().map(|v| (*v).powi(2)).sum();
+                            features.values_mut().for_each(|v| *v /= sum.powf(0.5));
+                        }
                     }
-                }
 
-                if let Some(e) = verts.get_mut(key) {
-                    *e = Embedding::new(features);
+                    // Clean up data
+                    let mut features: Vec<_> = features.into_iter()
+                        .filter(|(k, v)| v.abs() > self.error)
+                        .collect();
+
+                    if features.len() > self.max_terms {
+                        features.sort_by(|a,b| (b.1).partial_cmp(&a.1).unwrap());
+                        while features.len() > self.max_terms {
+                            features.pop();
+                        }
+                    }
+                    (key, Embedding::new(features))
+                }).collect();
+
+                for (k, new_e) in new_entries.into_iter() {
+                    if let Some(e) = verts.get_mut(k) {
+                        *e = new_e;
+                    }
                 }
             }
         }
@@ -145,7 +155,7 @@ impl VecProp {
     }
 }
 
-pub fn load_priors(path: &str) -> HashMap<u32,Embedding<Rc<String>>> {
+pub fn load_priors(path: &str) -> HashMap<u32,Embedding<Arc<String>>> {
     let f = File::open(path).expect("Error opening priors file");
     let br = BufReader::new(f);
 
@@ -162,7 +172,7 @@ pub fn load_priors(path: &str) -> HashMap<u32,Embedding<Rc<String>>> {
             let mut features = HashMap::new();
             for token in line.as_str()[idx..].split_whitespace() {
                 if !vocab.contains_key(token) {
-                    vocab.insert(token.to_string(), Rc::new(token.to_string()));
+                    vocab.insert(token.to_string(), Arc::new(token.to_string()));
                 }
 
                 features.insert(vocab[token].clone(), 1f32);
