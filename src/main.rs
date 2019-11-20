@@ -197,7 +197,8 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
 
     let reg = match args.value_of("regularizer").unwrap() {
         "l1" => vp::Regularizer::L1,
-        _    => vp::Regularizer::L2
+        "l2" => vp::Regularizer::L2,
+        _    => vp::Regularizer::Symmetric
     };
 
     let vp = vp::VecProp {
@@ -349,7 +350,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("regularizer")
                  .long("regularizer")
                  .takes_value(true)
-                 .possible_values(&["l1", "l2"])
+                 .possible_values(&["l1", "l2", "symmetric"])
                  .help("Number of iterations to compute on the graph"))
             .arg(Arg::with_name("iterations")
                  .long("iterations")

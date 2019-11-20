@@ -30,10 +30,11 @@ impl <F> Embedding<F> {
     }
 }
 
-#[derive(Clone,Copy)]
+#[derive(PartialEq,Eq,Clone,Copy)]
 pub enum Regularizer {
     L1,
-    L2
+    L2,
+    Symmetric
 }
 
 pub struct VecProp {
@@ -56,13 +57,27 @@ impl VecProp {
 
         // Create graph
         let mut edges = HashMap::new();
+        let mut weights = HashMap::new();
         for (f_node, t_node, weight) in graph.into_iter() {
             let e = edges.entry(f_node.clone()).or_insert_with(|| vec![]);
             e.push((t_node.clone(), weight));
-            let e = edges.entry(t_node).or_insert_with(|| vec![]);
-            e.push((f_node, weight));
+            let e = edges.entry(t_node.clone()).or_insert_with(|| vec![]);
+            e.push((f_node.clone(), weight));
+
+            // If we are performing symmetric normalization, track the aggregate
+            // weights
+            if self.regularizer == Regularizer::Symmetric {
+                let w = weights.entry(f_node).or_insert(0.);
+                *w += weight;
+                let w = weights.entry(t_node).or_insert(0.);
+                *w += weight;
+            }
         }
 
+        // Normalize weights 
+        weights.values_mut().for_each(|v| *v = v.powf(0.5));
+
+        // Setup initial embeddings
         let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
         let mut verts: HashMap<_,_> = keys.iter()
             .map(|key| {
@@ -75,6 +90,7 @@ impl VecProp {
             })
             .collect();
 
+        // We randomly sort our keys each pass in the same style as label embeddings
         let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed);
         for n_iter in 0..self.n_iters {
             eprintln!("Iteration: {}", n_iter);
@@ -82,20 +98,34 @@ impl VecProp {
             for key_subset in keys.as_slice().chunks(self.chunks) {
                 let new_entries: Vec<_> = key_subset.par_iter().map(|key| {
                     let mut features = HashMap::new();
-                    let total_weight: f32 = edges[key].iter().map(|(_, wi)| wi).sum();
                     for (t_node, wi) in &edges[key] {
+                        // We pull out the weights in cases where we are using 
+                        // symmetric normalization
+                        let scale = if self.regularizer == Regularizer::Symmetric {
+                            weights[key] * weights[t_node]
+                        } else {
+                            0.
+                        };
+
                         // Compute weighted sum of inbound
                         for (f, v) in verts[&t_node].0.iter() {
+                            let weight = match self.regularizer {
+                                Regularizer::Symmetric => wi / scale,
+                                _                      => *wi
+                            };
                             if let Some(nv) = features.get_mut(f) {
-                                *nv += v * wi;
+                                *nv += v * weight;
                             } else {
-                                features.insert(f.clone(), v * wi);
+                                features.insert(f.clone(), v * weight);
                             }
                         }
                     }
 
                     // Scale
-                    features.values_mut().for_each(|v| *v /= total_weight);
+                    if self.regularizer != Regularizer::Symmetric {
+                        let total_weight: f32 = edges[key].iter().map(|(_, w)| w).sum();
+                        features.values_mut().for_each(|v| *v /= total_weight);
+                    }
 
                     // Check for the prior
                     if let Some(p) = prior.get(key) {
@@ -127,12 +157,13 @@ impl VecProp {
                         Regularizer::L2 => {
                             let sum: f32 = features.values().map(|v| (*v).powi(2)).sum();
                             features.values_mut().for_each(|v| *v /= sum.powf(0.5));
-                        }
+                        },
+                        Regularizer::Symmetric => ()
                     }
 
                     // Clean up data
                     let mut features: Vec<_> = features.into_iter()
-                        .filter(|(k, v)| v.abs() > self.error)
+                        .filter(|(_, v)| v.abs() > self.error)
                         .collect();
 
                     if features.len() > self.max_terms {
@@ -150,6 +181,13 @@ impl VecProp {
                     }
                 }
             }
+        }
+        if self.regularizer == Regularizer::Symmetric {
+            // L2 normalize on the way out
+            verts.par_values_mut().for_each(|e| {
+                let sum: f32 = e.0.iter().map(|(_, v)| (*v).powi(2)).sum();
+                e.0.iter_mut().for_each(|p| (*p).1 /= sum.powf(0.5));
+            });
         }
         verts
     }
