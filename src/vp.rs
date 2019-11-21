@@ -1,10 +1,10 @@
+extern crate heap;
 extern crate hashbrown;
 extern crate rand;
 extern crate rayon;
 
 use std::ops::*;
 use std::hash::Hash;
-use std::sync::Arc;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -18,15 +18,19 @@ use rayon::prelude::*;
 pub struct Embedding<F>(pub Vec<(F, f32)>);
 
 impl <F: Ord> Embedding<F> {
-    pub fn new(mut feats: Vec<(F, f32)>) -> Self {
-        feats.sort_by(|l, r| (&l.0).partial_cmp(&r.0).unwrap());
+    pub fn new(feats: Vec<(F, f32)>) -> Self {
         Embedding(feats)
     }
 }
 
 impl <F> Embedding<F> {
-    pub fn zero() -> Self {
-        Embedding(vec![])
+
+    pub fn with_capacity(size: usize) -> Self {
+        Embedding(Vec::with_capacity(size))
+    }
+
+    pub fn swap(&mut self, rep: &mut Vec<(F, f32)>) {
+        std::mem::swap(&mut self.0, rep);
     }
 }
 
@@ -36,6 +40,9 @@ pub enum Regularizer {
     L2,
     Symmetric
 }
+
+// Used to track records and accumulated weight
+pub struct Vertex<F>(pub Embedding<F>, f32);
 
 pub struct VecProp {
     pub n_iters: usize,
@@ -53,7 +60,7 @@ impl VecProp {
         &self, 
         graph: impl Iterator<Item=(K,K,f32)>, 
         prior: &HashMap<K,Embedding<F>>
-    ) -> HashMap<K, Embedding<F>> {
+    ) -> HashMap<K, Vertex<F>> {
 
         // Create graph
         let mut edges = HashMap::new();
@@ -74,41 +81,61 @@ impl VecProp {
             }
         }
 
-        // Normalize weights 
-        weights.values_mut().for_each(|v| *v = v.powf(0.5));
-
         // Setup initial embeddings
         let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
         let mut verts: HashMap<_,_> = keys.iter()
             .map(|key| {
                 let e = if let Some(emb) = prior.get(key) {
-                    emb.clone()
+                    let mut e = emb.clone();
+                    if emb.0.len() < self.max_terms {
+                        e.0.reserve(self.max_terms - emb.0.len());
+                    }
+                    e
                 } else {
-                    Embedding::zero()
+                    Embedding::with_capacity(self.max_terms)
                 };
-                (key.clone(), e)
-            })
-            .collect();
+                let w = weights.get(key).unwrap_or(&0.).clone().powf(0.5);
+                (key.clone(), Vertex(e, w))
+            }).collect();
+
+        std::mem::drop(weights);
 
         // We randomly sort our keys each pass in the same style as label embeddings
         let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed);
+        //let mut feature_sets = vec![HashMap::new(); self.chunks];
+        let mut tmp_embeddings: Vec<Vec<(F,f32)>> = 
+            vec![Vec::with_capacity(self.max_terms); self.chunks];
         for n_iter in 0..self.n_iters {
             eprintln!("Iteration: {}", n_iter);
             keys.shuffle(&mut rng);
+
+            // We go over the keys in chunks so that we can parallelize them
             for key_subset in keys.as_slice().chunks(self.chunks) {
-                let new_entries: Vec<_> = key_subset.par_iter().map(|key| {
-                    let mut features = HashMap::new();
-                    for (t_node, wi) in &edges[key] {
+
+                //let it = key_subset.par_iter()
+                //    .zip(feature_sets.par_iter_mut()
+                //         .zip(tmp_embeddings.par_iter_mut()));
+
+                let it = key_subset.par_iter().zip(tmp_embeddings.par_iter_mut());
+
+                //it.for_each(|(key, (features, t_emb))| {
+                it.for_each(|(key, t_emb)| {
+                    let t_edges = &edges[key];
+                    let mut features = HashMap::with_capacity(t_edges.len() * self.max_terms);
+                    let d1 = verts[key].1;
+                    for (t_node, wi) in t_edges {
+                        let vert = &verts[&t_node];
+
                         // We pull out the weights in cases where we are using 
                         // symmetric normalization
                         let scale = if self.regularizer == Regularizer::Symmetric {
-                            weights[key] * weights[t_node]
+                            d1 * vert.1
                         } else {
                             0.
                         };
 
                         // Compute weighted sum of inbound
-                        for (f, v) in verts[&t_node].0.iter() {
+                        for (f, v) in (vert.0).0.iter() {
                             let weight = match self.regularizer {
                                 Regularizer::Symmetric => wi / scale,
                                 _                      => *wi
@@ -162,43 +189,65 @@ impl VecProp {
                     }
 
                     // Clean up data
-                    let mut features: Vec<_> = features.into_iter()
-                        .filter(|(_, v)| v.abs() > self.error)
-                        .collect();
-
-                    if features.len() > self.max_terms {
-                        features.sort_by(|a,b| (b.1).partial_cmp(&a.1).unwrap());
-                        while features.len() > self.max_terms {
-                            features.pop();
+                    t_emb.clear();
+                    for p in features.drain() {
+                        // Ignore features smaller than error rate
+                        if p.1.abs() > self.error {
+                            // Add items to the heap until it's full
+                            if t_emb.len() < self.max_terms {
+                                t_emb.push(p);
+                                if t_emb.len() == self.max_terms {
+                                    heap::build(t_emb.len(), 
+                                        |a,b| a.1 < b.1, 
+                                        t_emb.as_mut_slice());
+                                }
+                            } else if t_emb[0].1 < p.1 {
+                                // Found a bigger item, replace the smallest item
+                                // with the big one
+                                heap::replace_root(
+                                    t_emb.len(), 
+                                    |a,b| a.1 < b.1, 
+                                    t_emb.as_mut_slice(),
+                                    p);
+                                
+                            }
                         }
                     }
-                    (key, Embedding::new(features))
-                }).collect();
+                });
 
-                for (k, new_e) in new_entries.into_iter() {
+                // Swap in the new embeddings
+                for (k, new_e) in key_subset.iter().zip(tmp_embeddings.iter_mut()) {
                     if let Some(e) = verts.get_mut(k) {
-                        *e = new_e;
+                        e.0.swap(new_e);
                     }
                 }
             }
+
         }
+
         if self.regularizer == Regularizer::Symmetric {
             // L2 normalize on the way out
-            verts.par_values_mut().for_each(|e| {
-                let sum: f32 = e.0.iter().map(|(_, v)| (*v).powi(2)).sum();
-                e.0.iter_mut().for_each(|p| (*p).1 /= sum.powf(0.5));
+            verts.par_values_mut().for_each(|v| {
+                l2_normalize(&mut (v.0).0);
             });
         }
         verts
     }
 }
 
-pub fn load_priors(path: &str) -> HashMap<u32,Embedding<Arc<String>>> {
+#[inline]
+fn l2_normalize<A>(vec: &mut Vec<(A, f32)>) {
+    let sum: f32 = vec.iter().map(|(_, v)| (*v).powi(2)).sum();
+    let sqr = sum.powf(0.5);
+    vec.iter_mut().for_each(|p| (*p).1 /= sqr);
+}
+
+pub fn load_priors(path: &str) -> (HashMap<u32,Embedding<usize>>, HashMap<usize,String>) {
     let f = File::open(path).expect("Error opening priors file");
     let br = BufReader::new(f);
 
     let mut prior = HashMap::new();
-    let mut vocab = HashMap::new();
+    let mut vocab_to_index = HashMap::new();
 
     for line in br.lines() {
         let line = line
@@ -209,12 +258,12 @@ pub fn load_priors(path: &str) -> HashMap<u32,Embedding<Arc<String>>> {
 
             let mut features = HashMap::new();
             for token in line.as_str()[idx..].split_whitespace() {
-                if !vocab.contains_key(token) {
-                    vocab.insert(token.to_string(), Arc::new(token.to_string()));
+                if !vocab_to_index.contains_key(token) {
+                    vocab_to_index.insert(token.to_string(), vocab_to_index.len());
                 }
-
-                features.insert(vocab[token].clone(), 1f32);
+                features.insert(vocab_to_index[token].clone(), 1f32);
             }
+            // Normalize
             let size = features.len() as f32;
             let feats = features.into_iter()
                 .map(|(k, v)| (k, v / size)).collect();
@@ -222,5 +271,5 @@ pub fn load_priors(path: &str) -> HashMap<u32,Embedding<Arc<String>>> {
         }
 
     }
-    prior
+    (prior, vocab_to_index.into_iter().map(|(k, v)| (v, k)).collect())
 }

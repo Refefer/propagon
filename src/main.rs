@@ -212,16 +212,17 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     };
 
     // Load priors
-    let priors = vp::load_priors(prior.as_str());
+    let (priors, idx_to_vocab) = vp::load_priors(prior.as_str());
     let embeddings = vp.fit(games.into_iter(), &priors);
 
-    let it = embeddings.into_iter().map(|(id, mut emb)| {
+    let it = embeddings.into_iter().map(|(id, mut vert)| {
+        let mut emb = vert.0;
         let mut string = String::new();
         string.push_str("{");
         if emb.0.len() > 0 {
             emb.0.sort_by(|a,b| (b.1).partial_cmp(&a.1).unwrap());
             emb.0.into_iter().for_each(|(f, v)| {
-                string.push_str(format!("\"{}\":{},", f, v).as_str());
+                string.push_str(format!("\"{}\":{},", idx_to_vocab[&f], v).as_str());
             });
             string.pop();
         }

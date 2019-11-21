@@ -9,6 +9,7 @@ clap = "2.26.0"
 random = "0.12.2"
 rand = "0.7.2"
 rayon = "1.0.3"
+heap = "0.1.0"
 
 [dependencies.hashbrown]
 version = "0.3"
