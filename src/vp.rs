@@ -3,7 +3,6 @@ extern crate hashbrown;
 extern crate rand;
 extern crate rayon;
 
-use std::ops::*;
 use std::hash::Hash;
 
 use std::fs::File;
@@ -51,6 +50,7 @@ pub struct VecProp {
     pub max_terms: usize,
     pub alpha: f32,
     pub chunks: usize,
+    pub normalize: bool,
     pub seed: u64
 }
 

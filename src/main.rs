@@ -5,6 +5,7 @@ mod reader;
 mod pr;
 mod birank;
 mod vp;
+mod lpa;
 
 #[macro_use]
 extern crate clap;
@@ -193,6 +194,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     let prior      = value_t!(args, "prior", String).expect("Required");
     let max_terms  = value_t!(args, "max-terms", usize).unwrap_or(100);
     let error      = value_t!(args, "error", f32).unwrap_or(1e-5);
+    let l2_output  = args.is_present("l2-output");
     let chunks     = value_t!(args, "chunks", usize).unwrap_or(10);
 
     let reg = match args.value_of("regularizer").unwrap() {
@@ -208,6 +210,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
         max_terms,
         error,
         chunks,
+        normalize: l2_output,
         seed: 2019
     };
 
@@ -215,7 +218,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     let (priors, idx_to_vocab) = vp::load_priors(prior.as_str());
     let embeddings = vp.fit(games.into_iter(), &priors);
 
-    let it = embeddings.into_iter().map(|(id, mut vert)| {
+    let it = embeddings.into_iter().map(|(id, vert)| {
         let mut emb = vert.0;
         let mut string = String::new();
         string.push_str("{");
@@ -229,6 +232,32 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
         string.push_str("}");
         (id, string)
     });
+    emit_scores(it);
+}
+
+fn lpa(args: &&clap::ArgMatches<'_>, games: Games) {
+    let iterations = value_t!(args, "iterations", usize).ok();
+    let chunks     = value_t!(args, "chunks", usize).unwrap_or(10);
+
+    let lpa = lpa::LPA {
+        n_iters: iterations,
+        chunks: chunks,
+        seed: 2019
+    };
+
+    let clusters = lpa.fit(games.into_iter());
+    // Count cluster sizes, sort by them, and emit in most to least popular
+    let mut counts = HashMap::new();
+    let mut t_vec = Vec::with_capacity(clusters.len());
+    for (k, c) in clusters.into_iter() {
+        *counts.entry(c).or_insert(0) += 1;
+        t_vec.push((k, c));
+    }
+
+    eprintln!("Total Clusters: {}", counts.len());
+
+    t_vec.sort_by_key(|(k, c)| (counts[c], *c, *k));
+    let it = t_vec.into_iter().rev();
     emit_scores(it);
 }
 
@@ -369,6 +398,18 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("error")
                  .takes_value(true)
                  .help("Max error rate before suppressing the data"))
+            .arg(Arg::with_name("l2-output")
+                 .long("l2-output")
+                 .help("If provided, L2 normalizes the final embeddings"))
+            .arg(Arg::with_name("chunks")
+                 .long("chunks")
+                 .takes_value(true)
+                 .help("Number of vertices to perform in parallel.  Default is 10")))
+        .subcommand(SubCommand::with_name("lpa")
+            .arg(Arg::with_name("iterations")
+                 .long("iterations")
+                 .takes_value(true)
+                 .help("Number of iterations to compute on the graph.  If omitted, runs until there are no more node membership shanges"))
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)
@@ -386,7 +427,7 @@ fn main() {
 
     let min_count  = value_t!(args, "min-count", usize).unwrap_or(1);
 
-    let mut reader: Box<reader::GameReader> = if args.is_present("groups-are-separate") {
+    let mut reader: Box<dyn reader::GameReader> = if args.is_present("groups-are-separate") {
         Box::new(reader::EachSetSeparate::new(path))
     } else {
         Box::new(reader::AllGames::new(path))
@@ -424,6 +465,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("vec-prop") {
                 let all_games = games.into_iter().flatten().collect();
                 vec_prop(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("lpa") {
+                let all_games = games.into_iter().flatten().collect();
+                lpa(sub_args, all_games);
             }
 
             // print a separator
