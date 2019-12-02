@@ -112,10 +112,6 @@ impl VecProp {
             // We go over the keys in chunks so that we can parallelize them
             for key_subset in keys.as_slice().chunks(self.chunks) {
 
-                //let it = key_subset.par_iter()
-                //    .zip(feature_sets.par_iter_mut()
-                //         .zip(tmp_embeddings.par_iter_mut()));
-
                 let it = key_subset.par_iter().zip(tmp_embeddings.par_iter_mut());
 
                 //it.for_each(|(key, (features, t_emb))| {

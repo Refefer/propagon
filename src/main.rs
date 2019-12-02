@@ -6,6 +6,7 @@ mod pr;
 mod birank;
 mod vp;
 mod lpa;
+mod labelrankplus;
 
 #[macro_use]
 extern crate clap;
@@ -261,6 +262,37 @@ fn lpa(args: &&clap::ArgMatches<'_>, games: Games) {
     emit_scores(it);
 }
 
+fn label_rank(args: &&clap::ArgMatches<'_>, games: Games) {
+    let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
+    let inflation  = value_t!(args, "inflation", f32).unwrap_or(2.);
+    let prior      = value_t!(args, "prior", f32).unwrap_or(0.1);
+    let q          = value_t!(args, "q", f32).unwrap_or(0.1);
+    let max_terms  = value_t!(args, "max-terms", usize).unwrap_or(10);
+
+    let label_rank = labelrankplus::LabelRankPlus {
+        n_iters: iterations,
+        inflation,
+        prior,
+        q,
+        max_terms
+    };
+
+    let clusters = label_rank.fit(games.into_iter());
+    // Count cluster sizes, sort by them, and emit in most to least popular
+    let mut counts = HashMap::new();
+    let mut t_vec = Vec::with_capacity(clusters.len());
+    for (k, c) in clusters.into_iter() {
+        *counts.entry(c).or_insert(0) += 1;
+        t_vec.push((k, c));
+    }
+
+    eprintln!("Total Clusters: {}", counts.len());
+
+    t_vec.sort_by_key(|(k, c)| (counts[c], *c, *k));
+    let it = t_vec.into_iter().rev();
+    emit_scores(it);
+}
+
 
 fn parse<'a>() -> ArgMatches<'a> {
     App::new("btm")
@@ -405,6 +437,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("chunks")
                  .takes_value(true)
                  .help("Number of vertices to perform in parallel.  Default is 10")))
+
         .subcommand(SubCommand::with_name("lpa")
             .arg(Arg::with_name("iterations")
                  .long("iterations")
@@ -414,6 +447,29 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("chunks")
                  .takes_value(true)
                  .help("Number of vertices to perform in parallel.  Default is 10")))
+
+        .subcommand(SubCommand::with_name("label-rank")
+            .arg(Arg::with_name("iterations")
+                 .long("iterations")
+                 .takes_value(true)
+                 .help("Number of iterations to compute on the graph.  Default is 10."))
+            .arg(Arg::with_name("inflation")
+                 .long("inflation")
+                 .takes_value(true)
+                 .help("Label inflation exponent.  Default is 2."))
+            .arg(Arg::with_name("prior")
+                 .long("prior")
+                 .takes_value(true)
+                 .help("Label prior.  Default is 0.1"))
+            .arg(Arg::with_name("q")
+                 .long("q")
+                 .takes_value(true)
+                 .help("q value for stopping criteria.  Default is 0.1"))
+            .arg(Arg::with_name("max-terms")
+                 .long("max-terms")
+                 .takes_value(true)
+                 .help("Maximum number of terms to store.  Default is 10.")))
+
 
         .get_matches()
 }
@@ -468,6 +524,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("lpa") {
                 let all_games = games.into_iter().flatten().collect();
                 lpa(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("label-rank") {
+                let all_games = games.into_iter().flatten().collect();
+                label_rank(sub_args, all_games);
             }
 
             // print a separator
