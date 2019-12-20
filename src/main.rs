@@ -5,6 +5,7 @@ mod reader;
 mod pr;
 mod birank;
 mod vp;
+mod vw;
 mod lpa;
 mod labelrankplus;
 
@@ -189,6 +190,25 @@ fn birank(args: &&clap::ArgMatches<'_>, games: Games) {
     birank.emit();
 }
 
+fn fast_json<K>(
+    it: impl Iterator<Item=(K, Vec<(usize,f32)>)>, 
+    idx_to_vocab: HashMap<usize,String>
+) -> impl Iterator<Item=(K,String)> {
+    it.map(move |(id, mut emb)| {
+        let mut string = String::new();
+        string.push_str("{");
+        if emb.len() > 0 {
+            emb.sort_by(|a,b| (b.1).partial_cmp(&a.1).unwrap());
+            emb.into_iter().for_each(|(f, v)| {
+                string.push_str(format!("\"{}\":{},", idx_to_vocab[&f], v).as_str());
+            });
+            string.pop();
+        }
+        string.push_str("}");
+        (id, string)
+    })
+}
+
 fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
     let alpha      = value_t!(args, "alpha", f32).unwrap_or(0.9);
@@ -218,23 +238,39 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     // Load priors
     let (priors, idx_to_vocab) = vp::load_priors(prior.as_str());
     let embeddings = vp.fit(games.into_iter(), &priors);
-
-    let it = embeddings.into_iter().map(|(id, vert)| {
-        let mut emb = vert.0;
-        let mut string = String::new();
-        string.push_str("{");
-        if emb.0.len() > 0 {
-            emb.0.sort_by(|a,b| (b.1).partial_cmp(&a.1).unwrap());
-            emb.0.into_iter().for_each(|(f, v)| {
-                string.push_str(format!("\"{}\":{},", idx_to_vocab[&f], v).as_str());
-            });
-            string.pop();
-        }
-        string.push_str("}");
-        (id, string)
-    });
-    emit_scores(it);
+    let it = embeddings.into_iter().map(|(k, v)| (k, (v.0).0));
+    emit_scores(fast_json(it, idx_to_vocab));
 }
+
+fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
+    let iterations     = value_t!(args, "iterations", usize).unwrap_or(10);
+    let alpha          = value_t!(args, "alpha", f32).unwrap_or(0.9);
+    let prior          = value_t!(args, "prior", String).expect("Required");
+    let walk_len       = value_t!(args, "walk-len", usize).unwrap_or(20);
+    let context_window = value_t!(args, "context-window", usize).unwrap_or(2);
+    let max_terms      = value_t!(args, "max-terms", usize).unwrap_or(100);
+    let error          = value_t!(args, "error", f32).unwrap_or(1e-5);
+    let chunks         = value_t!(args, "chunks", usize).unwrap_or(10);
+
+    let vw = vw::VecWalk {
+        n_iters: iterations,
+        alpha,
+        max_terms,
+        walk_len,
+        context_window,
+        error,
+        chunks,
+        seed: 2019
+    };
+
+    // Load priors
+    let (priors, idx_to_vocab) = vp::load_priors(prior.as_str());
+    let embeddings = vw.fit(games.into_iter(), &priors);
+
+    let it = embeddings.into_iter().map(|(k, v)| (k, v.0));
+    emit_scores(fast_json(it, idx_to_vocab));
+}
+
 
 fn lpa(args: &&clap::ArgMatches<'_>, games: Games) {
     let iterations = value_t!(args, "iterations", usize).ok();
@@ -438,6 +474,41 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Number of vertices to perform in parallel.  Default is 10")))
 
+        .subcommand(SubCommand::with_name("vec-walk")
+            .arg(Arg::with_name("prior")
+                 .long("prior")
+                 .takes_value(true)
+                 .required(true)
+                 .help("Number of iterations to compute on the graph"))
+            .arg(Arg::with_name("iterations")
+                 .long("iterations")
+                 .takes_value(true)
+                 .help("Number of iterations to compute on the graph"))
+            .arg(Arg::with_name("alpha")
+                 .long("alpha")
+                 .takes_value(true)
+                 .help("Blend coefficiant for prior vector"))
+            .arg(Arg::with_name("max-terms")
+                 .long("max-terms")
+                 .takes_value(true)
+                 .help("Max terms to keep between propagations"))
+            .arg(Arg::with_name("error")
+                 .long("error")
+                 .takes_value(true)
+                 .help("Max error rate before suppressing the data"))
+            .arg(Arg::with_name("chunks")
+                 .long("chunks")
+                 .takes_value(true)
+                 .help("Number of vertices to perform in parallel.  Default is 10"))
+            .arg(Arg::with_name("walk-len")
+                 .long("walk-len")
+                 .takes_value(true)
+                 .help("Number of steps in the randomw walk"))
+            .arg(Arg::with_name("context-window")
+                 .long("context-window")
+                 .takes_value(true)
+                 .help("Number of adjacent embeddings to average together")))
+
         .subcommand(SubCommand::with_name("lpa")
             .arg(Arg::with_name("iterations")
                  .long("iterations")
@@ -521,6 +592,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("vec-prop") {
                 let all_games = games.into_iter().flatten().collect();
                 vec_prop(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("vec-walk") {
+                let all_games = games.into_iter().flatten().collect();
+                vec_walk(sub_args, all_games);
             } else if let Some(ref sub_args) = args.subcommand_matches("lpa") {
                 let all_games = games.into_iter().flatten().collect();
                 lpa(sub_args, all_games);

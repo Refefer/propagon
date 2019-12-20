@@ -232,7 +232,7 @@ impl VecProp {
 }
 
 #[inline]
-fn l2_normalize<A>(vec: &mut Vec<(A, f32)>) {
+pub fn l2_normalize<A>(vec: &mut Vec<(A, f32)>) {
     let sum: f32 = vec.iter().map(|(_, v)| (*v).powi(2)).sum();
     let sqr = sum.powf(0.5);
     vec.iter_mut().for_each(|p| (*p).1 /= sqr);
