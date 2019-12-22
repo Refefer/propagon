@@ -13,6 +13,8 @@ use hashbrown::HashMap;
 use rand::prelude::*;
 use rayon::prelude::*;
 
+use crate::utils;
+
 #[derive(Clone)]
 pub struct Embedding<F>(pub Vec<(F, f32)>);
 
@@ -115,7 +117,7 @@ impl VecProp {
                 let it = key_subset.par_iter().zip(tmp_embeddings.par_iter_mut());
 
                 //it.for_each(|(key, (features, t_emb))| {
-                it.for_each(|(key, t_emb)| {
+                it.for_each(|(key, mut t_emb)| {
                     let t_edges = &edges[key];
                     let mut features = HashMap::with_capacity(t_edges.len() * self.max_terms);
                     let d1 = verts[key].1;
@@ -177,38 +179,13 @@ impl VecProp {
                             let sum: f32 = features.values().map(|v| (*v).abs()).sum();
                             features.values_mut().for_each(|v| *v /= sum);
                         },
-                        Regularizer::L2 => {
-                            let sum: f32 = features.values().map(|v| (*v).powi(2)).sum();
-                            features.values_mut().for_each(|v| *v /= sum.powf(0.5));
-                        },
+                        Regularizer::L2 => utils::l2_norm_hm(&mut features),
                         Regularizer::Symmetric => ()
                     }
 
                     // Clean up data
                     t_emb.clear();
-                    for p in features.drain() {
-                        // Ignore features smaller than error rate
-                        if p.1.abs() > self.error {
-                            // Add items to the heap until it's full
-                            if t_emb.len() < self.max_terms {
-                                t_emb.push(p);
-                                if t_emb.len() == self.max_terms {
-                                    heap::build(t_emb.len(), 
-                                        |a,b| a.1 < b.1, 
-                                        t_emb.as_mut_slice());
-                                }
-                            } else if t_emb[0].1 < p.1 {
-                                // Found a bigger item, replace the smallest item
-                                // with the big one
-                                heap::replace_root(
-                                    t_emb.len(), 
-                                    |a,b| a.1 < b.1, 
-                                    t_emb.as_mut_slice(),
-                                    p);
-                                
-                            }
-                        }
-                    }
+                    utils::clean_map(features, &mut t_emb, self.error, self.max_terms);
                 });
 
                 // Swap in the new embeddings
@@ -224,18 +201,11 @@ impl VecProp {
         if self.regularizer == Regularizer::Symmetric {
             // L2 normalize on the way out
             verts.par_values_mut().for_each(|v| {
-                l2_normalize(&mut (v.0).0);
+                utils::l2_normalize(&mut (v.0).0);
             });
         }
         verts
     }
-}
-
-#[inline]
-pub fn l2_normalize<A>(vec: &mut Vec<(A, f32)>) {
-    let sum: f32 = vec.iter().map(|(_, v)| (*v).powi(2)).sum();
-    let sqr = sum.powf(0.5);
-    vec.iter_mut().for_each(|p| (*p).1 /= sqr);
 }
 
 pub fn load_priors(path: &str) -> (HashMap<u32,Embedding<usize>>, HashMap<usize,String>) {

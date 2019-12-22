@@ -9,6 +9,8 @@ mod vw;
 mod lpa;
 mod labelrankplus;
 
+mod utils;
+
 #[macro_use]
 extern crate clap;
 extern crate hashbrown;
@@ -251,6 +253,7 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
     let max_terms      = value_t!(args, "max-terms", usize).unwrap_or(100);
     let error          = value_t!(args, "error", f32).unwrap_or(1e-5);
     let chunks         = value_t!(args, "chunks", usize).unwrap_or(10);
+    let neg_sample     = value_t!(args, "negative-sample", usize).unwrap_or(5);
 
     let vw = vw::VecWalk {
         n_iters: iterations,
@@ -260,6 +263,7 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
         context_window,
         error,
         chunks,
+        negative_sample: neg_sample,
         seed: 2019
     };
 
@@ -507,7 +511,11 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("context-window")
                  .long("context-window")
                  .takes_value(true)
-                 .help("Number of adjacent embeddings to average together")))
+                 .help("Number of adjacent embeddings to average together. Default is 2"))
+            .arg(Arg::with_name("negative-sample")
+                 .long("negative-sample")
+                 .takes_value(true)
+                 .help("Number of vertices to randomly sample to subtract.  Default is 5")))
 
         .subcommand(SubCommand::with_name("lpa")
             .arg(Arg::with_name("iterations")

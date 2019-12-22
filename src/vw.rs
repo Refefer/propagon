@@ -8,7 +8,8 @@ use std::hash::Hash;
 use hashbrown::HashMap;
 use rand::prelude::*;
 use rayon::prelude::*;
-use super::vp::{Embedding,l2_normalize};
+use super::vp::{Embedding};
+use super::utils;
 
 pub struct VecWalk {
     pub n_iters: usize,
@@ -18,6 +19,7 @@ pub struct VecWalk {
     pub chunks: usize,
     pub walk_len: usize,
     pub context_window: usize,
+    pub negative_sample: usize,
     pub seed: u64
 }
 
@@ -72,21 +74,31 @@ impl VecWalk {
                     let mut new_map = HashMap::new();
                     // Generate Random Walk
                     let walk = gen_walk(key, &edges, &mut rng, self.walk_len);
+                    
                     for i in 0..walk.len() {
+                        let get = |x| {
+                            new_map.get(x).or_else(|| verts.get(x))
+                                .expect("verts should have the context, always")
+                        };
+                        let ctx = walk[i];
+
+                        // If we've already processed it this walk, move along.
+                        if new_map.contains_key(ctx) {continue}
+
+                        // Get the window framing
                         let left = if i < self.context_window {
                             0 
                         } else {
                             i - self.context_window
                         };
                         let right = (i + self.context_window + 1).min(walk.len());
-                        let ctx = walk[i];
 
                         let mut features = HashMap::with_capacity(
                             (right - left) * self.max_terms);
 
                         // Compute the sum of the embeddings in the walk
                         for vert in walk[left..right].iter() {
-                            for (f, v) in (&verts[vert].0).iter() {
+                            for (f, v) in (&get(vert).0).iter() {
                                 if let Some(nv) = features.get_mut(f) {
                                     *nv += *v;
                                 } else {
@@ -95,8 +107,20 @@ impl VecWalk {
                             }
                         }
 
+                        // Subtract random negative samples from the mean
+                        for _ in 0..self.negative_sample {
+                            let random_negative = keys.as_slice()
+                                .choose(&mut rng)
+                                .expect("Should always have at least 1 key");
+                            for (f, v) in (&get(random_negative).0).iter() {
+                                if let Some(nv) = features.get_mut(f) {
+                                    *nv = (*nv - *v).max(0.);
+                                } 
+                            }
+                        }
+
                         // L2 norm the embedding
-                        l2_norm_hm(&mut features);
+                        utils::l2_norm_hm(&mut features);
 
                         // Check if there is a prior, adding blending it if so
                         if let Some(p) = prior.get(ctx) {
@@ -117,39 +141,12 @@ impl VecWalk {
                                     features.insert(k.clone(), nv);
                                 }
                             }
+                            utils::l2_norm_hm(&mut features);
                         }
-
-
-                        // Normalize
-                        let sum = features.values()
-                            .map(|v| (*v).powi(2)).sum::<f32>().powf(0.5);
-                        features.values_mut().for_each(|v| *v /= sum);
 
                         // Clean up data
                         let mut t_emb = Vec::with_capacity(self.max_terms);
-                        for (k, f) in features.drain() {
-                            // Ignore features smaller than error rate
-                            if f.abs() > self.error {
-                                // Add items to the heap until it's full
-                                if t_emb.len() < self.max_terms {
-                                    t_emb.push((k, f));
-                                    if t_emb.len() == self.max_terms {
-                                        heap::build(t_emb.len(), 
-                                            |a,b| a.1 < b.1, 
-                                            t_emb.as_mut_slice());
-                                    }
-                                } else if t_emb[0].1 < f {
-                                    // Found a bigger item, replace the smallest item
-                                    // with the big one
-                                    heap::replace_root(
-                                        t_emb.len(), 
-                                        |a,b| a.1 < b.1, 
-                                        t_emb.as_mut_slice(),
-                                        (k, f));
-                                    
-                                }
-                            }
-                        }
+                        utils::clean_map(features, &mut t_emb, self.error, self.max_terms);
                         new_map.insert(ctx.clone(), Embedding(t_emb));
                     }
                     new_map
@@ -168,16 +165,10 @@ impl VecWalk {
 
         // L2 normalize on the way out
         verts.par_values_mut().for_each(|v| {
-            l2_normalize(&mut (v.0));
+            utils::l2_normalize(&mut (v.0));
         });
         verts
     }
-}
-
-fn l2_norm_hm<F: Hash>(features: &mut HashMap<F, f32>) {
-    let sum = features.values()
-        .map(|v| (*v).powi(2)).sum::<f32>().powf(0.5);
-    features.values_mut().for_each(|v| *v /= sum);
 }
 
 
