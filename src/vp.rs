@@ -3,6 +3,7 @@ extern crate hashbrown;
 extern crate rand;
 extern crate rayon;
 
+use std::ops::Deref;
 use std::hash::Hash;
 
 use std::fs::File;
@@ -32,6 +33,14 @@ impl <F> Embedding<F> {
 
     pub fn swap(&mut self, rep: &mut Vec<(F, f32)>) {
         std::mem::swap(&mut self.0, rep);
+    }
+}
+
+impl <F> Deref for Embedding<F> {
+    type Target = Vec<(F, f32)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -153,25 +162,7 @@ impl VecProp {
                     }
 
                     // Check for the prior
-                    if let Some(p) = prior.get(key) {
-
-                        // Scale the data by alpha
-                        features.values_mut().for_each(|v| {
-                            *v *= self.alpha;
-                        });
-
-                        // add the prior
-                        for (k, v) in (p.0).iter() {
-                            let nv = (1. - self.alpha) * (*v);
-                            if features.contains_key(k) {
-                                if let Some(v) = features.get_mut(k) {
-                                    *v += nv;
-                                }
-                            } else {
-                                features.insert(k.clone(), nv);
-                            }
-                        }
-                    }
+                    utils::update_prior(&mut features, key, &prior, self.alpha, false);
 
                     // Normalize
                     match self.regularizer {

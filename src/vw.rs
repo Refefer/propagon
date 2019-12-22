@@ -123,25 +123,10 @@ impl VecWalk {
                         utils::l2_norm_hm(&mut features);
 
                         // Check if there is a prior, adding blending it if so
-                        if let Some(p) = prior.get(ctx) {
+                        if self.alpha < 1. {
 
-                            // Scale the data by alpha
-                            features.values_mut().for_each(|v| {
-                                *v *= self.alpha;
-                            });
-
-                            // add the prior
-                            for (k, v) in (p.0).iter() {
-                                let nv = (1. - self.alpha) * (*v);
-                                if features.contains_key(k) {
-                                    if let Some(v) = features.get_mut(k) {
-                                        *v += nv;
-                                    }
-                                } else {
-                                    features.insert(k.clone(), nv);
-                                }
-                            }
-                            utils::l2_norm_hm(&mut features);
+                            utils::update_prior(
+                                &mut features, key, &prior, self.alpha, true);
                         }
 
                         // Clean up data

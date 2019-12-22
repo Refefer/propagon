@@ -1,6 +1,7 @@
 extern crate heap;
 extern crate hashbrown;
 
+use std::ops::Deref;
 use std::hash::Hash;
 use hashbrown::HashMap;
 
@@ -45,6 +46,40 @@ pub fn clean_map<K: Hash>(
                     out.as_mut_slice(),
                     (k, f));
             }
+        }
+    }
+}
+
+pub fn update_prior<K, F, E>(
+    mut features: &mut HashMap<F, f32>, 
+    ctx: &K, 
+    prior: &HashMap<K, E>, 
+    alpha: f32, 
+    norm: bool
+) 
+where K: Hash + Eq,
+      F: Hash + Eq + Clone,
+      E: Deref<Target=Vec<(F, f32)>> {
+    if let Some(p) = prior.get(ctx) {
+
+        // Scale the data by alpha
+        features.values_mut().for_each(|v| {
+            *v *= alpha;
+        });
+
+        // add the prior
+        for (k, v) in p.iter() {
+            let nv = (1. - alpha) * (*v);
+            if features.contains_key(k) {
+                if let Some(v) = features.get_mut(k) {
+                    *v += nv;
+                }
+            } else {
+                features.insert(k.clone(), nv);
+            }
+        }
+        if norm {
+            l2_norm_hm(&mut features);
         }
     }
 }
