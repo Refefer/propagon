@@ -72,10 +72,20 @@ impl VecWalk {
                 let it = key_subset.par_iter().zip(rngs.par_iter_mut());
                 let maps: Vec<_> = it.map(|(key, mut rng)| {
                     let mut new_map = HashMap::new();
+
                     // Generate Random Walk
                     let walk = gen_walk(key, &edges, &mut rng, self.walk_len);
+
+                    // We randomize the indices to break up linear percolation
+                    let mut indices: Vec<_> = (0..walk.len()).collect();
+                    indices.as_mut_slice().shuffle(&mut rng);
+                    let indices = 0..walk.len();
+
+                    let mut features = HashMap::with_capacity(
+                        (2 * self.context_window + 1) * self.max_terms);
                     
-                    for i in 0..walk.len() {
+                    for i in indices {
+                        features.clear();
                         let get = |x| {
                             new_map.get(x).or_else(|| verts.get(x))
                                 .expect("verts should have the context, always")
@@ -86,19 +96,11 @@ impl VecWalk {
                         if new_map.contains_key(ctx) {continue}
 
                         // Get the window framing
-                        let left = if i < self.context_window {
-                            0 
-                        } else {
-                            i - self.context_window
-                        };
-                        let right = (i + self.context_window + 1).min(walk.len());
-
-                        let mut features = HashMap::with_capacity(
-                            (right - left) * self.max_terms);
+                        let (left, right) = get_bounds(i, self.context_window, walk.len());
 
                         // Compute the sum of the embeddings in the walk
                         for vert in walk[left..right].iter() {
-                            for (f, v) in (&get(vert).0).iter() {
+                            for (f, v) in get(vert).iter() {
                                 if let Some(nv) = features.get_mut(f) {
                                     *nv += *v;
                                 } else {
@@ -112,7 +114,8 @@ impl VecWalk {
                             let random_negative = keys.as_slice()
                                 .choose(&mut rng)
                                 .expect("Should always have at least 1 key");
-                            for (f, v) in (&get(random_negative).0).iter() {
+
+                            for (f, v) in get(random_negative).iter() {
                                 if let Some(nv) = features.get_mut(f) {
                                     *nv = (*nv - *v).max(0.);
                                 } 
@@ -124,14 +127,13 @@ impl VecWalk {
 
                         // Check if there is a prior, adding blending it if so
                         if self.alpha < 1. {
-
                             utils::update_prior(
-                                &mut features, key, &prior, self.alpha, true);
+                                &mut features, ctx, &prior, self.alpha, true);
                         }
 
                         // Clean up data
                         let mut t_emb = Vec::with_capacity(self.max_terms);
-                        utils::clean_map(features, &mut t_emb, self.error, self.max_terms);
+                        utils::clean_map(&mut features, &mut t_emb, self.error, self.max_terms);
                         new_map.insert(ctx.clone(), Embedding(t_emb));
                     }
                     new_map
@@ -172,4 +174,28 @@ fn gen_walk<'a, K: Hash + Eq + Clone, R: Rng>(
         walk.push(key);
     }
     walk
+}
+
+fn get_bounds(i: usize, context_window: usize, walk_len: usize) -> (usize, usize) {
+    // Get the window framing
+    let left = if i < context_window {
+        0 
+    } else {
+        i - context_window
+    };
+    let right = (i + context_window + 1).min(walk_len);
+    (left, right)
+}
+
+#[cfg(test)]
+mod test_vec_walk {
+    use super::*;
+
+    #[test]
+    fn test_bounds() {
+        let walk_len = 5;
+        assert_eq!(get_bounds(0, 3, walk_len), (0, 4));
+        assert_eq!(get_bounds(4, 3, walk_len), (1, 5));
+        assert_eq!(get_bounds(2, 3, walk_len), (0, 5));
+    }
 }

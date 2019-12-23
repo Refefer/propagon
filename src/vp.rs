@@ -176,7 +176,7 @@ impl VecProp {
 
                     // Clean up data
                     t_emb.clear();
-                    utils::clean_map(features, &mut t_emb, self.error, self.max_terms);
+                    utils::clean_map(&mut features, &mut t_emb, self.error, self.max_terms);
                 });
 
                 // Swap in the new embeddings
