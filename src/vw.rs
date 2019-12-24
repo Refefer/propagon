@@ -23,6 +23,12 @@ pub struct VecWalk {
     pub seed: u64
 }
 
+struct ThreadTemp<F: Hash + Eq + Send + Sync> {
+    features: HashMap<F, f32>,
+    indices: Vec<usize>,
+    rng: StdRng
+}
+
 impl VecWalk {
 
     pub fn fit<K: Hash + Eq + Clone + Send + Sync, F: Hash + Eq + Clone + Ord + Send + Sync>(
@@ -36,9 +42,11 @@ impl VecWalk {
         for (f_node, t_node, weight) in graph.into_iter() {
             let e = edges.entry(f_node.clone()).or_insert_with(|| vec![]);
             e.push((t_node.clone(), weight));
-            let e = edges.entry(t_node.clone()).or_insert_with(|| vec![]);
-            e.push((f_node.clone(), weight));
+            let e = edges.entry(t_node).or_insert_with(|| vec![]);
+            e.push((f_node, weight));
         }
+
+        eprintln!("Number of Vertices: {}", edges.len());
 
         // Setup initial embeddings
         let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
@@ -58,9 +66,15 @@ impl VecWalk {
 
         // We randomly sort our keys each pass in the same style as label embeddings
         let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed);
-        let mut rngs: Vec<_> = (0..self.chunks)
-            .map(|i| rand::rngs::StdRng::seed_from_u64(self.seed + 1 + i as u64))
-            .collect();
+        let mut temp_space: Vec<ThreadTemp<F>> = (0..self.chunks)
+            .map(|i| {
+                ThreadTemp {
+                    features: HashMap::with_capacity(
+                        (2 * self.context_window + 1) * self.max_terms),
+                    indices: (0..self.walk_len).collect(),
+                    rng: rand::rngs::StdRng::seed_from_u64(self.seed + 1 + i as u64)
+                }
+            }).collect();
 
         for n_iter in 0..self.n_iters {
             eprintln!("Iteration: {}", n_iter);
@@ -69,22 +83,19 @@ impl VecWalk {
             // We go over the keys in chunks so that we can parallelize them
             for key_subset in keys.as_slice().chunks(self.chunks) {
 
-                let it = key_subset.par_iter().zip(rngs.par_iter_mut());
-                let maps: Vec<_> = it.map(|(key, mut rng)| {
+                let it = key_subset.par_iter().zip(temp_space.par_iter_mut());
+                let maps: Vec<_> = it.map(|(key, ts)| {
                     let mut new_map = HashMap::new();
 
                     // Generate Random Walk
-                    let walk = gen_walk(key, &edges, &mut rng, self.walk_len);
+                    let walk = gen_walk(key, &edges, &mut ts.rng, self.walk_len);
 
                     // We randomize the indices to break up linear percolation
-                    let mut indices: Vec<_> = (0..walk.len()).collect();
-                    indices.as_mut_slice().shuffle(&mut rng);
-                    let indices = 0..walk.len();
+                    ts.indices.as_mut_slice().shuffle(&mut ts.rng);
 
-                    let mut features = HashMap::with_capacity(
-                        (2 * self.context_window + 1) * self.max_terms);
+                    let mut features = &mut ts.features;
                     
-                    for i in indices {
+                    for &i in ts.indices.iter() {
                         features.clear();
                         let get = |x| {
                             new_map.get(x).or_else(|| verts.get(x))
@@ -112,7 +123,7 @@ impl VecWalk {
                         // Subtract random negative samples from the mean
                         for _ in 0..self.negative_sample {
                             let random_negative = keys.as_slice()
-                                .choose(&mut rng)
+                                .choose(&mut ts.rng)
                                 .expect("Should always have at least 1 key");
 
                             for (f, v) in get(random_negative).iter() {
@@ -128,12 +139,12 @@ impl VecWalk {
                         // Check if there is a prior, adding blending it if so
                         if self.alpha < 1. {
                             utils::update_prior(
-                                &mut features, ctx, &prior, self.alpha, true);
+                                features, ctx, &prior, self.alpha, true);
                         }
 
                         // Clean up data
                         let mut t_emb = Vec::with_capacity(self.max_terms);
-                        utils::clean_map(&mut features, &mut t_emb, self.error, self.max_terms);
+                        utils::clean_map(features, &mut t_emb, self.error, self.max_terms);
                         new_map.insert(ctx.clone(), Embedding(t_emb));
                     }
                     new_map
@@ -160,7 +171,7 @@ impl VecWalk {
 
 
 fn gen_walk<'a, K: Hash + Eq + Clone, R: Rng>(
-    key: &'a K, 
+    mut key: &'a K, 
     edges: &'a HashMap<K, Vec<(K, f32)>>, 
     mut rng: &mut R,
     walk_len: usize
@@ -168,9 +179,9 @@ fn gen_walk<'a, K: Hash + Eq + Clone, R: Rng>(
     let mut walk = Vec::with_capacity(walk_len+1);
     walk.push(key);
     for _ in 0..walk_len {
-        let (key, _w) = edges[key]
+        key = &edges[key]
             .choose_weighted(&mut rng, |(_, w)| *w)
-            .expect("Should never be empty!");
+            .expect("Should never be empty!").0;
         walk.push(key);
     }
     walk
