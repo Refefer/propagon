@@ -4,7 +4,6 @@ extern crate rand;
 extern crate rayon;
 
 use std::hash::Hash;
-use std::sync::RwLock;
 
 use hashbrown::HashMap;
 use rand::prelude::*;
