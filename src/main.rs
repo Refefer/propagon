@@ -353,6 +353,7 @@ fn parse<'a>() -> ArgMatches<'a> {
              .help("Treats separate files and groups as separate datasets to process"))
 
         .subcommand(SubCommand::with_name("btm-mm")
+            .about("Computes bradley-terry model rankings using the minor-maxim method")
             .arg(Arg::with_name("min-graph-size")
                  .long("min-graph-size")
                  .takes_value(true)
@@ -382,6 +383,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Weight of the games.  Defaults to 1e-3")))
 
         .subcommand(SubCommand::with_name("rate")
+            .about("Computes rankings based on win loss ratios")
             .arg(Arg::with_name("confidence-interval")
                  .long("confidence-interval")
                  .takes_value(true)
@@ -389,6 +391,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Confidence interval to compute the rank")))
 
         .subcommand(SubCommand::with_name("glicko2")
+            .about("Computes glicko2 rankings for pairs of games.")
             .arg(Arg::with_name("tau")
                  .long("tau")
                  .takes_value(true)
@@ -398,6 +401,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("If provided, uses mu instead of 95% lower-bound")))
 
         .subcommand(SubCommand::with_name("btm-lr")
+            .about("Computes bradley-terry model rankings logistic regression")
             .arg(Arg::with_name("alpha")
                  .long("alpha")
                  .takes_value(true)
@@ -416,6 +420,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                         independently")))
 
         .subcommand(SubCommand::with_name("page-rank")
+            .about("Computes the page rank of each vertex in a directed graph")
             .arg(Arg::with_name("iterations")
                  .long("iterations")
                  .takes_value(true)
@@ -431,6 +436,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("How sink nodes are dispersed.  Default is reverse")))
 
         .subcommand(SubCommand::with_name("birank")
+            .about("Computes importance using the BiRank method.")
             .arg(Arg::with_name("iterations")
                  .long("iterations")
                  .takes_value(true)
@@ -445,6 +451,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Blend coefficiant for u_0 vector")))
 
         .subcommand(SubCommand::with_name("vec-prop")
+            .about("Propagates sparse vectors within a graph using the Vec-Prop algorithm.")
             .arg(Arg::with_name("prior")
                  .long("prior")
                  .takes_value(true)
@@ -480,6 +487,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Number of vertices to perform in parallel.  Default is 10")))
 
         .subcommand(SubCommand::with_name("vec-walk")
+            .about("Propagates sparse vectors within a graph using weighted random walks.")
             .arg(Arg::with_name("prior")
                  .long("prior")
                  .takes_value(true)
@@ -519,6 +527,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Number of vertices to randomly sample to subtract.  Default is 5")))
 
         .subcommand(SubCommand::with_name("lpa")
+            .about("Computes clusters using label propagation")
             .arg(Arg::with_name("iterations")
                  .long("iterations")
                  .takes_value(true)
@@ -529,6 +538,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Number of vertices to perform in parallel.  Default is 10")))
 
         .subcommand(SubCommand::with_name("label-rank")
+            .about("Computes clusters using LabelRank")
             .arg(Arg::with_name("iterations")
                  .long("iterations")
                  .takes_value(true)

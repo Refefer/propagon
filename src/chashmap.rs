@@ -44,7 +44,10 @@ impl <K: Hash + Eq, V> CHashMap<K, V> {
     }
 
     pub fn get_map(&self, key: &K) -> &RwLock<HashMap<K, V>> {
-        &self.partitions[Self::get_idx(key, self.segments)]
+        let idx = Self::get_idx(key, self.segments);
+        unsafe {
+            self.partitions.get_unchecked(idx)
+        }
     }
 
     pub fn into_inner(self) -> Vec<HashMap<K, V>> {
