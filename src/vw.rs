@@ -4,12 +4,14 @@ extern crate rand;
 extern crate rayon;
 
 use std::hash::Hash;
+use std::sync::RwLock;
 
 use hashbrown::HashMap;
 use rand::prelude::*;
 use rayon::prelude::*;
 use super::vp::{Embedding};
 use super::utils;
+use crate::chashmap::CHashMap;
 
 pub struct VecWalk {
     pub n_iters: usize,
@@ -50,7 +52,7 @@ impl VecWalk {
 
         // Setup initial embeddings
         let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
-        let mut verts: HashMap<_,_> = keys.iter()
+        let it = keys.iter()
             .map(|key| {
                 let e = if let Some(emb) = prior.get(key) {
                     let mut e = emb.clone();
@@ -62,7 +64,10 @@ impl VecWalk {
                     Embedding::with_capacity(self.max_terms)
                 };
                 (key.clone(), e)
-            }).collect();
+            });
+
+        let verts = CHashMap::new(91);
+        let verts = verts.extend(it);
 
         // We randomly sort our keys each pass in the same style as label embeddings
         let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed);
@@ -84,9 +89,7 @@ impl VecWalk {
             for key_subset in keys.as_slice().chunks(self.chunks) {
 
                 let it = key_subset.par_iter().zip(temp_space.par_iter_mut());
-                let maps: Vec<_> = it.map(|(key, ts)| {
-                    let mut new_map = HashMap::new();
-
+                it.for_each(|(key, ts)| {
                     // Generate Random Walk
                     let walk = gen_walk(key, &edges, &mut ts.rng, self.walk_len);
 
@@ -97,21 +100,15 @@ impl VecWalk {
                     
                     for &i in ts.indices.iter() {
                         features.clear();
-                        let get = |x| {
-                            new_map.get(x).or_else(|| verts.get(x))
-                                .expect("verts should have the context, always")
-                        };
                         let ctx = walk[i];
-
-                        // If we've already processed it this walk, move along.
-                        if new_map.contains_key(ctx) {continue}
 
                         // Get the window framing
                         let (left, right) = get_bounds(i, self.context_window, walk.len());
 
                         // Compute the sum of the embeddings in the walk
                         for vert in walk[left..right].iter() {
-                            for (f, v) in get(vert).iter() {
+                            let v = verts.get_map(vert).read().unwrap();
+                            for (f, v) in v.get(vert).unwrap().iter() {
                                 if let Some(nv) = features.get_mut(f) {
                                     *nv += *v;
                                 } else {
@@ -126,7 +123,9 @@ impl VecWalk {
                                 .choose(&mut ts.rng)
                                 .expect("Should always have at least 1 key");
 
-                            for (f, v) in get(random_negative).iter() {
+                            let v = verts.get_map(random_negative).read().unwrap();
+
+                            for (f, v) in v.get(random_negative).unwrap().iter() {
                                 if let Some(nv) = features.get_mut(f) {
                                     *nv = (*nv - *v).max(0.);
                                 } 
@@ -145,27 +144,23 @@ impl VecWalk {
                         // Clean up data
                         let mut t_emb = Vec::with_capacity(self.max_terms);
                         utils::clean_map(features, &mut t_emb, self.error, self.max_terms);
-                        new_map.insert(ctx.clone(), Embedding(t_emb));
-                    }
-                    new_map
-                }).collect();
 
-                // Swap in the new embeddings
-                for map in maps.into_iter() {
-                    for (k, new_e) in map.into_iter() {
-                        verts.insert(k, new_e);
+                        let mut v = verts.get_map(ctx).write().unwrap();
+                        v.insert(ctx.clone(), Embedding(t_emb));
                     }
-                }
+                });
 
             }
 
         }
 
         // L2 normalize on the way out
-        verts.par_values_mut().for_each(|v| {
-            utils::l2_normalize(&mut (v.0));
-        });
-        verts
+        verts.into_inner().into_iter().flat_map(|mut m| {
+            m.par_values_mut().for_each(|v| {
+                utils::l2_normalize(&mut (v.0));
+            });
+            m.into_iter()
+        }).collect()
     }
 }
 

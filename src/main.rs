@@ -8,6 +8,7 @@ mod vp;
 mod vw;
 mod lpa;
 mod labelrankplus;
+mod chashmap;
 
 mod utils;
 
@@ -487,7 +488,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("iterations")
                  .long("iterations")
                  .takes_value(true)
-                 .help("Number of iterations to compute on the graph"))
+                 .help("Number of iterations to compute on the graph. Default is 10"))
             .arg(Arg::with_name("alpha")
                  .long("alpha")
                  .takes_value(true)
@@ -495,15 +496,15 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("max-terms")
                  .long("max-terms")
                  .takes_value(true)
-                 .help("Max terms to keep between propagations"))
+                 .help("Max terms to keep between propagations.  Default is 100"))
             .arg(Arg::with_name("error")
                  .long("error")
                  .takes_value(true)
-                 .help("Max error rate before suppressing the data"))
+                 .help("Max error rate before suppressing the data. Default is 1e-5"))
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)
-                 .help("Number of vertices to perform in parallel.  Default is 10"))
+                 .help("Number of vertices to perform in parallel. Default is 10"))
             .arg(Arg::with_name("walk-len")
                  .long("walk-len")
                  .takes_value(true)
