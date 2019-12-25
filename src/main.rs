@@ -253,7 +253,7 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
     let context_window = value_t!(args, "context-window", usize).unwrap_or(2);
     let max_terms      = value_t!(args, "max-terms", usize).unwrap_or(100);
     let error          = value_t!(args, "error", f32).unwrap_or(1e-5);
-    let chunks         = value_t!(args, "chunks", usize).unwrap_or(10);
+    let chunks         = value_t!(args, "chunks", usize).unwrap_or(91);
     let neg_sample     = value_t!(args, "negative-sample", usize).unwrap_or(5);
 
     let vw = vw::VecWalk {
@@ -512,7 +512,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)
-                 .help("Number of vertices to perform in parallel. Default is 10"))
+                 .help("Tunes concurrent hashmap.  Default is 91."))
             .arg(Arg::with_name("walk-len")
                  .long("walk-len")
                  .takes_value(true)
