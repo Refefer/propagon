@@ -3,6 +3,7 @@ extern crate hashbrown;
 extern crate rand;
 extern crate rayon;
 extern crate thread_local;
+extern crate indicatif;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash,Hasher};
@@ -11,6 +12,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::ops::DerefMut;
 
+use indicatif::{ProgressBar,ProgressStyle};
 use thread_local::ThreadLocal;
 use hashbrown::HashMap;
 use rand::prelude::*;
@@ -75,8 +77,15 @@ impl VecWalk {
         let ts_feats = Arc::new(ThreadLocal::new());
         let ts_inds = Arc::new(ThreadLocal::new());
 
-        for n_iter in 0..self.n_iters {
-            eprintln!("Iteration: {}", n_iter);
+        let total_work = self.n_iters * self.walk_len * keys.len();
+
+        eprintln!("Starting");
+        let pb = ProgressBar::new(total_work as u64);
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
+        pb.enable_steady_tick(200);
+
+        for _n_iter in 0..self.n_iters {
             keys.shuffle(&mut rng);
 
             // We go over the keys in chunks so that we can parallelize them
@@ -154,9 +163,11 @@ impl VecWalk {
                     let mut v = verts.get_map(ctx).write().unwrap();
                     v.insert(ctx.clone(), Embedding(t_emb));
                 }
+                pb.inc(self.walk_len as u64);
             });
 
         }
+        pb.finish();
 
         // L2 normalize on the way out
         verts.into_inner().into_iter().flat_map(|mut m| {
