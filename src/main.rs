@@ -9,6 +9,7 @@ mod vw;
 mod lpa;
 mod labelrankplus;
 mod chashmap;
+mod walker;
 
 mod utils;
 
@@ -250,6 +251,7 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
     let alpha          = value_t!(args, "alpha", f32).unwrap_or(0.9);
     let prior          = value_t!(args, "prior", String).expect("Required");
     let walk_len       = value_t!(args, "walk-len", usize).unwrap_or(20);
+    let biased_walk    = !value_t!(args, "uniform-walk", bool).unwrap_or(false);
     let context_window = value_t!(args, "context-window", usize).unwrap_or(2);
     let max_terms      = value_t!(args, "max-terms", usize).unwrap_or(100);
     let error          = value_t!(args, "error", f32).unwrap_or(1e-5);
@@ -261,6 +263,7 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
         alpha,
         max_terms,
         walk_len,
+        biased_walk,
         context_window,
         error,
         chunks,
@@ -517,6 +520,10 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("walk-len")
                  .takes_value(true)
                  .help("Number of steps in the randomw walk"))
+            .arg(Arg::with_name("uniform-walk")
+                 .long("uniform-len")
+                 .takes_value(true)
+                 .help("Whether to do an unweighted random walk."))
             .arg(Arg::with_name("context-window")
                  .long("context-window")
                  .takes_value(true)

@@ -50,8 +50,39 @@ pub fn clean_map<K: Hash>(
     }
 }
 
-pub fn update_prior<K, F, E>(
+pub fn interpolate_vecs<'a, F: 'a>(
     mut features: &mut HashMap<F, f32>, 
+    orig: impl Iterator<Item=&'a (F, f32)>, 
+    alpha: f32, 
+    norm: bool
+) 
+where F: Hash + Eq + Clone {
+
+    // Scale the data by alpha
+    features.values_mut().for_each(|v| {
+        *v *= alpha;
+    });
+
+    // add the prior
+    for (k, v) in orig {
+        let nv = (1. - alpha) * (*v);
+        if features.contains_key(k) {
+            if let Some(v) = features.get_mut(k) {
+                *v += nv;
+            }
+        } else {
+            features.insert(k.clone(), nv);
+        }
+    }
+    if norm {
+        l2_norm_hm(&mut features);
+    }
+
+
+}
+
+pub fn update_prior<K, F, E>(
+    features: &mut HashMap<F, f32>, 
     ctx: &K, 
     prior: &HashMap<K, E>, 
     alpha: f32, 
@@ -61,26 +92,7 @@ where K: Hash + Eq,
       F: Hash + Eq + Clone,
       E: Deref<Target=Vec<(F, f32)>> {
     if let Some(p) = prior.get(ctx) {
-
-        // Scale the data by alpha
-        features.values_mut().for_each(|v| {
-            *v *= alpha;
-        });
-
-        // add the prior
-        for (k, v) in p.iter() {
-            let nv = (1. - alpha) * (*v);
-            if features.contains_key(k) {
-                if let Some(v) = features.get_mut(k) {
-                    *v += nv;
-                }
-            } else {
-                features.insert(k.clone(), nv);
-            }
-        }
-        if norm {
-            l2_norm_hm(&mut features);
-        }
+        interpolate_vecs(features, p.iter(), alpha, norm);
     }
 }
 

@@ -17,9 +17,11 @@ use thread_local::ThreadLocal;
 use hashbrown::HashMap;
 use rand::prelude::*;
 use rayon::prelude::*;
-use super::vp::{Embedding};
-use super::utils;
+
+use crate::vp::{Embedding};
+use crate::utils;
 use crate::chashmap::CHashMap;
+use crate::walker::RandomWalk;
 
 pub struct VecWalk {
     pub n_iters: usize,
@@ -28,6 +30,7 @@ pub struct VecWalk {
     pub alpha: f32,
     pub chunks: usize,
     pub walk_len: usize,
+    pub biased_walk: bool,
     pub context_window: usize,
     pub negative_sample: usize,
     pub seed: u64
@@ -85,6 +88,8 @@ impl VecWalk {
             .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
         pb.enable_steady_tick(200);
 
+        let walker = RandomWalk::new(&edges);
+
         for _n_iter in 0..self.n_iters {
             keys.shuffle(&mut rng);
 
@@ -109,7 +114,11 @@ impl VecWalk {
                 }).borrow_mut();
 
                 // Generate Random Walk
-                let walk = gen_walk(key, &edges, rng.deref_mut(), self.walk_len);
+                let walk = if self.biased_walk {
+                    walker.gen_biased_walk(key, rng.deref_mut(), self.walk_len)
+                } else {
+                    walker.gen_uniform_walk(key, rng.deref_mut(), self.walk_len)
+                };
 
                 // We randomize the indices to break up linear percolation
                 indices.as_mut_slice().shuffle(rng.deref_mut());
@@ -133,7 +142,7 @@ impl VecWalk {
                         }
                     }
 
-                    // Subtract random negative samples from the mean
+                    // Subtract random negative samples from the mean.
                     for _ in 0..self.negative_sample {
                         let random_negative = keys.as_slice()
                             .choose(rng.deref_mut())
@@ -177,24 +186,6 @@ impl VecWalk {
             m.into_iter()
         }).collect()
     }
-}
-
-
-fn gen_walk<'a, K: Hash + Eq + Clone, R: Rng>(
-    mut key: &'a K, 
-    edges: &'a HashMap<K, Vec<(K, f32)>>, 
-    mut rng: &mut R,
-    walk_len: usize
-) -> Vec<&'a K> {
-    let mut walk = Vec::with_capacity(walk_len+1);
-    walk.push(key);
-    for _ in 0..walk_len {
-        key = &edges[key]
-            .choose_weighted(&mut rng, |(_, w)| *w)
-            .expect("Should never be empty!").0;
-        walk.push(key);
-    }
-    walk
 }
 
 fn get_bounds(i: usize, context_window: usize, walk_len: usize) -> (usize, usize) {
