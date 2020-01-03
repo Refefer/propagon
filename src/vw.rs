@@ -159,10 +159,11 @@ impl VecWalk {
                     // L2 norm the embedding
                     utils::l2_norm_hm(&mut features);
 
-                    // Check if there is a prior, adding blending it if so
-                    if self.alpha < 1. {
-                        utils::update_prior(
-                            &mut features, ctx, &prior, self.alpha, true);
+                    // Update step  is computed alpha * Mean(embeddings) + (1 - alpha) * v_e
+                    {
+                        let v = verts.get_map(ctx).read().unwrap();
+                        let p = v.get(ctx).unwrap().iter();
+                        utils::interpolate_vecs(&mut features, p, self.alpha, true);
                     }
 
                     // Clean up data
