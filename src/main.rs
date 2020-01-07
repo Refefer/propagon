@@ -6,6 +6,7 @@ mod pr;
 mod birank;
 mod vp;
 mod vw;
+mod rw;
 mod lpa;
 mod labelrankplus;
 mod chashmap;
@@ -19,7 +20,7 @@ extern crate hashbrown;
 
 use clap::{Arg, App, ArgMatches, SubCommand};
 
-use std::fmt::Display;
+use std::fmt::{Write,Display};
 use hashbrown::{HashMap,HashSet};
 
 type Match = (u32, u32, f32);
@@ -337,6 +338,32 @@ fn label_rank(args: &&clap::ArgMatches<'_>, games: Games) {
     emit_scores(it);
 }
 
+fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
+    let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
+    let walk_len   = value_t!(args, "walk-len", usize).unwrap_or(20);
+    let biased_walk    = !value_t!(args, "uniform-walk", bool).unwrap_or(false);
+    let buffer_size    = value_t!(args, "buffer-size", usize).unwrap_or(10000);
+
+    let random_walk = rw::RandomWalk {
+        iterations,
+        buffer_size,
+        walk_len,
+        biased_walk,
+        seed: 2019
+    };
+    let mut s = String::new();
+    for walk in random_walk.generate(games.into_iter()) {
+        for (i, k) in walk.into_iter().enumerate() {
+            if i > 0 {
+                s.push(' ');
+            }
+            write!(s, "{}", k).expect("Should never fail!");
+        }
+        println!("{}", s);
+        s.clear();
+    }
+}
+
 
 fn parse<'a>() -> ArgMatches<'a> {
     App::new("btm")
@@ -544,6 +571,24 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Number of vertices to perform in parallel.  Default is 10")))
 
+        .subcommand(SubCommand::with_name("random-walk")
+            .about("Generates random walks from a graph")
+            .arg(Arg::with_name("iterations")
+                 .long("iterations")
+                 .takes_value(true)
+                 .help("Number of iterations to compute on the graph.  If omitted, runs until there are no more node membership shanges"))
+            .arg(Arg::with_name("walk-len")
+                 .long("walk-len")
+                 .takes_value(true)
+                 .help("Number of steps in the random walk."))
+            .arg(Arg::with_name("unbiased-walk")
+                 .long("uniform-walk")
+                 .help("If provided, performs a uniform walk instead of a biased walk."))
+            .arg(Arg::with_name("buffer-size")
+                 .long("buffer-size")
+                 .takes_value(true)
+                 .help("Amount of temp space to use for parallel computation.  Default is 10000.")))
+
         .subcommand(SubCommand::with_name("label-rank")
             .about("Computes clusters using LabelRank")
             .arg(Arg::with_name("iterations")
@@ -627,6 +672,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("label-rank") {
                 let all_games = games.into_iter().flatten().collect();
                 label_rank(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("random-walk") {
+                let all_games = games.into_iter().flatten().collect();
+                random_walk(sub_args, all_games);
             }
 
             // print a separator
