@@ -181,12 +181,13 @@ fn birank(args: &&clap::ArgMatches<'_>, games: Games) {
     let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
     let alpha      = value_t!(args, "alpha", f32).unwrap_or(1.0);
     let beta       = value_t!(args, "beta", f32).unwrap_or(1.0);
+    let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let settings = birank::Settings {
         n_iters: iterations,
         alpha,
         beta,
-        seed: 2019
+        seed: seed
     };
 
     let mut birank = birank::BiRank::build(games.into_iter());
@@ -222,6 +223,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     let error      = value_t!(args, "error", f32).unwrap_or(1e-5);
     let l2_output  = args.is_present("l2-output");
     let chunks     = value_t!(args, "chunks", usize).unwrap_or(10);
+    let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let reg = match args.value_of("regularizer").unwrap() {
         "l1" => vp::Regularizer::L1,
@@ -237,7 +239,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
         error,
         chunks,
         normalize: l2_output,
-        seed: 2019
+        seed: seed 
     };
 
     // Load priors
@@ -258,6 +260,7 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
     let error          = value_t!(args, "error", f32).unwrap_or(1e-5);
     let chunks         = value_t!(args, "chunks", usize).unwrap_or(91);
     let neg_sample     = value_t!(args, "negative-sample", usize).unwrap_or(5);
+    let seed           = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let vw = vw::VecWalk {
         n_iters: iterations,
@@ -269,7 +272,7 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
         error,
         chunks,
         negative_sample: neg_sample,
-        seed: 2019
+        seed: seed 
     };
 
     // Load priors
@@ -291,12 +294,13 @@ fn lpa(args: &&clap::ArgMatches<'_>, games: Games) {
     } else {
         Some(10)
     };
-    let chunks     = value_t!(args, "chunks", usize).unwrap_or(10);
+    let chunks = value_t!(args, "chunks", usize).unwrap_or(10);
+    let seed   = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let lpa = lpa::LPA {
         n_iters: iterations,
         chunks: chunks,
-        seed: 2019
+        seed: seed 
     };
 
     let clusters = lpa.fit(games.into_iter());
@@ -351,13 +355,14 @@ fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
     let walk_len    = value_t!(args, "walk-len", usize).unwrap_or(20);
     let biased_walk = !value_t!(args, "uniform-walk", bool).unwrap_or(false);
     let buffer_size = value_t!(args, "buffer-size", usize).unwrap_or(10000);
+    let seed        = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let random_walk = rw::RandomWalk {
         iterations,
         buffer_size,
         walk_len,
         biased_walk,
-        seed: 2019
+        seed: seed
     };
     let mut s = String::new();
     for walk in random_walk.generate(games.into_iter()) {
@@ -486,7 +491,11 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("beta")
                  .long("beta")
                  .takes_value(true)
-                 .help("Blend coefficiant for u_0 vector")))
+                 .help("Blend coefficiant for u_0 vector"))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use.")))
 
         .subcommand(SubCommand::with_name("vec-prop")
             .about("Propagates sparse vectors within a graph using the Vec-Prop algorithm.")
@@ -519,6 +528,10 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("l2-output")
                  .long("l2-output")
                  .help("If provided, L2 normalizes the final embeddings"))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use."))
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)
@@ -566,7 +579,11 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("negative-sample")
                  .long("negative-sample")
                  .takes_value(true)
-                 .help("Number of vertices to randomly sample to subtract.  Default is 5")))
+                 .help("Number of vertices to randomly sample to subtract.  Default is 5"))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use.")))
 
         .subcommand(SubCommand::with_name("lpa")
             .about("Computes clusters using label propagation")
@@ -574,6 +591,10 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("iterations")
                  .takes_value(true)
                  .help("Number of iterations to compute on the graph.  Default is 10.  When set to 0, will run until there are no more node membership changes."))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use."))
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)
@@ -592,6 +613,10 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("unbiased-walk")
                  .long("uniform-walk")
                  .help("If provided, performs a uniform walk instead of a biased walk."))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use."))
             .arg(Arg::with_name("buffer-size")
                  .long("buffer-size")
                  .takes_value(true)
