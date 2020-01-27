@@ -366,10 +366,10 @@ fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
 
 
 fn parse<'a>() -> ArgMatches<'a> {
-    App::new("btm")
-        .version("0.0.1")
+    App::new("propagon")
+        .version("0.1.0")
         .author("Andrew S. <refefer@gmail.com>")
-        .about("Computes the bradley-terry model of a given set")
+        .about("Suite of high performance graph tools")
         .arg(Arg::with_name("path")
              .min_values(1)
              .required(true)

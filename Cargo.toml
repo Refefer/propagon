@@ -1,5 +1,5 @@
 [package]
-name = "pairwizer"
+name = "propagon"
 version = "0.1.0"
 authors = ["Andrew Stanton <refefer@gmail.com>"]
 edition = "2018"
