@@ -339,10 +339,10 @@ fn label_rank(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
-    let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
-    let walk_len   = value_t!(args, "walk-len", usize).unwrap_or(20);
-    let biased_walk    = !value_t!(args, "uniform-walk", bool).unwrap_or(false);
-    let buffer_size    = value_t!(args, "buffer-size", usize).unwrap_or(10000);
+    let iterations  = value_t!(args, "iterations", usize).unwrap_or(10);
+    let walk_len    = value_t!(args, "walk-len", usize).unwrap_or(20);
+    let biased_walk = !value_t!(args, "uniform-walk", bool).unwrap_or(false);
+    let buffer_size = value_t!(args, "buffer-size", usize).unwrap_or(10000);
 
     let random_walk = rw::RandomWalk {
         iterations,
