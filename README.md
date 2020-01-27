@@ -111,7 +111,7 @@ You'll need the latest version of the Rust compiler [toolchain](http://www.rustu
 Data Format
 ---
 
-Data is expected in the following, line delimited format:
+Data for tournament rankings is expected as the following, line delimited format:
 
 ```
     ID_OF_WINNER ID_OF_LOSER [WEIGHT]
@@ -122,9 +122,27 @@ Data is expected in the following, line delimited format:
     ID_OF_WINNER ID_OF_LOSER [WEIGHT]
 ```
 
-where weight is optional and only taken into consideration for Bradley-Terry Models.  Empty lines designate separate batch delimiters: in the case of `glicko2`, each batch will be considered an update against previous batches.  BTM and rate statistics will flatten multiple batches as they don't support updates.
+where weight is optional (assumed as 1 if omitted).  Empty lines designate separate batch delimiters: in the case of `glicko2`, each batch will be considered an update against previous batches.  BTM and rate statistics will flatten multiple batches as they don't support updates.
 
-To treat batches as completely independent rankings, users can use the `--groups-are-separate` in which case `propagon` will emit separate scores per batch.  This is useful when processing a large number of independent tournaments.
+For graph algorithms, the format is interpretted as edges: 
+
+```
+    FROM_NODE_ID TO_NODE_ID [WEIGHT]
+    FROM_NODE_ID TO_NODE_ID [WEIGHT]
+    FROM_NODE_ID TO_NODE_ID [WEIGHT]
+```
+
+For graph algorithms operating on undirected graphs, edges will automatically be added in both directions.
+
+For algorithms utilizing a "priors" file, such as the propagation algorithms:
+
+```
+    NODE_ID FEAT_1 FEAT_2 [...]
+    NODE_ID FEAT_1 FEAT_2 [...]
+    NODE_ID FEAT_1 FEAT_2 [...]
+```
+
+where FEAT is a token of interest.  Currently, the input format only support boolean features.
 
 Example
 ---
