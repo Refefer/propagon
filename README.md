@@ -1,7 +1,7 @@
 Propagon
 ===
 
-Propagon is a library which provides a suite of algorithms for processing graphs.  It can scale up to 100s of millions of edges and 10s of millions of ids on a laptop.
+Propagon is a library which provides a suite of algorithms for processing graphs.  It can scale up to 100s of millions of edges and 10s of millions of nodes on a single laptop.
 
 Algorithms Implemented
 ---
