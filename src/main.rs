@@ -282,7 +282,15 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
 
 
 fn lpa(args: &&clap::ArgMatches<'_>, games: Games) {
-    let iterations = value_t!(args, "iterations", usize).ok();
+    let iterations = if let Some(n_iter) = value_t!(args, "iterations", usize).ok() {
+        if n_iter == 0 {
+            None
+        } else {
+            Some(n_iter)
+        }
+    } else {
+        Some(10)
+    };
     let chunks     = value_t!(args, "chunks", usize).unwrap_or(10);
 
     let lpa = lpa::LPA {
@@ -565,7 +573,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("iterations")
                  .long("iterations")
                  .takes_value(true)
-                 .help("Number of iterations to compute on the graph.  If omitted, runs until there are no more node membership shanges"))
+                 .help("Number of iterations to compute on the graph.  Default is 10.  When set to 0, will run until there are no more node membership changes."))
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)
