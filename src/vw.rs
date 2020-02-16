@@ -87,6 +87,7 @@ impl VecWalk {
         pb.set_style(ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
         pb.enable_steady_tick(200);
+        pb.set_draw_delta(total_work as u64 / 1000);
 
         let walker = RandomWalk::new(&edges);
 

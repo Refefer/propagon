@@ -222,7 +222,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     let max_terms  = value_t!(args, "max-terms", usize).unwrap_or(100);
     let error      = value_t!(args, "error", f32).unwrap_or(1e-5);
     let l2_output  = args.is_present("l2-output");
-    let chunks     = value_t!(args, "chunks", usize).unwrap_or(10);
+    let chunks     = value_t!(args, "chunks", usize).unwrap_or(91);
     let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let reg = match args.value_of("regularizer").unwrap() {
@@ -535,7 +535,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)
-                 .help("Number of vertices to perform in parallel.  Default is 10")))
+                 .help("Tunes concurrent hashmap.  Default is 91.")))
 
         .subcommand(SubCommand::with_name("vec-walk")
             .about("Propagates sparse vectors within a graph using weighted random walks.")
