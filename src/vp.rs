@@ -9,7 +9,6 @@ use std::ops::Deref;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::cell::RefCell;
-use std::ops::DerefMut;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -137,7 +136,7 @@ impl VecProp {
         pb.enable_steady_tick(200);
         pb.set_draw_delta(total_work as u64 / 1000);
 
-        for n_iter in 0..self.n_iters {
+        for _n_iter in 0..self.n_iters {
             keys.shuffle(&mut rng);
 
             // We go over the keys in chunks so that we can parallelize them

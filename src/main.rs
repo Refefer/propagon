@@ -229,7 +229,7 @@ fn vec_prop(args: &&clap::ArgMatches<'_>, games: Games) {
     let chunks     = value_t!(args, "chunks", usize).unwrap_or(91);
     let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
 
-    let reg = match args.value_of("regularizer").unwrap() {
+    let reg = match args.value_of("regularizer").unwrap_or("symmetric") {
         "l1" => vp::Regularizer::L1,
         "l2" => vp::Regularizer::L2,
         _    => vp::Regularizer::Symmetric
@@ -512,7 +512,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("regularizer")
                  .takes_value(true)
                  .possible_values(&["l1", "l2", "symmetric"])
-                 .help("Number of iterations to compute on the graph"))
+                 .help("Embedding regularizer.  Default is 'symmetric'."))
             .arg(Arg::with_name("iterations")
                  .long("iterations")
                  .takes_value(true)

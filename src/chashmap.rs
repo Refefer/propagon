@@ -5,7 +5,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash,Hasher};
 use std::sync::RwLock;
 
-use hashbrown::{HashMap,HashSet};
+use hashbrown::HashMap;
 
 #[derive(Debug)]
 pub struct CHashMap<K: Hash + Eq,V> {
@@ -58,6 +58,7 @@ impl <K: Hash + Eq, V> CHashMap<K, V> {
 
 impl <K: Hash + Eq + Clone, V: Clone> CHashMap<K, V> {
 
+    #[allow(dead_code)]
     pub fn update<F: Fn(Option<&V>) -> V>(&self, key: &K, f: F) {
         let mut map = self.get_map(key).write().unwrap();
         if let Some(v) = map.get_mut(key) {
@@ -69,6 +70,7 @@ impl <K: Hash + Eq + Clone, V: Clone> CHashMap<K, V> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn cache(&self, keys: impl Iterator<Item=K>) -> HashMap<K,V> {
         let mut hm = HashMap::new();
         for k in keys {
