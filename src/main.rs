@@ -71,8 +71,12 @@ fn tally_winners_losers(games: &Games) -> (HashMap<u32,(usize,f32)>, HashMap<u32
 }
 
 fn emit_scores<K: Display, V: Display>(it: impl Iterator<Item=(K,V)>) {
+    use std::io::{BufWriter,stdout,Write};
+    let stdout = stdout();
+    let mut handle = BufWriter::new(stdout.lock());
     for (id, s) in it {
-        println!("{}: {}", id, s);
+        write!(handle, "{}: {}\n", id, s)
+            .expect("Error when writing out results!");
     }
 }
 
@@ -569,8 +573,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Number of steps in the random walk"))
             .arg(Arg::with_name("uniform-walk")
-                 .long("uniform-len")
-                 .takes_value(true)
+                 .long("uniform-walk")
                  .help("Whether to do an unweighted random walk."))
             .arg(Arg::with_name("context-window")
                  .long("context-window")
@@ -610,7 +613,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("walk-len")
                  .takes_value(true)
                  .help("Number of steps in the random walk."))
-            .arg(Arg::with_name("unbiased-walk")
+            .arg(Arg::with_name("uniform-walk")
                  .long("uniform-walk")
                  .help("If provided, performs a uniform walk instead of a biased walk."))
             .arg(Arg::with_name("seed")
