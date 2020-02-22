@@ -19,6 +19,12 @@ pub fn l2_normalize<A>(vec: &mut Vec<(A, f32)>) {
     vec.iter_mut().for_each(|p| (*p).1 /= sqr);
 }
 
+#[inline]
+pub fn l2_norm(vec: &mut Vec<f32>) {
+    let sum: f32 = vec.iter().map(|v| (*v).powi(2)).sum();
+    let sqr = sum.powf(0.5);
+    vec.iter_mut().for_each(|p| (*p) /= sqr);
+}
 
 pub fn clean_map<K: Hash>(
     features: &mut HashMap<K,f32>, 

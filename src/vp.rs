@@ -1,4 +1,3 @@
-extern crate heap;
 extern crate hashbrown;
 extern crate rand;
 extern crate rayon;

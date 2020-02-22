@@ -11,6 +11,7 @@ mod lpa;
 mod labelrankplus;
 mod chashmap;
 mod walker;
+mod ectrw;
 
 mod utils;
 
@@ -381,6 +382,40 @@ fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
     }
 }
 
+fn ect_rw(args: &&clap::ArgMatches<'_>, games: Games) {
+    let dims     = value_t!(args, "dims", usize).unwrap();
+    let seed     = value_t!(args, "seed", u64).unwrap_or(2019);
+    let chunks   = value_t!(args, "chunks", usize).unwrap_or(91);
+    let l2norm   = args.is_present("l2");
+    let distance = if args.is_present("weighted") { 
+        ectrw::Distance::Weighted 
+    } else { 
+        ectrw::Distance::Uniform
+    };
+
+    let ect = ectrw::ECTRW {
+        dims,
+        distance,
+        chunks,
+        l2norm,
+        seed
+    };
+
+    let embeddings = ect.fit(games.into_iter());
+    emit_scores(embeddings.into_iter().map(|(k, v)| {
+        let mut s = String::new();
+        s.push('[');
+        for (i, vi) in v.into_iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            write!(&mut s, "{}", vi).expect("Should never fail");
+        }
+        s.push(']');
+        (k, s)
+    }));
+}
+
 
 fn parse<'a>() -> ArgMatches<'a> {
     App::new("propagon")
@@ -648,6 +683,28 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Maximum number of terms to store.  Default is 10.")))
 
+        .subcommand(SubCommand::with_name("ect-rw")
+            .about("Generates dense embeddings based on randomw walks andeuclidean commute time.")
+            .arg(Arg::with_name("dims")
+                 .long("dims")
+                 .required(true)
+                 .takes_value(true)
+                 .help("Number of random walks to generate dimensions"))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use."))
+            .arg(Arg::with_name("weighted")
+                 .long("weighted")
+                 .help("Uses edge weights as part of the distance computation."))
+            .arg(Arg::with_name("chunks")
+                 .long("chunks")
+                 .takes_value(true)
+                 .help("Tunes concurrent hashmap.  Default is 91."))
+            .arg(Arg::with_name("l2")
+                 .long("l2")
+                 .help("If provided, L2-norms the embeddings.")))
+
 
         .get_matches()
 }
@@ -711,6 +768,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("random-walk") {
                 let all_games = games.into_iter().flatten().collect();
                 random_walk(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("ect-rw") {
+                let all_games = games.into_iter().flatten().collect();
+                ect_rw(sub_args, all_games);
             }
 
             // print a separator

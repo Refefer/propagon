@@ -16,7 +16,7 @@ pub struct LPA {
 
 impl LPA {
 
-    pub fn fit<K: Hash + Eq + Clone + Send + Sync>(
+    pub fn fit<K: Hash + Eq + Clone + Send + Sync + Ord>(
         &self, 
         graph: impl Iterator<Item=(K,K,f32)>
     ) -> HashMap<K, usize> {
@@ -32,6 +32,7 @@ impl LPA {
 
         // Setup initial embeddings
         let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
+        keys.sort();
 
         let mut clusters: HashMap<_,_> = keys.iter().enumerate()
             .map(|(i, k)| (k.clone(), i))
@@ -74,7 +75,9 @@ impl LPA {
 
                     // Get the best cluster.  if ties, select cluster at random
                     if ties {
-                        let clusters: Vec<_> = counts.keys().collect();
+                        let mut clusters: Vec<_> = counts.keys().collect();
+                        // Makes LPA deterministic
+                        clusters.sort();
                         **clusters.as_slice()
                             .choose(&mut rng)
                             .expect("If a node has no edges, code bug")
