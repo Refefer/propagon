@@ -382,20 +382,27 @@ fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
     }
 }
 
-fn ect_rw(args: &&clap::ArgMatches<'_>, games: Games) {
+fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     let dims     = value_t!(args, "dims", usize).unwrap();
     let seed     = value_t!(args, "seed", u64).unwrap_or(2019);
     let chunks   = value_t!(args, "chunks", usize).unwrap_or(91);
     let l2norm   = args.is_present("l2");
-    let distance = if args.is_present("weighted") { 
-        ectrw::Distance::Weighted 
-    } else { 
-        ectrw::Distance::Uniform
+
+    let distance = match args.value_of("weighting").unwrap_or("uniform") {
+        "uniform" => ectrw::Distance::Uniform,
+        "edge"    => ectrw::Distance::EdgeWeighted,
+        _         => ectrw::Distance::DegreeWeighted
+    };
+
+    let selection = match args.value_of("selection").unwrap_or("degree") {
+        "random" => ectrw::LandmarkSelection::Random,
+        _        => ectrw::LandmarkSelection::Degree
     };
 
     let ect = ectrw::ECTRW {
         dims,
         distance,
+        selection,
         chunks,
         l2norm,
         seed
@@ -683,24 +690,32 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Maximum number of terms to store.  Default is 10.")))
 
-        .subcommand(SubCommand::with_name("ect-rw")
-            .about("Generates dense embeddings based on randomw walks andeuclidean commute time.")
+        .subcommand(SubCommand::with_name("euc-emb")
+            .about("Generates dense embeddings based on euclidean embeddings of shortest distance")
             .arg(Arg::with_name("dims")
                  .long("dims")
                  .required(true)
                  .takes_value(true)
-                 .help("Number of random walks to generate dimensions"))
+                 .help("Number of landmarks to use"))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
                  .help("Random seed to use."))
-            .arg(Arg::with_name("weighted")
-                 .long("weighted")
-                 .help("Uses edge weights as part of the distance computation."))
+            .arg(Arg::with_name("weighting")
+                 .long("weighting")
+                 .takes_value(true)
+                 .possible_values(&["uniform", "degree", "edge"])
+                 .help("Selects how edge weights are treated during distance calculations"))
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)
                  .help("Tunes concurrent hashmap.  Default is 91."))
+            .arg(Arg::with_name("selection")
+                 .long("selection")
+                 .takes_value(true)
+                 .possible_values(&["random", "degree"])
+                 .help("Pick which mechanism to use for landmark selection.  Default is degree"))
+
             .arg(Arg::with_name("l2")
                  .long("l2")
                  .help("If provided, L2-norms the embeddings.")))
@@ -768,9 +783,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("random-walk") {
                 let all_games = games.into_iter().flatten().collect();
                 random_walk(sub_args, all_games);
-            } else if let Some(ref sub_args) = args.subcommand_matches("ect-rw") {
+            } else if let Some(ref sub_args) = args.subcommand_matches("euc-emb") {
                 let all_games = games.into_iter().flatten().collect();
-                ect_rw(sub_args, all_games);
+                euc_emb(sub_args, all_games);
             }
 
             // print a separator
