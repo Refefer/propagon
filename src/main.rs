@@ -12,6 +12,7 @@ mod labelrankplus;
 mod chashmap;
 mod walker;
 mod ectrw;
+mod de;
 
 mod utils;
 

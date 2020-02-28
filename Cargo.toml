@@ -12,6 +12,7 @@ rayon = "1.0.3"
 heap = "0.1.0"
 thread_local = "1.0.0"
 indicatif = "0.13.0"
+float-ord = "0.2.0"
 
 [dependencies.hashbrown]
 version = "0.6"
