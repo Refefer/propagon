@@ -384,13 +384,14 @@ fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
-    let dims       = value_t!(args, "dims", usize).unwrap();
-    let landmarks  = value_t!(args, "landmarks", usize).unwrap();
-    let global_fns = value_t!(args, "global-embed-fns", usize).unwrap_or(1_000_000);
-    let local_fns  = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
-    let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
-    let chunks     = value_t!(args, "chunks", usize).unwrap_or(91);
-    let l2norm     = args.is_present("l2");
+    let dims               = value_t!(args, "dims", usize).unwrap();
+    let landmarks          = value_t!(args, "landmarks", usize).unwrap();
+    let global_fns         = value_t!(args, "global-embed-fns", usize).unwrap_or(1_000_000);
+    let local_fns          = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
+    let seed               = value_t!(args, "seed", u64).unwrap_or(2019);
+    let chunks             = value_t!(args, "chunks", usize).unwrap_or(91);
+    let local_stablization = value_t!(args, "stabilize", usize).is_ok();
+    let l2norm             = args.is_present("l2");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
         "uniform" => eucemb::Distance::Uniform,
@@ -412,6 +413,7 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
         selection,
         chunks,
         l2norm,
+        local_stablization,
         seed
     };
 
@@ -717,8 +719,11 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("local-embed-fns")
                  .takes_value(true)
                  .help("Number of Function calls for the local optimization step.  Default is 1,000"))
+            .arg(Arg::with_name("stabilize")
+                 .long("stabilize")
+                 .help("If enabled, runs a forth pass which includes local neighborhood optimization"))
 
-.arg(Arg::with_name("seed")
+            .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
                  .help("Random seed to use."))

@@ -45,6 +45,7 @@ impl DifferentialEvolution {
         fit_fn: &F, 
         total_fns: usize, 
         seed: u64, 
+        x_in: Option<&[f32]>,
         mut callback: FN
     ) -> (f32, Vec<f32>) {
 
@@ -57,6 +58,15 @@ impl DifferentialEvolution {
             v.iter_mut().for_each(|vi| *vi = dist1.sample(&mut rng));
             v
         }).collect();
+
+        // If an x_in has been provided, offset the population by it
+        if let Some(x_in_v) = x_in {
+            pop.iter_mut().for_each(|p| {
+                p.iter_mut().zip(x_in_v.iter()).for_each(|(pi, vi)| {
+                    *pi += vi;
+                });
+            });
+        }
 
         let mut tmp_pop = pop.clone();
 
@@ -82,10 +92,14 @@ impl DifferentialEvolution {
             }
 
             if self.restart_on_stale > 0 && stale_len == self.restart_on_stale {
+
+                let best = pop[best_idx].clone();
+
                 // Re build population
                 pop.iter_mut().enumerate().for_each(|(i, p)| {
                     if i != best_idx {
-                        p.iter_mut().for_each(|vi| *vi = dist1.sample(&mut rng));
+                        p.iter_mut().zip(best.iter())
+                            .for_each(|(vi, bi)| *vi = bi + dist1.sample(&mut rng));
                     }
                 });
                 stale_len = 0;
@@ -220,7 +234,7 @@ mod test_de {
         };
 
         let fit_fn = MatyasEnv(-10., 10.);
-        let (fit, results) = de.fit(&fit_fn, 10000, 2020, |_best_fit, _fns_remaining| {});
+        let (fit, results) = de.fit(&fit_fn, 10000, 2020, None, |_best_fit, _fns_remaining| {});
         assert_eq!(fit, 0.);
         assert_eq!(results[0], 10.);
         assert_eq!(results[1], -10.);

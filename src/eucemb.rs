@@ -73,6 +73,7 @@ pub struct EucEmb {
     pub local_fns: usize,
     pub distance: Distance,
     pub selection: LandmarkSelection,
+    pub local_stablization: bool,
     pub chunks: usize,
     pub l2norm: bool,
     pub seed: u64
@@ -117,8 +118,9 @@ impl EucEmb {
         pb.set_style(ProgressStyle::default_bar()
             .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
 
+        // We store the running loss in a mutex
         let data = Arc::new(Mutex::new((0f32, 0usize, String::new())));
-        let out = distances.par_drain().map(|(k, v)| {
+        let results = distances.par_drain().map(|(k, v)| {
             let iter = {data.lock().unwrap().1};
             let (loss, emb) = self.local_emb(&emb_slice, v, iter);
             pb.inc(1);
@@ -128,7 +130,7 @@ impl EucEmb {
                 (*pl).1 += 1;
                 pl.2.clear();
                 let rate = pl.0 / pl.1 as f32;
-                write!(pl.2, "Loss: {:.5}", rate).unwrap();
+                write!(pl.2, "Avg Loss: {:.5}", rate).unwrap();
                 pb.set_message(&pl.2);
             };
             (k, emb)
@@ -136,7 +138,12 @@ impl EucEmb {
 
         pb.finish();
 
-        out
+        // Check to see if want to preserve local neighborhoods as well.
+        if self.local_stablization {
+            self.embed_neighborhood(results, edges)
+        } else {
+            results
+        }
 
     }
 
@@ -162,7 +169,8 @@ impl EucEmb {
 
         pb.inc(lambda as u64);
         let mut msg = String::new();
-        let (_, results) = de.fit(&fitness, self.global_fns, self.seed + 2, |best_fit, _rem| {
+        let (_, results) = de.fit(&fitness, self.global_fns, self.seed + 2, 
+                                  None, |best_fit, _rem| {
             msg.clear();
             write!(msg, "Loss: {:.5}", -best_fit).unwrap();
             pb.set_message(&msg);
@@ -194,8 +202,91 @@ impl EucEmb {
             restart_on_stale: 10
         };
 
-        de.fit(&fitness, self.local_fns, self.seed + idx as u64, |_best_fit, _rem| { })
+        de.fit(&fitness, self.local_fns, self.seed + idx as u64, 
+               None, |_best_fit, _rem| { })
             
+    }
+
+    fn embed_neighborhood<K: Hash + Eq + Clone + Send + Sync>(
+        &self, 
+        mut m: HashMap<K, Vec<f32>>,
+        edges: HashMap<K,Vec<(K, f32)>>
+    ) -> HashMap<K, Vec<f32>> {
+        // Load everything into a concurrent hashmap
+        let embeddings = CHashMap::new(self.chunks);
+        let embeddings = embeddings.extend(m.drain());
+
+        
+        let de = DifferentialEvolution {
+            dims: self.dims,
+            lambda: 30,
+            f: (0.1, 0.9),
+            cr: 0.9,
+            m: 0.1,
+            exp: 3.,
+            restart_on_stale: 10
+        };
+
+        eprintln!("Computing neighborhoods...");
+        let pb = ProgressBar::new(edges.len() as u64);
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
+
+        // We store the running loss in a mutex
+        let fits = Arc::new(Mutex::new((0f32, 0usize, String::new())));
+
+        // Get keys and iterator
+        edges.par_iter().for_each(|(k, es)| {
+
+            // Get original embedding
+            let emb_orig = {
+                embeddings.get_map(k).read().unwrap()
+                    .get(k).unwrap()
+                    .clone()
+            };
+
+            // Get neighbors
+            let hms = embeddings.cache(es.iter().map(|(k, v)| k.clone()));
+
+            // Construct weighted neighbors
+            let (neighbor_emb, dists): (Vec<_>, Vec<_>) = es.iter().map(|(k, w)| {
+                let n_emb = hms.get(k).expect("Should always exist");
+                (n_emb.as_slice(), w)
+            }).unzip();
+
+            let fitness = LocalNeighborEmbedding {
+                orig: emb_orig.as_slice(), 
+                neighbors: &neighbor_emb,
+                neighbors_dists: dists.as_slice()
+            };
+
+            // Eh, local seed uses weights
+            let local_seed = dists.iter().sum::<f32>() as u64;
+            
+            let (loss, new_emb) = de.fit(&fitness, self.local_fns, self.seed + local_seed, 
+                   Some(emb_orig.as_slice()), |_best_fit, _rem| { });
+
+            // Insert the new embedding
+            embeddings.get_map(k).write().unwrap()
+                .insert((*k).clone(), new_emb);
+
+            pb.inc(1);
+            {
+                let mut pl = fits.lock().unwrap();
+                (*pl).0 += -loss;
+                (*pl).1 += 1;
+                pl.2.clear();
+                let rate = pl.0 / pl.1 as f32;
+                write!(pl.2, "Avg Loss: {:.5}", rate).unwrap();
+                pb.set_message(&pl.2);
+            };
+
+        });
+        pb.finish();
+
+        embeddings.into_inner().into_iter().flat_map(|hm| {
+            hm.into_iter()
+        }).collect()
     }
 
     // computes the walk distances
@@ -297,7 +388,7 @@ fn weighted_walk_distance<'a, K: Hash + Eq>(
     while let Some(vert) = queue.pop_front() {
         let cur_dist = distance[vert];
 
-        let mut degrees = if degree_weighted {
+        let degrees = if degree_weighted {
             (1. + edges[vert].len() as f32).ln()
         } else {
             1.
@@ -374,6 +465,21 @@ impl <'a> Fitness for LocalLandmarkEmbedding<'a> {
     }
 }
 
+struct LocalNeighborEmbedding<'a> {
+    orig: &'a [f32], 
+    neighbors: &'a Vec<&'a [f32]>, 
+    neighbors_dists: &'a [f32]
+}
+
+impl <'a> Fitness for LocalNeighborEmbedding<'a> {
+
+    fn score(&self, candidate: &[f32]) -> f32 {
+        let global_score = euc_dist(self.orig, candidate);
+        let neighbor_score = LocalLandmarkEmbedding(self.neighbors, self.neighbors_dists)
+            .score(candidate);
+        -global_score + neighbor_score
+    }
+}
 
 fn euc_dist(v1: &[f32], v2: &[f32]) -> f32 {
     v1.iter().zip(v2.iter())
