@@ -390,7 +390,7 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     let local_fns          = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
     let seed               = value_t!(args, "seed", u64).unwrap_or(2019);
     let chunks             = value_t!(args, "chunks", usize).unwrap_or(91);
-    let local_stablization = value_t!(args, "stabilize", usize).is_ok();
+    let local_stablization = args.is_present("stabilize");
     let l2norm             = args.is_present("l2");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
