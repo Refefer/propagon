@@ -65,7 +65,7 @@ pub enum LandmarkSelection {
     Degree
 }
 
-pub struct ECTRW {
+pub struct EucEmb {
     pub landmarks: usize,
     pub dims: usize,
     pub global_fns: usize,
@@ -77,7 +77,7 @@ pub struct ECTRW {
     pub seed: u64
 }
 
-impl ECTRW {
+impl EucEmb {
 
     pub fn fit<K: Hash + Eq + Clone + Send + Sync>(
         &self, 

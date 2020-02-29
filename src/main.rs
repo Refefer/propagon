@@ -11,7 +11,7 @@ mod lpa;
 mod labelrankplus;
 mod chashmap;
 mod walker;
-mod ectrw;
+mod eucemb;
 mod de;
 
 mod utils;
@@ -387,23 +387,23 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     let dims       = value_t!(args, "dims", usize).unwrap();
     let landmarks  = value_t!(args, "landmarks", usize).unwrap();
     let global_fns = value_t!(args, "global-embed-fns", usize).unwrap_or(1_000_000);
-    let local_fns = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
+    let local_fns  = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
     let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
     let chunks     = value_t!(args, "chunks", usize).unwrap_or(91);
     let l2norm     = args.is_present("l2");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
-        "uniform" => ectrw::Distance::Uniform,
-        "edge"    => ectrw::Distance::EdgeWeighted,
-        _         => ectrw::Distance::DegreeWeighted
+        "uniform" => eucemb::Distance::Uniform,
+        "edge"    => eucemb::Distance::EdgeWeighted,
+        _         => eucemb::Distance::DegreeWeighted
     };
 
     let selection = match args.value_of("selection").unwrap_or("degree") {
-        "random" => ectrw::LandmarkSelection::Random,
-        _        => ectrw::LandmarkSelection::Degree
+        "random" => eucemb::LandmarkSelection::Random,
+        _        => eucemb::LandmarkSelection::Degree
     };
 
-    let ect = ectrw::ECTRW {
+    let emb = eucemb::EucEmb {
         landmarks,
         dims,
         global_fns,
@@ -415,7 +415,7 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
         seed
     };
 
-    let embeddings = ect.fit(games.into_iter());
+    let embeddings = emb.fit(games.into_iter());
     emit_scores(embeddings.into_iter().map(|(k, v)| {
         let mut s = String::new();
         s.push('[');
