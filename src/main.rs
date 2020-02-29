@@ -384,10 +384,13 @@ fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
-    let dims     = value_t!(args, "dims", usize).unwrap();
-    let seed     = value_t!(args, "seed", u64).unwrap_or(2019);
-    let chunks   = value_t!(args, "chunks", usize).unwrap_or(91);
-    let l2norm   = args.is_present("l2");
+    let dims       = value_t!(args, "dims", usize).unwrap();
+    let landmarks  = value_t!(args, "landmarks", usize).unwrap();
+    let global_fns = value_t!(args, "global-embed-fns", usize).unwrap_or(1_000_000);
+    let local_fns = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
+    let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
+    let chunks     = value_t!(args, "chunks", usize).unwrap_or(91);
+    let l2norm     = args.is_present("l2");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
         "uniform" => ectrw::Distance::Uniform,
@@ -401,7 +404,10 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     };
 
     let ect = ectrw::ECTRW {
+        landmarks,
         dims,
+        global_fns,
+        local_fns,
         distance,
         selection,
         chunks,
@@ -697,8 +703,22 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("dims")
                  .required(true)
                  .takes_value(true)
+                 .help("Embedding dimensions to use"))
+            .arg(Arg::with_name("landmarks")
+                 .long("landmarks")
+                 .required(true)
+                 .takes_value(true)
                  .help("Number of landmarks to use"))
-            .arg(Arg::with_name("seed")
+            .arg(Arg::with_name("global-embed-fns")
+                 .long("global-embed-fns")
+                 .takes_value(true)
+                 .help("Number of function calls for the global optimization step.  Default is 1,000,000"))
+            .arg(Arg::with_name("local-embed-fns")
+                 .long("local-embed-fns")
+                 .takes_value(true)
+                 .help("Number of Function calls for the local optimization step.  Default is 1,000"))
+
+.arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
                  .help("Random seed to use."))

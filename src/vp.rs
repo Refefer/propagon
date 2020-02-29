@@ -145,11 +145,6 @@ impl VecProp {
                     RefCell::new(Vec::with_capacity(self.max_terms))
                 }).borrow_mut();
 
-                //let mut features = tl_features.get_or(|| {
-                //    RefCell::new(HashMap::new())
-                //}).borrow_mut();
-
-                //features.clear();
                 let t_edges = &edges[key];
                 let mut features = HashMap::with_capacity(t_edges.len() * self.max_terms);
 

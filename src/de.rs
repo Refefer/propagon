@@ -12,30 +12,37 @@ pub trait Fitness: Send + Sync {
     fn score(&self, candidate: &[f32]) -> f32;
 }
 
+#[derive(Clone,Copy,Debug)]
 pub struct DifferentialEvolution {
     /// Dims
-    dims: usize,
+    pub dims: usize,
 
     /// Population size.
-    lambda: usize,
+    pub lambda: usize,
 
     /// Dithered learning rate, F.  A good default is (0.1, 0.9)
-    f: (f32, f32),
+    pub f: (f32, f32),
 
     /// Mutation rate: typically set to either 0.1 or 0.9
-    cr: f32,
+    pub cr: f32,
 
     /// Likelihood of replacing a candidate with a randomly perturb best.  0.1 is a good
     /// default
-    m: f32,
+    pub m: f32,
 
     /// Expansion constant for random perturbation.  A good value is between 2 to 5
-    exp: f32
+    pub exp: f32
 }
 
 impl DifferentialEvolution {
 
-    fn train<F: Fitness>(&self, fit_fn: &F, total_fns: usize, seed: u64) -> Vec<f32> {
+    pub fn fit<F: Fitness, FN: FnMut(f32, usize) -> ()>(
+        &self, 
+        fit_fn: &F, 
+        total_fns: usize, 
+        seed: u64, 
+        mut callback: FN
+    ) -> Vec<f32> {
 
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
@@ -72,7 +79,8 @@ impl DifferentialEvolution {
                     .enumerate().for_each(|(idx, (x, f))| {
 
                 let orig_x = &pop[idx];
-                let mut local_rng = rand::rngs::StdRng::seed_from_u64((idx + fns) as u64);
+                let mut local_rng = rand::rngs::StdRng::seed_from_u64(
+                    seed + (idx + fns) as u64);
 
                 // Randomize a candidate in the population
                 if idx != best_idx && dist.sample(&mut local_rng) < self.m {
@@ -81,6 +89,7 @@ impl DifferentialEvolution {
                     x.iter_mut().zip(orig_x.iter()).enumerate().for_each(|(i, (xi, oxi))| {
                         *xi = oxi - best[i];
                     });
+
                     let orig_mag = l2norm(&x);
 
                     // Ok, generate new vector
@@ -133,10 +142,16 @@ impl DifferentialEvolution {
             // Swap tmp with orig
             std::mem::swap(&mut pop, &mut tmp_pop);
             fns += self.lambda;
+
+            // Callback
+            callback({
+                let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
+                    .expect("Should never be empty!");
+                fits[best_idx]
+            }, if fns < total_fns {total_fns - fns} else {0});
         }
 
-
-        // Get the best idx!
+        // Get the best candidate!
         let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
             .expect("Should never be empty!");
         pop.swap_remove(best_idx)
@@ -150,9 +165,39 @@ fn l2norm(v: &[f32]) -> f32 {
         .powf(0.5)
 }
 
-fn euc_dist(v1: &[f32], v2: &[f32]) -> f32 {
-    v1.iter().zip(v2.iter())
-        .map(|(v1i, v2i)| (v1i - v2i).powi(2))
-        .sum::<f32>()
-        .powf(0.5)
+#[cfg(test)]
+mod test_de {
+    use super::*;
+    use crate::vp::Embedding;
+
+    struct MatyasEnv(f32, f32);
+
+    impl Fitness for MatyasEnv {
+
+        fn score(&self, candidate: &[f32]) -> f32 {
+            let mut x = candidate[0];
+            let mut y = candidate[1];
+            x += self.0;
+            y += self.1;
+            -(0.26 * (x.powi(2) + y.powi(2)) - 0.48 * x * y)
+        }
+
+    }
+
+    #[test]
+    fn test_matyas() {
+        let de = DifferentialEvolution {
+            dims: 2,
+            lambda: 30,
+            f: (0.1, 1.),
+            cr: 0.9,
+            m: 0.1,
+            exp: 3.
+        };
+
+        let fit_fn = MatyasEnv(-10., 10.);
+        let results = de.fit(&fit_fn, 10000, 2020, |_best_fit, _fns_remaining| {});
+        assert_eq!(results[0], 10.);
+        assert_eq!(results[1], -10.);
+    }
 }

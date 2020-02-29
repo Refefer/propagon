@@ -4,6 +4,7 @@ extern crate rayon;
 extern crate thread_local;
 extern crate indicatif;
 
+use std::fmt::Write;
 use std::hash::Hash;
 use std::collections::{VecDeque,BinaryHeap};
 use std::cmp::{Reverse,Ordering};
@@ -15,6 +16,7 @@ use rayon::prelude::*;
 
 use crate::utils;
 use crate::chashmap::CHashMap;
+use crate::de::{Fitness,DifferentialEvolution};
 
 #[derive(Debug)]
 struct BestDegree<K>(K, usize);
@@ -64,7 +66,10 @@ pub enum LandmarkSelection {
 }
 
 pub struct ECTRW {
+    pub landmarks: usize,
     pub dims: usize,
+    pub global_fns: usize,
+    pub local_fns: usize,
     pub distance: Distance,
     pub selection: LandmarkSelection,
     pub chunks: usize,
@@ -90,18 +95,103 @@ impl ECTRW {
 
         eprintln!("Number of Vertices: {}", edges.len());
 
+        let (mut distances, landmarks) = self.compute_landmark_distances(&edges);
+
+        eprintln!("Computed walks, globally embedding landmarks");
+
+        // Gather the landmarks
+        let landmark_walks = landmarks.iter().map(|l| {
+            distances[l].as_slice()
+        }).collect();
+
+        // Map the landmarks into a different dimensional space, attempting
+        // to preserve distance measurements
+        let embedded_landmarks = self.global_opt(landmark_walks);
+
+        // locally embed each of the points
+        let emb_slice = embedded_landmarks.iter().map(|v| v.as_slice()).collect();
+
+        eprintln!("Computed distances, embedding local points...");
+        let pb = ProgressBar::new(distances.len() as u64);
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
+
+        distances.par_drain().map(|(k, v)| {
+            pb.inc(1);
+            (k, self.local_emb(&emb_slice, v, 137))
+        }).collect()
+
+    }
+
+    fn global_opt(&self, landmark_dists: Vec<&[f32]>) -> Vec<Vec<f32>> {
+
+        let fitness = GlobalLandmarkEmbedding(self.dims, &landmark_dists);
+
+        let total_dims = self.dims * self.landmarks;
+        let lambda = 30.max((total_dims as f32).powf(0.5) as usize);
+        let de = DifferentialEvolution {
+            dims: self.dims * self.landmarks,
+            lambda: lambda,
+            f: (0.1, 1.5),
+            cr: 0.9,
+            m: 0.1,
+            exp: 3.
+        };
+
+        let pb = ProgressBar::new(self.global_fns as u64);
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{msg}] {wide_bar} {eta_precise}"));
+
+        pb.inc(lambda as u64);
+        let mut msg = String::new();
+        let results = de.fit(&fitness, self.global_fns, self.seed + 2, |best_fit, rem| {
+            msg.clear();
+            write!(msg, "Error: {:.4}", -best_fit).unwrap();
+            pb.set_message(&msg);
+            pb.inc(lambda as u64)
+        });
+        pb.finish();
+            
+        results.chunks(self.dims).map(|chunks| chunks.to_vec()).collect()
+
+    }
+
+    // Locall embed each point by landmarks
+    fn local_emb(&self, emb_landmarks: &Vec<&[f32]>, dist: Vec<f32>, idx: usize) -> Vec<f32> {
+
+        let fitness = LocalLandmarkEmbedding(emb_landmarks, dist.as_slice());
+
+        let de = DifferentialEvolution {
+            dims: self.dims,
+            lambda: 30,
+            f: (0.1, 0.9),
+            cr: 0.9,
+            m: 0.1,
+            exp: 3.
+        };
+
+        de.fit(&fitness, self.local_fns, self.seed + idx as u64, |_best_fit, _rem| { })
+            
+    }
+
+    // computes the walk distances
+    fn compute_landmark_distances<K: Hash + Eq + Clone + Send + Sync>(
+        &self, 
+        edges: &HashMap<K, Vec<(K, f32)>>
+
+    ) -> (HashMap<K, Vec<f32>>, Vec<K>) {
         // Setup initial embeddings
         let keys: Vec<_> = edges.keys().collect();
         let it = keys.iter()
             .map(|key| {
-                ((*key).clone(), vec![0.; self.dims])
+                ((*key).clone(), vec![0.; self.landmarks])
             });
 
         let embeddings = CHashMap::new(self.chunks);
         let embeddings = embeddings.extend(it);
 
         // Progress bar time
-        let total_work = self.dims;
+        let total_work = self.landmarks;
         let pb = ProgressBar::new(total_work as u64);
         pb.set_style(ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
@@ -111,14 +201,14 @@ impl ECTRW {
 
         let start_nodes: Vec<_> = if self.selection == LandmarkSelection::Random {
             keys.as_slice()
-                .choose_multiple(&mut rng, self.dims)
+                .choose_multiple(&mut rng, self.landmarks)
                 .collect()
         } else {
-            top_k_nodes(&keys, &edges, self.dims)
+            top_k_nodes(&keys, &edges, self.landmarks)
         };
 
-        // Do it!
-        (0..self.dims).into_par_iter().for_each(|idx| {
+        // Compute walks for all 
+        (0..self.landmarks).into_par_iter().for_each(|idx| {
             let new_distances = if self.distance == Distance::Uniform {
                 unweighted_walk_distance(&edges, &start_nodes[idx])
             } else {
@@ -136,14 +226,11 @@ impl ECTRW {
 
         pb.finish();
 
-        embeddings.into_inner().into_iter().flat_map(|hm| {
-            hm.into_iter().map(|(k, mut v)| {
-                if self.l2norm { 
-                    utils::l2_norm(&mut v); 
-                }
-                (k, v)
-            })
-        }).collect()
+        let es = embeddings.into_inner().into_iter().flat_map(|hm| {
+            hm.into_iter()
+        }).collect();
+
+        (es, start_nodes.into_iter().map(|v| (*v).clone()).collect())
     }
 }
 
@@ -220,6 +307,52 @@ fn top_k_nodes<'a, 'b, K: Hash + Eq>(
     }
     bh.into_iter().map(|Reverse(BestDegree(k, _))| k).collect()
 }
+
+struct GlobalLandmarkEmbedding<'a>(usize, &'a Vec<&'a [f32]>);
+
+impl <'a> Fitness for GlobalLandmarkEmbedding<'a> {
+
+    fn score(&self, candidate: &[f32]) -> f32 {
+        let n_cands = self.1.len();
+        let dims = self.0;
+        let mut err = 0.;
+        for i in 0..n_cands {
+            let i_start = i * dims;
+            let v1 = &candidate[i_start..i_start + dims];
+            for j in (i+1)..n_cands {
+                let j_start = j * dims;
+                let v2 = &candidate[j_start..j_start + dims];
+                err += (euc_dist(v1, v2) - self.1[i][j]).abs()
+            }
+        }
+
+        -err / (n_cands as f32 * (n_cands as f32- 1.) / 2.)
+    }
+}
+
+struct LocalLandmarkEmbedding<'a>(&'a Vec<&'a [f32]>, &'a [f32]);
+
+impl <'a> Fitness for LocalLandmarkEmbedding<'a> {
+
+    fn score(&self, candidate: &[f32]) -> f32 {
+        let n_cands = self.0.len();
+        let mut err = 0.;
+        for i in 0..n_cands {
+            err += (euc_dist(candidate, self.0[i]) - self.1[i]).abs();
+        }
+
+        -err / (n_cands as f32)
+    }
+}
+
+
+fn euc_dist(v1: &[f32], v2: &[f32]) -> f32 {
+    v1.iter().zip(v2.iter())
+        .map(|(v1i, v2i)| (v1i - v2i).powi(2))
+        .sum::<f32>()
+        .powf(0.5)
+}
+
 
 #[cfg(test)]
 mod test_ect_rw {
