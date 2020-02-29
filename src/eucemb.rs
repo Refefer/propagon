@@ -119,7 +119,8 @@ impl EucEmb {
 
         let data = Arc::new(Mutex::new((0f32, 0usize, String::new())));
         let out = distances.par_drain().map(|(k, v)| {
-            let (loss, emb) = self.local_emb(&emb_slice, v, 137);
+            let iter = {data.lock().unwrap().1};
+            let (loss, emb) = self.local_emb(&emb_slice, v, iter);
             pb.inc(1);
             {
                 let mut pl = data.lock().unwrap();
@@ -296,13 +297,18 @@ fn weighted_walk_distance<'a, K: Hash + Eq>(
     while let Some(vert) = queue.pop_front() {
         let cur_dist = distance[vert];
 
-        let degrees = if degree_weighted {
+        let mut degrees = if degree_weighted {
             (1. + edges[vert].len() as f32).ln()
         } else {
             1.
         };
         for (out_edge, wi) in edges[vert].iter() {
-            let new_dist = cur_dist + degrees / (1. + wi).ln();
+            let new_dist = if degree_weighted {
+                let out_degrees = (1. + edges[out_edge].len() as f32).ln();
+                cur_dist + degrees.max(out_degrees) / (1. + wi).ln()
+            } else {
+                cur_dist + degrees / (1. + wi).ln()
+            };
 
             let out_dist = *distance.get(&out_edge).unwrap_or(&std::f32::INFINITY);
             if new_dist < out_dist {
