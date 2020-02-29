@@ -116,10 +116,14 @@ impl EucEmb {
         pb.set_style(ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
 
-        distances.par_drain().map(|(k, v)| {
+        let out = distances.par_drain().map(|(k, v)| {
             pb.inc(1);
             (k, self.local_emb(&emb_slice, v, 137))
-        }).collect()
+        }).collect();
+
+        pb.finish();
+
+        out
 
     }
 
@@ -144,7 +148,7 @@ impl EucEmb {
 
         pb.inc(lambda as u64);
         let mut msg = String::new();
-        let results = de.fit(&fitness, self.global_fns, self.seed + 2, |best_fit, rem| {
+        let results = de.fit(&fitness, self.global_fns, self.seed + 2, |best_fit, _rem| {
             msg.clear();
             write!(msg, "Error: {:.4}", -best_fit).unwrap();
             pb.set_message(&msg);
