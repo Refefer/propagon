@@ -31,7 +31,11 @@ pub struct DifferentialEvolution {
     pub m: f32,
 
     /// Expansion constant for random perturbation.  A good value is between 2 to 5
-    pub exp: f32
+    pub exp: f32,
+
+    /// If enabled, early terminates if it doesn't improve after K iterations.  0 means
+    /// turn off
+    pub restart_on_stale: usize
 }
 
 impl DifferentialEvolution {
@@ -42,15 +46,15 @@ impl DifferentialEvolution {
         total_fns: usize, 
         seed: u64, 
         mut callback: FN
-    ) -> Vec<f32> {
+    ) -> (f32, Vec<f32>) {
 
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
         // Initialize population
-        let dist = Uniform::new(-1., 1.);
+        let dist1 = Uniform::new(-1., 1.);
         let mut pop: Vec<_> = (0..self.lambda).map(|_| {
             let mut v = vec![0.; self.dims];
-            v.iter_mut().for_each(|vi| *vi = dist.sample(&mut rng));
+            v.iter_mut().for_each(|vi| *vi = dist1.sample(&mut rng));
             v
         }).collect();
 
@@ -64,10 +68,30 @@ impl DifferentialEvolution {
 
         let norm_dist = Normal::new(0., 1.);
 
+        let mut best_fit = std::f32::NEG_INFINITY;
+        let mut stale_len = 0;
         while fns < total_fns {
             // Get the best candidate
             let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
                 .expect("Should never be empty!");
+
+            // Check if we've improved
+            if fits[best_idx] > best_fit {
+                best_fit = fits[best_idx];
+                stale_len = 0;
+            }
+
+            if self.restart_on_stale > 0 && stale_len == self.restart_on_stale {
+                // Re build population
+                pop.iter_mut().enumerate().for_each(|(i, p)| {
+                    if i != best_idx {
+                        p.iter_mut().for_each(|vi| *vi = dist1.sample(&mut rng));
+                    }
+                });
+                stale_len = 0;
+            }
+
+            stale_len += 1;
 
             let best = &pop[best_idx];
 
@@ -154,7 +178,7 @@ impl DifferentialEvolution {
         // Get the best candidate!
         let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
             .expect("Should never be empty!");
-        pop.swap_remove(best_idx)
+        (fits[best_idx], pop.swap_remove(best_idx))
     }
 }
 
@@ -196,7 +220,8 @@ mod test_de {
         };
 
         let fit_fn = MatyasEnv(-10., 10.);
-        let results = de.fit(&fit_fn, 10000, 2020, |_best_fit, _fns_remaining| {});
+        let (fit, results) = de.fit(&fit_fn, 10000, 2020, |_best_fit, _fns_remaining| {});
+        assert_eq!(fit, 0.);
         assert_eq!(results[0], 10.);
         assert_eq!(results[1], -10.);
     }

@@ -8,6 +8,7 @@ use std::fmt::Write;
 use std::hash::Hash;
 use std::collections::{VecDeque,BinaryHeap};
 use std::cmp::{Reverse,Ordering};
+use std::sync::{Arc,Mutex};
 
 use indicatif::{ProgressBar,ProgressStyle};
 use hashbrown::{HashMap, HashSet};
@@ -114,11 +115,22 @@ impl EucEmb {
         eprintln!("Computed distances, embedding local points...");
         let pb = ProgressBar::new(distances.len() as u64);
         pb.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
+            .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
 
+        let data = Arc::new(Mutex::new((0f32, 0usize, String::new())));
         let out = distances.par_drain().map(|(k, v)| {
+            let (loss, emb) = self.local_emb(&emb_slice, v, 137);
             pb.inc(1);
-            (k, self.local_emb(&emb_slice, v, 137))
+            {
+                let mut pl = data.lock().unwrap();
+                (*pl).0 += -loss;
+                (*pl).1 += 1;
+                pl.2.clear();
+                let rate = pl.0 / pl.1 as f32;
+                write!(pl.2, "Loss: {:.5}", rate).unwrap();
+                pb.set_message(&pl.2);
+            };
+            (k, emb)
         }).collect();
 
         pb.finish();
@@ -139,7 +151,8 @@ impl EucEmb {
             f: (0.1, 1.5),
             cr: 0.9,
             m: 0.1,
-            exp: 3.
+            exp: 3.,
+            restart_on_stale: 100
         };
 
         let pb = ProgressBar::new(self.global_fns as u64);
@@ -148,9 +161,9 @@ impl EucEmb {
 
         pb.inc(lambda as u64);
         let mut msg = String::new();
-        let results = de.fit(&fitness, self.global_fns, self.seed + 2, |best_fit, _rem| {
+        let (_, results) = de.fit(&fitness, self.global_fns, self.seed + 2, |best_fit, _rem| {
             msg.clear();
-            write!(msg, "Error: {:.4}", -best_fit).unwrap();
+            write!(msg, "Loss: {:.5}", -best_fit).unwrap();
             pb.set_message(&msg);
             pb.inc(lambda as u64)
         });
@@ -161,7 +174,12 @@ impl EucEmb {
     }
 
     // Locall embed each point by landmarks
-    fn local_emb(&self, emb_landmarks: &Vec<&[f32]>, dist: Vec<f32>, idx: usize) -> Vec<f32> {
+    fn local_emb(
+        &self, 
+        emb_landmarks: &Vec<&[f32]>, 
+        dist: Vec<f32>, 
+        idx: usize
+    ) -> (f32, Vec<f32>) {
 
         let fitness = LocalLandmarkEmbedding(emb_landmarks, dist.as_slice());
 
@@ -171,7 +189,8 @@ impl EucEmb {
             f: (0.1, 0.9),
             cr: 0.9,
             m: 0.1,
-            exp: 3.
+            exp: 3.,
+            restart_on_stale: 10
         };
 
         de.fit(&fitness, self.local_fns, self.seed + idx as u64, |_best_fit, _rem| { })
