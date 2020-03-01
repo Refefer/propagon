@@ -405,9 +405,10 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     };
 
     let metric = match args.value_of("space").unwrap_or("euclidean") {
-        "euclidean"  => gcs::Space::Euclidean,
-        "hyperboloi" => gcs::Space::Hyperboloid,
-        _            => gcs::Space::Poincare
+        "euclidean"   => gcs::Space::Euclidean,
+        "hyperboloid" => gcs::Space::Hyperboloid,
+        "manhattan"   => gcs::Space::Manhattan,
+        _             => gcs::Space::Poincare
     };
 
     let emb = gcs::GCS {
@@ -706,8 +707,8 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Maximum number of terms to store.  Default is 10.")))
 
-        .subcommand(SubCommand::with_name("euc-emb")
-            .about("Generates dense embeddings based on euclidean embeddings of shortest distance")
+        .subcommand(SubCommand::with_name("gcs")
+            .about("Generates dense embeddings based on the graph coordinate system of shortest distance")
             .arg(Arg::with_name("dims")
                  .long("dims")
                  .required(true)
@@ -752,7 +753,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("space")
                  .long("space")
                  .takes_value(true)
-                 .possible_values(&["euclidean", "poincare", "hyperboloid"])
+                 .possible_values(&["euclidean", "poincare", "hyperboloid", "manhattan"])
                  .help("Space to learn embeddings.  Default is Euclidean"))
             .arg(Arg::with_name("l2")
                  .long("l2")
@@ -821,7 +822,7 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("random-walk") {
                 let all_games = games.into_iter().flatten().collect();
                 random_walk(sub_args, all_games);
-            } else if let Some(ref sub_args) = args.subcommand_matches("euc-emb") {
+            } else if let Some(ref sub_args) = args.subcommand_matches("gcs") {
                 let all_games = games.into_iter().flatten().collect();
                 euc_emb(sub_args, all_games);
             }

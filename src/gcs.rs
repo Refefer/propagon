@@ -91,6 +91,24 @@ impl Metric for EuclideanSpace {
     }
 }
 
+// Euclidean distance
+pub struct ManhattanSpace;
+
+impl Metric for ManhattanSpace {
+    #[inline]
+    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
+        x.iter().zip(y.iter())
+            .map(|(v1i, v2i)| (v1i - v2i).abs())
+            .sum::<f32>()
+    }
+
+    fn normalize(&self, x: &mut [f32]) {}
+
+    fn component_range(&self, dims: usize) -> f32 {
+        (1f32.powi(2) / (dims as f32)).powf(0.5)
+    }
+}
+
 // Poincare distance
 pub struct PoincareSpace;
 
@@ -149,7 +167,12 @@ impl Metric for HyperboloidSpace {
         }
 
         let k = ((1. + x2) * (1. + y2)).sqrt() - xy;
-        k.acosh()
+        let res = k.acosh();
+        if res.is_nan() {
+            std::f32::INFINITY
+        } else {
+            res
+        }
     }
 
     fn normalize(&self, x: &mut [f32]) { }
@@ -160,8 +183,11 @@ impl Metric for HyperboloidSpace {
 }
 
 pub enum Space {
-    // Euclidean distances
+    // Euclidean distance
     Euclidean,
+
+    // Manhattan distance
+    Manhattan,
 
     // Hyperbolic space on the Poincare disk
     Poincare,
@@ -176,7 +202,8 @@ impl Metric for Space {
         match self {
             Space::Euclidean => EuclideanSpace.distance(x, y),
             Space::Poincare  => PoincareSpace.distance(x, y),
-            Space::Hyperboloid  => HyperboloidSpace.distance(x, y)
+            Space::Hyperboloid  => HyperboloidSpace.distance(x, y),
+            Space::Manhattan  => ManhattanSpace.distance(x, y),
         }
     }
 
@@ -185,7 +212,8 @@ impl Metric for Space {
         match self {
             Space::Euclidean => EuclideanSpace.normalize(x),
             Space::Poincare  => PoincareSpace.normalize(x),
-            Space::Hyperboloid  => HyperboloidSpace.normalize(x)
+            Space::Hyperboloid  => HyperboloidSpace.normalize(x),
+            Space::Manhattan  => ManhattanSpace.normalize(x)
         }
     }
 
@@ -194,7 +222,8 @@ impl Metric for Space {
         match self {
             Space::Euclidean   => EuclideanSpace.component_range(dims),
             Space::Poincare    => PoincareSpace.component_range(dims),
-            Space::Hyperboloid => HyperboloidSpace.component_range(dims)
+            Space::Hyperboloid => HyperboloidSpace.component_range(dims),
+            Space::Manhattan  => ManhattanSpace.component_range(dims)
         }
     }
 
