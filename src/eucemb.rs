@@ -57,6 +57,93 @@ pub enum Distance {
     EdgeWeighted
 }
 
+pub trait Metric: Send + Sync {
+    // Computes the distance between two points
+    #[inline] 
+    fn distance(&self, x: &[f32], y: &[f32]) -> f32;
+
+    // Normalizes the vectors, if necessary
+    #[inline] 
+    fn normalize(&self, x: &mut [f32]);
+}
+
+// Euclidean distance
+pub struct EuclideanSpace;
+
+impl Metric for EuclideanSpace {
+    #[inline]
+    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
+        x.iter().zip(y.iter())
+            .map(|(v1i, v2i)| (v1i - v2i).powi(2))
+            .sum::<f32>()
+            .powf(0.5)
+    }
+
+    fn normalize(&self, x: &mut [f32]) {}
+}
+
+// Poincare distance
+pub struct PoincareSpace;
+
+impl Metric for PoincareSpace {
+
+    #[inline]
+    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
+        let mut xy2 = 0.;
+        let mut x2 = 0.;
+        let mut y2 = 0.;
+        for (xi, yi) in x.iter().zip(y.iter()) {
+            xy2 += (xi - yi).powi(2);
+            x2 += xi.powi(2);
+            y2 += yi.powi(2);
+        }
+
+        // normalize by magnitude
+        if x2 >= 1. {
+            xy2 /= x2.powf(0.5);
+            x2 = 1. - 1e-5;
+        }
+        if y2 >= 1. {
+            xy2 /= y2.powf(0.5);
+            y2 = 1. - 1e-5;
+        }
+        let k = (1. + 2. * (xy2 / ((1. - x2) * (1. - y2))));
+        k.acosh()
+    }
+
+    fn normalize(&self, x: &mut [f32]) {
+        let x_norm = x.iter().map(|xi| xi.powi(2)).sum::<f32>().powf(0.5);
+        if x_norm > 1. {
+            x.iter_mut().for_each(|xi| *xi /= x_norm);
+        }
+    }
+}
+
+pub enum Space {
+    Euclidean,
+
+    Poincare
+}
+
+impl Metric for Space {
+    #[inline]
+    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
+        match self {
+            Space::Euclidean => EuclideanSpace.distance(x, y),
+            Space::Poincare  => PoincareSpace.distance(x, y)
+        }
+    }
+
+    #[inline]
+    fn normalize(&self, x: &mut [f32]) {
+        match self {
+            Space::Euclidean => EuclideanSpace.normalize(x),
+            Space::Poincare  => PoincareSpace.normalize(x)
+        }
+    }
+
+}
+
 #[derive(PartialEq,Eq,Clone,Copy)]
 pub enum LandmarkSelection {
     // Selects nodes randomly
@@ -66,20 +153,21 @@ pub enum LandmarkSelection {
     Degree
 }
 
-pub struct EucEmb {
+pub struct EucEmb<M> {
+    pub metric: M,
     pub landmarks: usize,
     pub dims: usize,
     pub global_fns: usize,
     pub local_fns: usize,
     pub distance: Distance,
     pub selection: LandmarkSelection,
-    pub local_stablization: bool,
+    pub local_stablization: Option<f32>,
     pub chunks: usize,
     pub l2norm: bool,
     pub seed: u64
 }
 
-impl EucEmb {
+impl <M: Metric> EucEmb<M> {
 
     pub fn fit<K: Hash + Eq + Clone + Send + Sync>(
         &self, 
@@ -139,17 +227,26 @@ impl EucEmb {
         pb.finish();
 
         // Check to see if want to preserve local neighborhoods as well.
-        if self.local_stablization {
-            self.embed_neighborhood(results, edges)
+        let mut final_embeddings = if let Some(global_preserve) = self.local_stablization {
+            self.embed_neighborhood(global_preserve, results, edges)
         } else {
             results
-        }
+        };
+
+        // Norm if we have to
+        final_embeddings.par_values_mut().for_each(|v| {
+            self.metric.normalize(v.as_mut_slice());
+            if self.l2norm {
+                utils::l2_norm(v);
+            }
+        });
+        final_embeddings
 
     }
 
     fn global_opt(&self, landmark_dists: Vec<&[f32]>) -> Vec<Vec<f32>> {
 
-        let fitness = GlobalLandmarkEmbedding(self.dims, &landmark_dists);
+        let fitness = GlobalLandmarkEmbedding(self.dims, &landmark_dists, &self.metric);
 
         let total_dims = self.dims * self.landmarks;
         let lambda = 30.max((total_dims as f32).powf(0.5) as usize);
@@ -190,7 +287,7 @@ impl EucEmb {
         idx: usize
     ) -> (f32, Vec<f32>) {
 
-        let fitness = LocalLandmarkEmbedding(emb_landmarks, dist.as_slice());
+        let fitness = LocalLandmarkEmbedding(emb_landmarks, dist.as_slice(), &self.metric);
 
         let de = DifferentialEvolution {
             dims: self.dims,
@@ -209,6 +306,7 @@ impl EucEmb {
 
     fn embed_neighborhood<K: Hash + Eq + Clone + Send + Sync>(
         &self, 
+        global_preserve: f32,
         mut m: HashMap<K, Vec<f32>>,
         edges: HashMap<K,Vec<(K, f32)>>
     ) -> HashMap<K, Vec<f32>> {
@@ -246,7 +344,7 @@ impl EucEmb {
             };
 
             // Get neighbors
-            let hms = embeddings.cache(es.iter().map(|(k, v)| k.clone()));
+            let hms = embeddings.cache(es.iter().map(|(k, _v)| k.clone()));
 
             // Construct weighted neighbors
             let (neighbor_emb, dists): (Vec<_>, Vec<_>) = es.iter().map(|(k, w)| {
@@ -255,9 +353,11 @@ impl EucEmb {
             }).unzip();
 
             let fitness = LocalNeighborEmbedding {
+                global_preserve: global_preserve,
                 orig: emb_orig.as_slice(), 
                 neighbors: &neighbor_emb,
-                neighbors_dists: dists.as_slice()
+                neighbors_dists: dists.as_slice(),
+                metric: &self.metric
             };
 
             // Eh, local seed uses weights
@@ -428,9 +528,9 @@ fn top_k_nodes<'a, 'b, K: Hash + Eq>(
     bh.into_iter().map(|Reverse(BestDegree(k, _))| k).collect()
 }
 
-struct GlobalLandmarkEmbedding<'a>(usize, &'a Vec<&'a [f32]>);
+struct GlobalLandmarkEmbedding<'a, M>(usize, &'a Vec<&'a [f32]>, &'a M);
 
-impl <'a> Fitness for GlobalLandmarkEmbedding<'a> {
+impl <'a,M: Metric> Fitness for GlobalLandmarkEmbedding<'a, M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
         let n_cands = self.1.len();
@@ -442,7 +542,7 @@ impl <'a> Fitness for GlobalLandmarkEmbedding<'a> {
             for j in (i+1)..n_cands {
                 let j_start = j * dims;
                 let v2 = &candidate[j_start..j_start + dims];
-                err += (euc_dist(v1, v2) - self.1[i][j]).abs()
+                err += (self.2.distance(v1, v2) - self.1[i][j]).abs()
             }
         }
 
@@ -450,44 +550,38 @@ impl <'a> Fitness for GlobalLandmarkEmbedding<'a> {
     }
 }
 
-struct LocalLandmarkEmbedding<'a>(&'a Vec<&'a [f32]>, &'a [f32]);
+struct LocalLandmarkEmbedding<'a,M>(&'a Vec<&'a [f32]>, &'a [f32], &'a M);
 
-impl <'a> Fitness for LocalLandmarkEmbedding<'a> {
+impl <'a, M: Metric> Fitness for LocalLandmarkEmbedding<'a, M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
         let n_cands = self.0.len();
         let mut err = 0.;
         for i in 0..n_cands {
-            err += (euc_dist(candidate, self.0[i]) - self.1[i]).abs();
+            err += (self.2.distance(candidate, self.0[i]) - self.1[i]).abs();
         }
 
         -err / (n_cands as f32)
     }
 }
 
-struct LocalNeighborEmbedding<'a> {
+struct LocalNeighborEmbedding<'a, M> {
+    global_preserve: f32,
     orig: &'a [f32], 
     neighbors: &'a Vec<&'a [f32]>, 
-    neighbors_dists: &'a [f32]
+    neighbors_dists: &'a [f32],
+    metric: &'a M
 }
 
-impl <'a> Fitness for LocalNeighborEmbedding<'a> {
+impl <'a, M: Metric> Fitness for LocalNeighborEmbedding<'a,M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
-        let global_score = euc_dist(self.orig, candidate);
-        let neighbor_score = LocalLandmarkEmbedding(self.neighbors, self.neighbors_dists)
+        let global_score = -self.metric.distance(self.orig, candidate);
+        let neighbor_score = LocalLandmarkEmbedding(self.neighbors, self.neighbors_dists, self.metric)
             .score(candidate);
-        -global_score + neighbor_score
+        (self.global_preserve * global_score) + (1. - self.global_preserve) * neighbor_score
     }
 }
-
-fn euc_dist(v1: &[f32], v2: &[f32]) -> f32 {
-    v1.iter().zip(v2.iter())
-        .map(|(v1i, v2i)| (v1i - v2i).powi(2))
-        .sum::<f32>()
-        .powf(0.5)
-}
-
 
 #[cfg(test)]
 mod test_ect_rw {

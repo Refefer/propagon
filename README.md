@@ -80,6 +80,8 @@ This is an interesting approach to learning graph representations.  It first tak
 
 Unlike other graph embedding techniques, this approach starts by capturing global structure and attempts to construct the space via the triangle inequality.  This results in embeddings which tend to have worse homophily than neighbor/adjacency based approaches (e.g. GCNs, Word2vec, spectral clustering, etc.) but with much stronger global geometry.
 
+To account for the distortion of local distances, we add an additional feature to reconstruct the local neighborhood distances after the global embedding.  This allows Propagon to first embed all the points into the global structure and then attempt to rebuild the local structure, which can lead to higher quality local distance preservation.
+
 We replace the Downhill Simplex optimizer for a custom Differential Evolution optimizer which empirically and significantly outperforms the previous for the same function calls.  
 
 [1] Zhao, Xiaohan, et al. "Orion: shortest path estimation for large social graphs." networks 1 (2010): 5.

@@ -390,7 +390,7 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     let local_fns          = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
     let seed               = value_t!(args, "seed", u64).unwrap_or(2019);
     let chunks             = value_t!(args, "chunks", usize).unwrap_or(91);
-    let local_stablization = args.is_present("stabilize");
+    let local_stablization = value_t!(args, "stabilize", f32).ok();
     let l2norm             = args.is_present("l2");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
@@ -404,7 +404,13 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
         _        => eucemb::LandmarkSelection::Degree
     };
 
+    let metric = match args.value_of("space").unwrap_or("euclidean") {
+        "euclidean" => eucemb::Space::Euclidean,
+        _           => eucemb::Space::Poincare
+    };
+
     let emb = eucemb::EucEmb {
+        metric,
         landmarks,
         dims,
         global_fns,
@@ -721,6 +727,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Number of Function calls for the local optimization step.  Default is 1,000"))
             .arg(Arg::with_name("stabilize")
                  .long("stabilize")
+                 .takes_value(true)
                  .help("If enabled, runs a forth pass which includes local neighborhood optimization"))
 
             .arg(Arg::with_name("seed")
@@ -741,7 +748,11 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .possible_values(&["random", "degree"])
                  .help("Pick which mechanism to use for landmark selection.  Default is degree"))
-
+            .arg(Arg::with_name("space")
+                 .long("space")
+                 .takes_value(true)
+                 .possible_values(&["euclidean", "poincare"])
+                 .help("Space to learn embeddings.  Default is Euclidean"))
             .arg(Arg::with_name("l2")
                  .long("l2")
                  .help("If provided, L2-norms the embeddings.")))
