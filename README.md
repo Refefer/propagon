@@ -74,17 +74,28 @@ Outputs an embedding, encoded as json, for each node within the network.
 
 [1] Perozzi, Bryan, Rami Al-Rfou, and Steven Skiena. "Deepwalk: Online learning of social representations." Proceedings of the 20th ACM SIGKDD international conference on Knowledge discovery and data mining. 2014.
 
-#### Euclidean Embedding
+#### Graph Coordinate System Embedding
 
 This is an interesting approach to learning graph representations.  It first takes a sample of nodes which have high connectivity (e.g. degrees), called landmarks, and performs shortest distance computation from each landmark to every other node in the graph.  It then performs a global optimization where it embeds those landmarks into a lower dimensional eucldiean space, attempting to preserve the shortest path distances between each of the landmarks.  Once the landmarks have been embedded into the euclidean space, every other vertex in the graph is embedded into the euclidean space, using those embedded landmarks to guide optimization.
 
-Unlike other graph embedding techniques, this approach starts by capturing global structure and attempts to construct the space via the triangle inequality.  This results in embeddings which tend to have worse homophily than neighbor/adjacency based approaches (e.g. GCNs, Word2vec, spectral clustering, etc.) but with much stronger global geometry.
+Unlike other graph embedding techniques, this approach starts by capturing global structure and attempts to construct the space via the triangle inequality.  Since we use derivative free optimization, this gives us the flexibility of optimizing for _any_ metric - and advantage over recent work in Poincare embeddings (chosen due to easy derivatives)[3].  However, this results in embeddings which tend to have worse homophily than neighbor/adjacency based approaches (e.g. GCNs, Word2vec, spectral clustering, etc.) but with much stronger global geometry.
 
 To account for the distortion of local distances, we add an additional feature to reconstruct the local neighborhood distances after the global embedding.  This allows Propagon to first embed all the points into the global structure and then attempt to rebuild the local structure, which can lead to higher quality local distance preservation.
 
-We replace the Downhill Simplex optimizer for a custom Differential Evolution optimizer which empirically and significantly outperforms the previous for the same function calls.  
+We replace the Downhill Simplex optimizer for a custom Differential Evolution optimizer which empirically and significantly outperforms the former for the same number of function calls.  An additional upside is parallelization of the optimizer.
+
+We current support embeddings in three different spaces:
+ - Euclidean [1]
+ - Hyperboloid [2]
+ - Poincare
+
+It's important to note that the goal of Graph Coordinate Systems is to capture distances between nodes to allow for adhoc distance calculations between arbitraty nodes, forgoing a BFS or Djikstra walk.
 
 [1] Zhao, Xiaohan, et al. "Orion: shortest path estimation for large social graphs." networks 1 (2010): 5.
+
+[2] Zhao, Xiaohan, et al. "Fast and scalable analysis of massive social graphs." arXiv preprint arXiv:1107.5114 (2011).
+
+[3] Nickel, Maximillian, and Douwe Kiela. "Poincaré embeddings for learning hierarchical representations." Advances in neural information processing systems. 2017.
 
 ### Clustering
 
