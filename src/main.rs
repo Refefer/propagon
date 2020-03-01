@@ -11,7 +11,7 @@ mod lpa;
 mod labelrankplus;
 mod chashmap;
 mod walker;
-mod eucemb;
+mod gcs;
 mod de;
 
 mod utils;
@@ -394,22 +394,23 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     let l2norm             = args.is_present("l2");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
-        "uniform" => eucemb::Distance::Uniform,
-        "edge"    => eucemb::Distance::EdgeWeighted,
-        _         => eucemb::Distance::DegreeWeighted
+        "uniform" => gcs::Distance::Uniform,
+        "edge"    => gcs::Distance::EdgeWeighted,
+        _         => gcs::Distance::DegreeWeighted
     };
 
     let selection = match args.value_of("selection").unwrap_or("degree") {
-        "random" => eucemb::LandmarkSelection::Random,
-        _        => eucemb::LandmarkSelection::Degree
+        "random" => gcs::LandmarkSelection::Random,
+        _        => gcs::LandmarkSelection::Degree
     };
 
     let metric = match args.value_of("space").unwrap_or("euclidean") {
-        "euclidean" => eucemb::Space::Euclidean,
-        _           => eucemb::Space::Poincare
+        "euclidean"  => gcs::Space::Euclidean,
+        "hyperboloi" => gcs::Space::Hyperboloid,
+        _            => gcs::Space::Poincare
     };
 
-    let emb = eucemb::EucEmb {
+    let emb = gcs::GCS {
         metric,
         landmarks,
         dims,
@@ -751,7 +752,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("space")
                  .long("space")
                  .takes_value(true)
-                 .possible_values(&["euclidean", "poincare"])
+                 .possible_values(&["euclidean", "poincare", "hyperboloid"])
                  .help("Space to learn embeddings.  Default is Euclidean"))
             .arg(Arg::with_name("l2")
                  .long("l2")

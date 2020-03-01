@@ -132,10 +132,42 @@ impl Metric for PoincareSpace {
     }
 }
 
+// We'll assume a -1 curvature for the time being
+pub struct HyperboloidSpace;
+
+impl Metric for HyperboloidSpace {
+
+    #[inline]
+    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
+        let mut xy = 0.;
+        let mut x2 = 0.;
+        let mut y2 = 0.;
+        for (xi, yi) in x.iter().zip(y.iter()) {
+            xy += xi * yi;
+            x2 += xi.powi(2);
+            y2 += yi.powi(2);
+        }
+
+        let k = ((1. + x2) * (1. + y2)).sqrt() - xy;
+        k.acosh()
+    }
+
+    fn normalize(&self, x: &mut [f32]) { }
+
+    fn component_range(&self, dims: usize) -> f32 {
+        (1. / (dims as f32)).powf(0.5)
+    }
+}
+
 pub enum Space {
+    // Euclidean distances
     Euclidean,
 
-    Poincare
+    // Hyperbolic space on the Poincare disk
+    Poincare,
+
+    // Hyperbolic space in Hyperboloid model
+    Hyperboloid
 }
 
 impl Metric for Space {
@@ -143,7 +175,8 @@ impl Metric for Space {
     fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
         match self {
             Space::Euclidean => EuclideanSpace.distance(x, y),
-            Space::Poincare  => PoincareSpace.distance(x, y)
+            Space::Poincare  => PoincareSpace.distance(x, y),
+            Space::Hyperboloid  => HyperboloidSpace.distance(x, y)
         }
     }
 
@@ -151,15 +184,17 @@ impl Metric for Space {
     fn normalize(&self, x: &mut [f32]) {
         match self {
             Space::Euclidean => EuclideanSpace.normalize(x),
-            Space::Poincare  => PoincareSpace.normalize(x)
+            Space::Poincare  => PoincareSpace.normalize(x),
+            Space::Hyperboloid  => HyperboloidSpace.normalize(x)
         }
     }
 
     #[inline]
     fn component_range(&self, dims: usize) -> f32 {
         match self {
-            Space::Euclidean => EuclideanSpace.component_range(dims),
-            Space::Poincare  => PoincareSpace.component_range(dims)
+            Space::Euclidean   => EuclideanSpace.component_range(dims),
+            Space::Poincare    => PoincareSpace.component_range(dims),
+            Space::Hyperboloid => HyperboloidSpace.component_range(dims)
         }
     }
 
@@ -174,7 +209,7 @@ pub enum LandmarkSelection {
     Degree
 }
 
-pub struct EucEmb<M> {
+pub struct GCS<M> {
     pub metric: M,
     pub landmarks: usize,
     pub dims: usize,
@@ -188,7 +223,7 @@ pub struct EucEmb<M> {
     pub seed: u64
 }
 
-impl <M: Metric> EucEmb<M> {
+impl <M: Metric> GCS<M> {
 
     pub fn fit<K: Hash + Eq + Clone + Send + Sync>(
         &self, 
@@ -270,7 +305,7 @@ impl <M: Metric> EucEmb<M> {
         let fitness = GlobalLandmarkEmbedding(self.dims, &landmark_dists, &self.metric);
 
         let total_dims = self.dims * self.landmarks;
-        let lambda = 30.max((total_dims as f32).powf(0.5) as usize);
+        let lambda = 30.max((total_dims as f32).powf(0.8) as usize);
         let init = self.metric.component_range(self.dims);
         let de = DifferentialEvolution {
             dims: self.dims * self.landmarks,
