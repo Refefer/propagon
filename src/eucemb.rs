@@ -65,6 +65,11 @@ pub trait Metric: Send + Sync {
     // Normalizes the vectors, if necessary
     #[inline] 
     fn normalize(&self, x: &mut [f32]);
+
+    // Initialization component score for DE
+    #[inline] 
+    fn component_range(&self, dims: usize) -> f32; 
+
 }
 
 // Euclidean distance
@@ -80,6 +85,10 @@ impl Metric for EuclideanSpace {
     }
 
     fn normalize(&self, x: &mut [f32]) {}
+
+    fn component_range(&self, dims: usize) -> f32 {
+        (1f32.powi(2) / (dims as f32)).powf(0.5)
+    }
 }
 
 // Poincare distance
@@ -117,6 +126,10 @@ impl Metric for PoincareSpace {
             x.iter_mut().for_each(|xi| *xi /= x_norm);
         }
     }
+
+    fn component_range(&self, dims: usize) -> f32 {
+        (1. / (dims as f32)).powf(0.5)
+    }
 }
 
 pub enum Space {
@@ -139,6 +152,14 @@ impl Metric for Space {
         match self {
             Space::Euclidean => EuclideanSpace.normalize(x),
             Space::Poincare  => PoincareSpace.normalize(x)
+        }
+    }
+
+    #[inline]
+    fn component_range(&self, dims: usize) -> f32 {
+        match self {
+            Space::Euclidean => EuclideanSpace.component_range(dims),
+            Space::Poincare  => PoincareSpace.component_range(dims)
         }
     }
 
@@ -250,6 +271,7 @@ impl <M: Metric> EucEmb<M> {
 
         let total_dims = self.dims * self.landmarks;
         let lambda = 30.max((total_dims as f32).powf(0.5) as usize);
+        let init = self.metric.component_range(self.dims);
         let de = DifferentialEvolution {
             dims: self.dims * self.landmarks,
             lambda: lambda,
@@ -257,7 +279,8 @@ impl <M: Metric> EucEmb<M> {
             cr: 0.9,
             m: 0.1,
             exp: 3.,
-            restart_on_stale: 100
+            restart_on_stale: 100,
+            range: init
         };
 
         let pb = ProgressBar::new(self.global_fns as u64);
@@ -289,6 +312,7 @@ impl <M: Metric> EucEmb<M> {
 
         let fitness = LocalLandmarkEmbedding(emb_landmarks, dist.as_slice(), &self.metric);
 
+        let init = self.metric.component_range(self.dims);
         let de = DifferentialEvolution {
             dims: self.dims,
             lambda: 30,
@@ -296,7 +320,8 @@ impl <M: Metric> EucEmb<M> {
             cr: 0.9,
             m: 0.1,
             exp: 3.,
-            restart_on_stale: 10
+            restart_on_stale: 10,
+            range: init
         };
 
         de.fit(&fitness, self.local_fns, self.seed + idx as u64, 
@@ -314,7 +339,7 @@ impl <M: Metric> EucEmb<M> {
         let embeddings = CHashMap::new(self.chunks);
         let embeddings = embeddings.extend(m.drain());
 
-        
+        let init = self.metric.component_range(self.dims);
         let de = DifferentialEvolution {
             dims: self.dims,
             lambda: 30,
@@ -322,7 +347,8 @@ impl <M: Metric> EucEmb<M> {
             cr: 0.9,
             m: 0.1,
             exp: 3.,
-            restart_on_stale: 10
+            restart_on_stale: 10,
+            range: init
         };
 
         eprintln!("Computing neighborhoods...");

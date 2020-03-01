@@ -35,7 +35,10 @@ pub struct DifferentialEvolution {
 
     /// If enabled, early terminates if it doesn't improve after K iterations.  0 means
     /// turn off
-    pub restart_on_stale: usize
+    pub restart_on_stale: usize,
+
+    /// Random component range for generation of initial points
+    pub range: f32
 }
 
 impl DifferentialEvolution {
@@ -52,7 +55,7 @@ impl DifferentialEvolution {
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
         // Initialize population
-        let dist1 = Uniform::new(-1., 1.);
+        let dist1 = Uniform::new(-self.range, self.range);
         let mut pop: Vec<_> = (0..self.lambda).map(|_| {
             let mut v = vec![0.; self.dims];
             v.iter_mut().for_each(|vi| *vi = dist1.sample(&mut rng));
