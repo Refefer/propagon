@@ -19,28 +19,8 @@ use crate::utils;
 use crate::chashmap::CHashMap;
 use crate::de::{Fitness,DifferentialEvolution};
 
-#[derive(Debug)]
-struct BestDegree<K>(K, usize);
-
-impl <K> Ord for BestDegree<K> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.1.cmp(&other.1)
-    }
-}
-
-impl <K> PartialOrd for BestDegree<K> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl <K> Eq for BestDegree<K> {}
-
-impl <K> PartialEq for BestDegree<K> {
-    fn eq(&self, other: &Self) -> bool {
-        self.1 == other.1
-    }
-}
+#[derive(Ord,Eq,PartialEq,PartialOrd)]
+struct BestDegree<K: Ord + Eq + PartialEq + PartialOrd>(usize, K);
 
 #[derive(PartialEq,Eq,Clone,Copy)]
 pub enum Distance {
@@ -254,7 +234,7 @@ pub struct GCS<M> {
 
 impl <M: Metric> GCS<M> {
 
-    pub fn fit<K: Hash + Eq + Clone + Send + Sync>(
+    pub fn fit<K: Hash + Eq + Ord + Clone + Send + Sync>(
         &self, 
         graph: impl Iterator<Item=(K,K,f32)>
     ) -> HashMap<K, Vec<f32>> {
@@ -290,6 +270,9 @@ impl <M: Metric> GCS<M> {
         let pb = ProgressBar::new(distances.len() as u64);
         pb.set_style(ProgressStyle::default_bar()
             .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
+
+        pb.enable_steady_tick(200);
+        pb.set_draw_delta(distances.len() as u64 / 1000);
 
         // We store the running loss in a mutex
         let data = Arc::new(Mutex::new((0f32, 0usize, String::new())));
@@ -420,6 +403,8 @@ impl <M: Metric> GCS<M> {
         pb.set_style(ProgressStyle::default_bar()
             .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
 
+        pb.enable_steady_tick(200);
+        pb.set_draw_delta(edges.len() as u64 / 1000);
         // We store the running loss in a mutex
         let fits = Arc::new(Mutex::new((0f32, 0usize, String::new())));
 
@@ -480,13 +465,14 @@ impl <M: Metric> GCS<M> {
     }
 
     // computes the walk distances
-    fn compute_landmark_distances<K: Hash + Eq + Clone + Send + Sync>(
+    fn compute_landmark_distances<K: Hash + Eq + Ord + Clone + Send + Sync>(
         &self, 
         edges: &HashMap<K, Vec<(K, f32)>>
 
     ) -> (HashMap<K, Vec<f32>>, Vec<K>) {
         // Setup initial embeddings
-        let keys: Vec<_> = edges.keys().collect();
+        let mut keys: Vec<_> = edges.keys().collect();
+        keys.sort();
         let it = keys.iter()
             .map(|key| {
                 ((*key).clone(), vec![0.; self.landmarks])
@@ -602,7 +588,7 @@ fn weighted_walk_distance<'a, K: Hash + Eq>(
     distance
 }
 
-fn top_k_nodes<'a, 'b, K: Hash + Eq>(
+fn top_k_nodes<'a, 'b, K: Hash + Eq + Ord>(
     keys: &'b Vec<&'a K>,
     edges: &HashMap<K, Vec<(K, f32)>>,
     dims: usize
@@ -610,12 +596,12 @@ fn top_k_nodes<'a, 'b, K: Hash + Eq>(
     let mut bh = BinaryHeap::with_capacity(dims + 1);
     for k in keys.iter() {
         let degrees = edges[k].len();
-        bh.push(Reverse(BestDegree(k, degrees)));
+        bh.push(Reverse(BestDegree(degrees, k)));
         if bh.len() > dims {
             bh.pop();
         }
     }
-    bh.into_iter().map(|Reverse(BestDegree(k, _))| k).collect()
+    bh.into_iter().map(|Reverse(BestDegree(_, k))| k).collect()
 }
 
 struct GlobalLandmarkEmbedding<'a, M>(usize, &'a Vec<&'a [f32]>, &'a M);
