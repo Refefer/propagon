@@ -213,7 +213,11 @@ impl <M: Metric> GCS<M> {
         idx: usize
     ) -> (f32, Vec<f32>) {
 
-        let fitness = LocalLandmarkEmbedding(emb_landmarks, dist, &self.metric);
+        let fitness = LocalLandmarkEmbedding{
+            landmarks: emb_landmarks, 
+            landmarks_dists: dist, 
+            metric: &self.metric
+        };
 
         let init = self.metric.component_range(self.dims);
         let de = DifferentialEvolution {
@@ -476,30 +480,35 @@ impl <'a,M: Metric> Fitness for GlobalLandmarkEmbedding<'a, M> {
             for j in (i+1)..n_cands {
                 let j_start = j * dims;
                 let v2 = &candidate[j_start..j_start + dims];
-                err += (self.2.distance(v1, v2) - self.1[i][j]).abs()
+                err += (self.2.distance(v1, v2) - self.1[i][j]).powi(2)
             }
         }
 
-        -err / (n_cands as f32 * (n_cands as f32- 1.) / 2.)
+        -err.sqrt() / (n_cands as f32 * (n_cands as f32- 1.) / 2.)
     }
 }
 
-struct LocalLandmarkEmbedding<'a,M>(&'a Vec<&'a [f32]>, &'a [f32], &'a M);
+struct LocalLandmarkEmbedding<'a,M> {
+    landmarks: &'a Vec<&'a [f32]>, 
+    landmarks_dists: &'a [f32], 
+    metric: &'a M
+}
 
 impl <'a, M: Metric> Fitness for LocalLandmarkEmbedding<'a, M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
-        if !self.2.in_domain(candidate) {
+        if !self.metric.in_domain(candidate) {
             return std::f32::NEG_INFINITY;
         }
 
-        let n_cands = self.0.len();
+        let n_cands = self.landmarks.len();
         let mut err = 0.;
         for i in 0..n_cands {
-            err += (self.2.distance(candidate, self.0[i]) - self.1[i]).abs();
+            let d = self.metric.distance(candidate, self.landmarks[i]);
+            err += (d - self.landmarks_dists[i]).powi(2);
         }
 
-        -err / (n_cands as f32)
+        -err.sqrt() / (n_cands as f32)
     }
 }
 
@@ -518,8 +527,13 @@ impl <'a, M: Metric> Fitness for LocalNeighborEmbedding<'a,M> {
             return std::f32::NEG_INFINITY;
         }
         let global_score = -self.metric.distance(self.orig, candidate);
-        let neighbor_score = LocalLandmarkEmbedding(self.neighbors, self.neighbors_dists, self.metric)
-            .score(candidate);
+        let emb = LocalLandmarkEmbedding{
+            landmarks: self.neighbors, 
+            landmarks_dists: self.neighbors_dists, 
+            metric: self.metric
+        };
+
+        let neighbor_score = emb.score(candidate);
         (self.global_preserve * global_score) + (1. - self.global_preserve) * neighbor_score
     }
 }
