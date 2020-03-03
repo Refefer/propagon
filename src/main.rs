@@ -13,6 +13,7 @@ mod chashmap;
 mod walker;
 mod gcs;
 mod de;
+mod metric;
 
 mod utils;
 
@@ -388,10 +389,13 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     let landmarks          = value_t!(args, "landmarks", usize).unwrap();
     let global_fns         = value_t!(args, "global-embed-fns", usize).unwrap_or(1_000_000);
     let local_fns          = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
+    let neighbor_fns       = value_t!(args, "neighbor-fns", usize).unwrap_or(local_fns);
     let seed               = value_t!(args, "seed", u64).unwrap_or(2019);
     let chunks             = value_t!(args, "chunks", usize).unwrap_or(91);
     let local_stablization = value_t!(args, "stabilize", f32).ok();
+    let stable_passes      = value_t!(args, "stabilization-passes", usize).unwrap_or(1);
     let l2norm             = args.is_present("l2");
+    let only_walks         = args.is_present("only-walks");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
         "uniform" => gcs::Distance::Uniform,
@@ -405,23 +409,26 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     };
 
     let metric = match args.value_of("space").unwrap_or("euclidean") {
-        "euclidean"   => gcs::Space::Euclidean,
-        "hyperboloid" => gcs::Space::Hyperboloid,
-        "manhattan"   => gcs::Space::Manhattan,
-        _             => gcs::Space::Poincare
+        "euclidean"   => metric::Space::Euclidean,
+        "hyperboloid" => metric::Space::Hyperboloid,
+        "manhattan"   => metric::Space::Manhattan,
+        _             => metric::Space::Poincare
     };
 
     let emb = gcs::GCS {
         metric,
         landmarks,
+        only_walks,
         dims,
         global_fns,
         local_fns,
+        neighbor_fns,
         distance,
         selection,
         chunks,
         l2norm,
         local_stablization,
+        stable_passes,
         seed
     };
 
@@ -719,6 +726,9 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .required(true)
                  .takes_value(true)
                  .help("Number of landmarks to use"))
+            .arg(Arg::with_name("only-walks")
+                 .long("only-walks")
+                 .help("If enabled, only emits the walk distances"))
             .arg(Arg::with_name("global-embed-fns")
                  .long("global-embed-fns")
                  .takes_value(true)
@@ -727,10 +737,19 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("local-embed-fns")
                  .takes_value(true)
                  .help("Number of Function calls for the local optimization step.  Default is 1,000"))
+            .arg(Arg::with_name("neighbor-fns")
+                 .long("neighbor-fns")
+                 .takes_value(true)
+                 .help("Number of functions calls for polishing listings to their neighborhoods"))
             .arg(Arg::with_name("stabilize")
                  .long("stabilize")
                  .takes_value(true)
                  .help("If enabled, runs a forth pass which includes local neighborhood optimization"))
+            .arg(Arg::with_name("stabilization-passes")
+                 .long("stabilization-passes")
+                 .takes_value(true)
+                 .help("Number of passes to fine-tune on.  Default is 1."))
+
 
             .arg(Arg::with_name("seed")
                  .long("seed")

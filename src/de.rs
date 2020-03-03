@@ -64,9 +64,14 @@ impl DifferentialEvolution {
 
         // If an x_in has been provided, offset the population by it
         if let Some(x_in_v) = x_in {
-            pop.iter_mut().for_each(|p| {
+            pop.iter_mut().enumerate().for_each(|(i, p)| {
                 p.iter_mut().zip(x_in_v.iter()).for_each(|(pi, vi)| {
-                    *pi += vi;
+                    // First one gets x_in as the basis
+                    if i == 0 {
+                        *pi = *vi;
+                    } else {
+                        *pi += vi;
+                    }
                 });
             });
         }
@@ -83,6 +88,11 @@ impl DifferentialEvolution {
 
         let mut best_fit = std::f32::NEG_INFINITY;
         let mut stale_len = 0;
+
+        let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
+            .expect("Should never be empty!");
+        assert!(fits[best_idx].is_finite(), format!("IDX: {}, vec: {:?}",best_idx, pop[best_idx]));
+
         while fns < total_fns {
             // Get the best candidate
             let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
@@ -98,7 +108,7 @@ impl DifferentialEvolution {
 
                 let best = pop[best_idx].clone();
 
-                // Re build population
+                // Re build population, preserving the best one
                 pop.iter_mut().enumerate().for_each(|(i, p)| {
                     if i != best_idx {
                         p.iter_mut().zip(best.iter())
@@ -195,6 +205,7 @@ impl DifferentialEvolution {
         // Get the best candidate!
         let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
             .expect("Should never be empty!");
+
         (fits[best_idx], pop.swap_remove(best_idx))
     }
 }

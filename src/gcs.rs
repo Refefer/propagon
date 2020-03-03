@@ -16,6 +16,7 @@ use rand::prelude::*;
 use rayon::prelude::*;
 
 use crate::utils;
+use crate::metric::Metric;
 use crate::chashmap::CHashMap;
 use crate::de::{Fitness,DifferentialEvolution};
 
@@ -37,178 +38,6 @@ pub enum Distance {
     EdgeWeighted
 }
 
-pub trait Metric: Send + Sync {
-    // Computes the distance between two points
-    #[inline] 
-    fn distance(&self, x: &[f32], y: &[f32]) -> f32;
-
-    // Normalizes the vectors, if necessary
-    #[inline] 
-    fn normalize(&self, x: &mut [f32]);
-
-    // Initialization component score for DE
-    #[inline] 
-    fn component_range(&self, dims: usize) -> f32; 
-
-}
-
-// Euclidean distance
-pub struct EuclideanSpace;
-
-impl Metric for EuclideanSpace {
-    #[inline]
-    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
-        x.iter().zip(y.iter())
-            .map(|(v1i, v2i)| (v1i - v2i).powi(2))
-            .sum::<f32>()
-            .powf(0.5)
-    }
-
-    fn normalize(&self, x: &mut [f32]) {}
-
-    fn component_range(&self, dims: usize) -> f32 {
-        (1f32.powi(2) / (dims as f32)).powf(0.5)
-    }
-}
-
-// Euclidean distance
-pub struct ManhattanSpace;
-
-impl Metric for ManhattanSpace {
-    #[inline]
-    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
-        x.iter().zip(y.iter())
-            .map(|(v1i, v2i)| (v1i - v2i).abs())
-            .sum::<f32>()
-    }
-
-    fn normalize(&self, x: &mut [f32]) {}
-
-    fn component_range(&self, dims: usize) -> f32 {
-        (1f32.powi(2) / (dims as f32)).powf(0.5)
-    }
-}
-
-// Poincare distance
-pub struct PoincareSpace;
-
-impl Metric for PoincareSpace {
-
-    #[inline]
-    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
-        let mut xy2 = 0.;
-        let mut x2 = 0.;
-        let mut y2 = 0.;
-        for (xi, yi) in x.iter().zip(y.iter()) {
-            xy2 += (xi - yi).powi(2);
-            x2 += xi.powi(2);
-            y2 += yi.powi(2);
-        }
-
-        // normalize by magnitude
-        if x2 >= 1. {
-            xy2 /= x2.powf(0.5);
-            x2 = 1. - 1e-5;
-        }
-        if y2 >= 1. {
-            xy2 /= y2.powf(0.5);
-            y2 = 1. - 1e-5;
-        }
-        let k = (1. + 2. * (xy2 / ((1. - x2) * (1. - y2))));
-        k.acosh()
-    }
-
-    fn normalize(&self, x: &mut [f32]) {
-        let x_norm = x.iter().map(|xi| xi.powi(2)).sum::<f32>().powf(0.5);
-        if x_norm > 1. {
-            x.iter_mut().for_each(|xi| *xi /= x_norm);
-        }
-    }
-
-    fn component_range(&self, dims: usize) -> f32 {
-        (1. / (dims as f32)).powf(0.5)
-    }
-}
-
-// We'll assume a -1 curvature for the time being
-pub struct HyperboloidSpace;
-
-impl Metric for HyperboloidSpace {
-
-    #[inline]
-    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
-        let mut xy = 0.;
-        let mut x2 = 0.;
-        let mut y2 = 0.;
-        for (xi, yi) in x.iter().zip(y.iter()) {
-            xy += xi * yi;
-            x2 += xi.powi(2);
-            y2 += yi.powi(2);
-        }
-
-        let k = ((1. + x2) * (1. + y2)).sqrt() - xy;
-        let res = k.acosh();
-        if res.is_nan() {
-            std::f32::INFINITY
-        } else {
-            res
-        }
-    }
-
-    fn normalize(&self, x: &mut [f32]) { }
-
-    fn component_range(&self, dims: usize) -> f32 {
-        (1. / (dims as f32)).powf(0.5)
-    }
-}
-
-pub enum Space {
-    // Euclidean distance
-    Euclidean,
-
-    // Manhattan distance
-    Manhattan,
-
-    // Hyperbolic space on the Poincare disk
-    Poincare,
-
-    // Hyperbolic space in Hyperboloid model
-    Hyperboloid
-}
-
-impl Metric for Space {
-    #[inline]
-    fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
-        match self {
-            Space::Euclidean => EuclideanSpace.distance(x, y),
-            Space::Poincare  => PoincareSpace.distance(x, y),
-            Space::Hyperboloid  => HyperboloidSpace.distance(x, y),
-            Space::Manhattan  => ManhattanSpace.distance(x, y),
-        }
-    }
-
-    #[inline]
-    fn normalize(&self, x: &mut [f32]) {
-        match self {
-            Space::Euclidean => EuclideanSpace.normalize(x),
-            Space::Poincare  => PoincareSpace.normalize(x),
-            Space::Hyperboloid  => HyperboloidSpace.normalize(x),
-            Space::Manhattan  => ManhattanSpace.normalize(x)
-        }
-    }
-
-    #[inline]
-    fn component_range(&self, dims: usize) -> f32 {
-        match self {
-            Space::Euclidean   => EuclideanSpace.component_range(dims),
-            Space::Poincare    => PoincareSpace.component_range(dims),
-            Space::Hyperboloid => HyperboloidSpace.component_range(dims),
-            Space::Manhattan  => ManhattanSpace.component_range(dims)
-        }
-    }
-
-}
-
 #[derive(PartialEq,Eq,Clone,Copy)]
 pub enum LandmarkSelection {
     // Selects nodes randomly
@@ -221,12 +50,15 @@ pub enum LandmarkSelection {
 pub struct GCS<M> {
     pub metric: M,
     pub landmarks: usize,
+    pub only_walks: bool,
     pub dims: usize,
     pub global_fns: usize,
     pub local_fns: usize,
+    pub neighbor_fns: usize,
     pub distance: Distance,
     pub selection: LandmarkSelection,
     pub local_stablization: Option<f32>,
+    pub stable_passes: usize, 
     pub chunks: usize,
     pub l2norm: bool,
     pub seed: u64
@@ -250,7 +82,12 @@ impl <M: Metric> GCS<M> {
 
         eprintln!("Number of Vertices: {}", edges.len());
 
-        let (mut distances, landmarks) = self.compute_landmark_distances(&edges);
+        let (distances, landmarks) = self.compute_landmark_distances(&edges);
+
+        // Early exit if only showing walks
+        if self.only_walks {
+            return distances
+        }
 
         eprintln!("Computed walks, globally embedding landmarks");
 
@@ -266,49 +103,67 @@ impl <M: Metric> GCS<M> {
         // locally embed each of the points
         let emb_slice = embedded_landmarks.iter().map(|v| v.as_slice()).collect();
 
-        eprintln!("Computed distances, embedding local points...");
-        let pb = ProgressBar::new(distances.len() as u64);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
-
-        pb.enable_steady_tick(200);
-        pb.set_draw_delta(distances.len() as u64 / 1000);
+        
+        // Setup the embeddings for constant use
+        let embeddings = CHashMap::new(self.chunks).extend(distances.keys().map(|k| {
+            (k.clone(), vec![0f32; self.dims])
+        }));
 
         // We store the running loss in a mutex
         let data = Arc::new(Mutex::new((0f32, 0usize, String::new())));
-        let results = distances.par_drain().map(|(k, v)| {
-            let iter = {data.lock().unwrap().1};
-            let (loss, emb) = self.local_emb(&emb_slice, v, iter);
-            pb.inc(1);
-            {
-                let mut pl = data.lock().unwrap();
-                (*pl).0 += -loss;
-                (*pl).1 += 1;
-                pl.2.clear();
-                let rate = pl.0 / pl.1 as f32;
-                write!(pl.2, "Avg Loss: {:.5}", rate).unwrap();
-                pb.set_message(&pl.2);
-            };
-            (k, emb)
-        }).collect();
+        for pass in 0..self.stable_passes {
+            eprintln!("Pass: {}/{} - Computed distances, embedding local points...", pass + 1, self.stable_passes);
 
-        pb.finish();
+            let pb = ProgressBar::new(distances.len() as u64);
+            pb.set_style(ProgressStyle::default_bar()
+                .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
 
-        // Check to see if want to preserve local neighborhoods as well.
-        let mut final_embeddings = if let Some(global_preserve) = self.local_stablization {
-            self.embed_neighborhood(global_preserve, results, edges)
-        } else {
-            results
-        };
+            pb.enable_steady_tick(200);
+            pb.set_draw_delta(distances.len() as u64 / 1000);
 
-        // Norm if we have to
-        final_embeddings.par_values_mut().for_each(|v| {
-            self.metric.normalize(v.as_mut_slice());
-            if self.l2norm {
-                utils::l2_norm(v);
+            distances.par_iter().for_each(|(k, v)| {
+                let iter = {data.lock().unwrap().1};
+                // Get the embedding
+                let emb_orig = {
+                    embeddings.get_map(k).read().unwrap()
+                        .get(k).unwrap()
+                        .clone()
+                };
+
+                let (loss, new_emb) = self.local_emb(&emb_slice, &distances[k], 
+                                                     emb_orig.as_slice(), iter);
+                pb.inc(1);
+                {
+                    let mut pl = data.lock().unwrap();
+                    (*pl).0 += -loss;
+                    (*pl).1 += 1;
+                    pl.2.clear();
+                    let rate = pl.0 / pl.1 as f32;
+                    write!(pl.2, "Avg Loss: {:.5}", rate).unwrap();
+                    pb.set_message(&pl.2);
+                };
+                embeddings.get_map(k).write().unwrap()
+                    .insert((*k).clone(), new_emb);
+            });
+
+            pb.finish();
+
+            // Check to see if want to preserve local neighborhoods as well.
+            if let Some(global_preserve) = self.local_stablization {
+                self.embed_neighborhood(global_preserve, &embeddings, &edges);
             }
-        });
-        final_embeddings
+        }
+
+        embeddings.into_inner().into_iter().flat_map(|mut hm| {
+            hm.par_values_mut().for_each(|v| {
+                // Norm if we have to
+                self.metric.normalize(v.as_mut_slice());
+                if self.l2norm {
+                    utils::l2_norm(v);
+                }
+            });
+            hm.into_iter()
+        }).collect()
 
     }
 
@@ -353,11 +208,12 @@ impl <M: Metric> GCS<M> {
     fn local_emb(
         &self, 
         emb_landmarks: &Vec<&[f32]>, 
-        dist: Vec<f32>, 
+        dist: &[f32], 
+        x_in: &[f32],
         idx: usize
     ) -> (f32, Vec<f32>) {
 
-        let fitness = LocalLandmarkEmbedding(emb_landmarks, dist.as_slice(), &self.metric);
+        let fitness = LocalLandmarkEmbedding(emb_landmarks, dist, &self.metric);
 
         let init = self.metric.component_range(self.dims);
         let de = DifferentialEvolution {
@@ -372,20 +228,16 @@ impl <M: Metric> GCS<M> {
         };
 
         de.fit(&fitness, self.local_fns, self.seed + idx as u64, 
-               None, |_best_fit, _rem| { })
-            
+               Some(x_in), |_best_fit, _rem| { })
     }
 
     fn embed_neighborhood<K: Hash + Eq + Clone + Send + Sync>(
         &self, 
         global_preserve: f32,
-        mut m: HashMap<K, Vec<f32>>,
-        edges: HashMap<K,Vec<(K, f32)>>
-    ) -> HashMap<K, Vec<f32>> {
+        embeddings: &CHashMap<K, Vec<f32>>,
+        edges: &HashMap<K,Vec<(K, f32)>>
+    ) {
         // Load everything into a concurrent hashmap
-        let embeddings = CHashMap::new(self.chunks);
-        let embeddings = embeddings.extend(m.drain());
-
         let init = self.metric.component_range(self.dims);
         let de = DifferentialEvolution {
             dims: self.dims,
@@ -399,13 +251,14 @@ impl <M: Metric> GCS<M> {
         };
 
         eprintln!("Computing neighborhoods...");
-        let pb = ProgressBar::new(edges.len() as u64);
+        let pb = ProgressBar::new((edges.len()) as u64);
         pb.set_style(ProgressStyle::default_bar()
             .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
 
         pb.enable_steady_tick(200);
         pb.set_draw_delta(edges.len() as u64 / 1000);
         // We store the running loss in a mutex
+
         let fits = Arc::new(Mutex::new((0f32, 0usize, String::new())));
 
         // Get keys and iterator
@@ -438,8 +291,10 @@ impl <M: Metric> GCS<M> {
             // Eh, local seed uses weights
             let local_seed = dists.iter().sum::<f32>() as u64;
             
-            let (loss, new_emb) = de.fit(&fitness, self.local_fns, self.seed + local_seed, 
-                   Some(emb_orig.as_slice()), |_best_fit, _rem| { });
+            let (loss, new_emb) = de.fit(
+                &fitness, self.neighbor_fns, self.seed + local_seed, 
+                   Some(emb_orig.as_slice()), |_best_fit, _rem| { }
+            );
 
             // Insert the new embedding
             embeddings.get_map(k).write().unwrap()
@@ -459,9 +314,6 @@ impl <M: Metric> GCS<M> {
         });
         pb.finish();
 
-        embeddings.into_inner().into_iter().flat_map(|hm| {
-            hm.into_iter()
-        }).collect()
     }
 
     // computes the walk distances
@@ -609,12 +461,18 @@ struct GlobalLandmarkEmbedding<'a, M>(usize, &'a Vec<&'a [f32]>, &'a M);
 impl <'a,M: Metric> Fitness for GlobalLandmarkEmbedding<'a, M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
+        
         let n_cands = self.1.len();
         let dims = self.0;
         let mut err = 0.;
         for i in 0..n_cands {
             let i_start = i * dims;
             let v1 = &candidate[i_start..i_start + dims];
+
+            if !self.2.in_domain(v1) {
+                return std::f32::NEG_INFINITY;
+            }
+
             for j in (i+1)..n_cands {
                 let j_start = j * dims;
                 let v2 = &candidate[j_start..j_start + dims];
@@ -631,6 +489,11 @@ struct LocalLandmarkEmbedding<'a,M>(&'a Vec<&'a [f32]>, &'a [f32], &'a M);
 impl <'a, M: Metric> Fitness for LocalLandmarkEmbedding<'a, M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
+        if !self.2.in_domain(candidate) {
+            eprintln!("sad panda!");
+            return std::f32::NEG_INFINITY;
+        }
+
         let n_cands = self.0.len();
         let mut err = 0.;
         for i in 0..n_cands {
@@ -652,6 +515,9 @@ struct LocalNeighborEmbedding<'a, M> {
 impl <'a, M: Metric> Fitness for LocalNeighborEmbedding<'a,M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
+        if !self.metric.in_domain(candidate) {
+            return std::f32::NEG_INFINITY;
+        }
         let global_score = -self.metric.distance(self.orig, candidate);
         let neighbor_score = LocalLandmarkEmbedding(self.neighbors, self.neighbors_dists, self.metric)
             .score(candidate);
