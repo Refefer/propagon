@@ -89,10 +89,6 @@ impl DifferentialEvolution {
         let mut best_fit = std::f32::NEG_INFINITY;
         let mut stale_len = 0;
 
-        let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
-            .expect("Should never be empty!");
-        assert!(fits[best_idx].is_finite(), format!("IDX: {}, vec: {:?}",best_idx, pop[best_idx]));
-
         while fns < total_fns {
             // Get the best candidate
             let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
@@ -157,7 +153,15 @@ impl DifferentialEvolution {
                     });
 
                     // Just override the fitness
-                    *f = fit_fn.score(&x);
+                    let new_f = fit_fn.score(&x);
+                    if new_f.is_finite() {
+                        *f = new_f;
+                    } else {
+                        x.iter_mut().zip(orig_x.iter()).for_each(|(xi, oxi)| {
+                            *xi = *oxi;
+                        });
+                    }
+
 
                 } else {
                     // x_b +  F * (a - b)
@@ -179,7 +183,7 @@ impl DifferentialEvolution {
 
                     // Score the new individual
                     let new_fitness = fit_fn.score(&x);
-                    if new_fitness > *f {
+                    if new_fitness.is_finite() && new_fitness > *f {
                         *f = new_fitness;
                     } else {
                         // Copy over the original x
@@ -205,6 +209,9 @@ impl DifferentialEvolution {
         // Get the best candidate!
         let best_idx = (0..self.lambda).max_by_key(|i| FloatOrd(fits[*i]))
             .expect("Should never be empty!");
+
+        assert!(fits[best_idx].is_finite(), 
+                format!("IDX: {}, vec: {:?}", best_idx, pop[best_idx]));
 
         (fits[best_idx], pop.swap_remove(best_idx))
     }

@@ -490,7 +490,6 @@ impl <'a, M: Metric> Fitness for LocalLandmarkEmbedding<'a, M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
         if !self.2.in_domain(candidate) {
-            eprintln!("sad panda!");
             return std::f32::NEG_INFINITY;
         }
 

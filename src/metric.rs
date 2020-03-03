@@ -119,12 +119,7 @@ impl Metric for HyperboloidSpace {
         }
 
         let k = ((1. + x2) * (1. + y2)).sqrt() - xy;
-        let res = k.acosh();
-        if res.is_nan() {
-            std::f32::INFINITY
-        } else {
-            res
-        }
+        k.acosh()
     }
 
     fn normalize(&self, x: &mut [f32]) { }
@@ -134,8 +129,8 @@ impl Metric for HyperboloidSpace {
     }
 
     fn in_domain(&self, x: &[f32]) -> bool{
-        let norm = x.iter().map(|xi| xi.powi(2)).sum::<f32>().powf(0.5);
-        norm <= 1.0
+        let max_value = (std::f32::MAX - 1.).powf(0.5) / x.len() as f32;
+        x.iter().all(|xi| xi.abs() < max_value)
     }
 }
 
@@ -157,20 +152,20 @@ impl Metric for Space {
     #[inline]
     fn distance(&self, x: &[f32], y: &[f32]) -> f32 {
         match self {
-            Space::Euclidean => EuclideanSpace.distance(x, y),
-            Space::Poincare  => PoincareSpace.distance(x, y),
-            Space::Hyperboloid  => HyperboloidSpace.distance(x, y),
-            Space::Manhattan  => ManhattanSpace.distance(x, y),
+            Space::Euclidean   => EuclideanSpace.distance(x, y),
+            Space::Poincare    => PoincareSpace.distance(x, y),
+            Space::Hyperboloid => HyperboloidSpace.distance(x, y),
+            Space::Manhattan   => ManhattanSpace.distance(x, y),
         }
     }
 
     #[inline]
     fn normalize(&self, x: &mut [f32]) {
         match self {
-            Space::Euclidean => EuclideanSpace.normalize(x),
-            Space::Poincare  => PoincareSpace.normalize(x),
-            Space::Hyperboloid  => HyperboloidSpace.normalize(x),
-            Space::Manhattan  => ManhattanSpace.normalize(x)
+            Space::Euclidean   => EuclideanSpace.normalize(x),
+            Space::Poincare    => PoincareSpace.normalize(x),
+            Space::Hyperboloid => HyperboloidSpace.normalize(x),
+            Space::Manhattan   => ManhattanSpace.normalize(x)
         }
     }
 
@@ -180,9 +175,20 @@ impl Metric for Space {
             Space::Euclidean   => EuclideanSpace.component_range(dims),
             Space::Poincare    => PoincareSpace.component_range(dims),
             Space::Hyperboloid => HyperboloidSpace.component_range(dims),
-            Space::Manhattan  => ManhattanSpace.component_range(dims)
+            Space::Manhattan   => ManhattanSpace.component_range(dims)
         }
     }
+
+    #[inline]
+    fn in_domain(&self, x: &[f32]) -> bool {
+        match self {
+            Space::Euclidean   => EuclideanSpace.in_domain(x),
+            Space::Poincare    => PoincareSpace.in_domain(x),
+            Space::Hyperboloid => HyperboloidSpace.in_domain(x),
+            Space::Manhattan   => ManhattanSpace.in_domain(x)
+        }
+    }
+
 
 }
 
