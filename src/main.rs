@@ -385,17 +385,16 @@ fn random_walk(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
-    let dims               = value_t!(args, "dims", usize).unwrap();
-    let landmarks          = value_t!(args, "landmarks", usize).unwrap();
-    let global_fns         = value_t!(args, "global-embed-fns", usize).unwrap_or(1_000_000);
-    let local_fns          = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
-    let neighbor_fns       = value_t!(args, "neighbor-fns", usize).unwrap_or(local_fns);
-    let seed               = value_t!(args, "seed", u64).unwrap_or(2019);
-    let chunks             = value_t!(args, "chunks", usize).unwrap_or(91);
-    let local_stablization = value_t!(args, "stabilize", f32).ok();
-    let stable_passes      = value_t!(args, "stabilization-passes", usize).unwrap_or(1);
-    let l2norm             = args.is_present("l2");
-    let only_walks         = args.is_present("only-walks");
+    let dims         = value_t!(args, "dims", usize).unwrap();
+    let landmarks    = value_t!(args, "landmarks", usize).unwrap();
+    let global_fns   = value_t!(args, "global-embed-fns", usize).unwrap_or(1_000_000);
+    let local_fns    = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
+    let seed         = value_t!(args, "seed", u64).unwrap_or(2019);
+    let chunks       = value_t!(args, "chunks", usize).unwrap_or(91);
+    let global_bias  = value_t!(args, "global-bias", f32).unwrap_or(0.5);
+    let passes       = value_t!(args, "passes", usize).unwrap_or(3);
+    let l2norm       = args.is_present("l2");
+    let only_walks   = args.is_present("only-walks");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
         "uniform" => gcs::Distance::Uniform,
@@ -422,13 +421,12 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
         dims,
         global_fns,
         local_fns,
-        neighbor_fns,
         distance,
         selection,
         chunks,
         l2norm,
-        local_stablization,
-        stable_passes,
+        global_bias,
+        passes,
         seed
     };
 
@@ -737,20 +735,14 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("local-embed-fns")
                  .takes_value(true)
                  .help("Number of Function calls for the local optimization step.  Default is 1,000"))
-            .arg(Arg::with_name("neighbor-fns")
-                 .long("neighbor-fns")
+            .arg(Arg::with_name("global-bias")
+                 .long("global-bias")
                  .takes_value(true)
-                 .help("Number of functions calls for polishing listings to their neighborhoods"))
-            .arg(Arg::with_name("stabilize")
-                 .long("stabilize")
+                 .help("Amount to bias toward global distance versus local"))
+            .arg(Arg::with_name("passes")
+                 .long("passes")
                  .takes_value(true)
-                 .help("If enabled, runs a forth pass which includes local neighborhood optimization"))
-            .arg(Arg::with_name("stabilization-passes")
-                 .long("stabilization-passes")
-                 .takes_value(true)
-                 .help("Number of passes to fine-tune on.  Default is 1."))
-
-
+                 .help("Number of passes to fine-tune on.  Default is 3."))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)

@@ -13,7 +13,7 @@ pub trait Metric: Send + Sync {
 
     // Adds a score penalty to vectors.  It helps us avoid overflows.
     #[inline] 
-    fn in_domain(&self, x: &[f32]) -> bool {
+    fn in_domain(&self, _x: &[f32]) -> bool {
         true
     }
 
@@ -31,7 +31,7 @@ impl Metric for EuclideanSpace {
             .powf(0.5)
     }
 
-    fn normalize(&self, x: &mut [f32]) {}
+    fn normalize(&self, _x: &mut [f32]) {}
 
     fn component_range(&self, dims: usize) -> f32 {
         (1f32.powi(2) / (dims as f32)).powf(0.5)
@@ -49,7 +49,7 @@ impl Metric for ManhattanSpace {
             .sum::<f32>()
     }
 
-    fn normalize(&self, x: &mut [f32]) {}
+    fn normalize(&self, _x: &mut [f32]) {}
 
     fn component_range(&self, dims: usize) -> f32 {
         (1f32.powi(2) / (dims as f32)).powf(0.5)
@@ -81,7 +81,7 @@ impl Metric for PoincareSpace {
             xy2 /= y2.powf(0.5);
             y2 = 1. - 1e-5;
         }
-        let k = (1. + 2. * (xy2 / ((1. - x2) * (1. - y2))));
+        let k = 1. + 2. * (xy2 / ((1. - x2) * (1. - y2)));
         k.acosh()
     }
 
@@ -122,7 +122,7 @@ impl Metric for HyperboloidSpace {
         k.acosh()
     }
 
-    fn normalize(&self, x: &mut [f32]) { }
+    fn normalize(&self, _x: &mut [f32]) { }
 
     fn component_range(&self, dims: usize) -> f32 {
         (1. / (dims as f32)).powf(0.5)

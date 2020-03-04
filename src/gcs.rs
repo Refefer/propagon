@@ -7,7 +7,7 @@ extern crate indicatif;
 use std::fmt::Write;
 use std::hash::Hash;
 use std::collections::{VecDeque,BinaryHeap};
-use std::cmp::{Reverse,Ordering};
+use std::cmp::Reverse;
 use std::sync::{Arc,Mutex};
 
 use indicatif::{ProgressBar,ProgressStyle};
@@ -54,11 +54,10 @@ pub struct GCS<M> {
     pub dims: usize,
     pub global_fns: usize,
     pub local_fns: usize,
-    pub neighbor_fns: usize,
     pub distance: Distance,
     pub selection: LandmarkSelection,
-    pub local_stablization: Option<f32>,
-    pub stable_passes: usize, 
+    pub global_bias: f32,
+    pub passes: usize, 
     pub chunks: usize,
     pub l2norm: bool,
     pub seed: u64
@@ -103,57 +102,16 @@ impl <M: Metric> GCS<M> {
         // locally embed each of the points
         let emb_slice = embedded_landmarks.iter().map(|v| v.as_slice()).collect();
 
-        
         // Setup the embeddings for constant use
         let embeddings = CHashMap::new(self.chunks).extend(distances.keys().map(|k| {
             (k.clone(), vec![0f32; self.dims])
         }));
 
-        // We store the running loss in a mutex
-        let data = Arc::new(Mutex::new((0f32, 0usize, String::new())));
-        for pass in 0..self.stable_passes {
-            eprintln!("Pass: {}/{} - Computed distances, embedding local points...", pass + 1, self.stable_passes);
-
-            let pb = ProgressBar::new(distances.len() as u64);
-            pb.set_style(ProgressStyle::default_bar()
-                .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
-
-            pb.enable_steady_tick(200);
-            pb.set_draw_delta(distances.len() as u64 / 1000);
-
-            distances.par_iter().for_each(|(k, v)| {
-                let iter = {data.lock().unwrap().1};
-                // Get the embedding
-                let emb_orig = {
-                    embeddings.get_map(k).read().unwrap()
-                        .get(k).unwrap()
-                        .clone()
-                };
-
-                let (loss, new_emb) = self.local_emb(&emb_slice, &distances[k], 
-                                                     emb_orig.as_slice(), iter);
-                pb.inc(1);
-                {
-                    let mut pl = data.lock().unwrap();
-                    (*pl).0 += -loss;
-                    (*pl).1 += 1;
-                    pl.2.clear();
-                    let rate = pl.0 / pl.1 as f32;
-                    write!(pl.2, "Avg Loss: {:.5}", rate).unwrap();
-                    pb.set_message(&pl.2);
-                };
-                embeddings.get_map(k).write().unwrap()
-                    .insert((*k).clone(), new_emb);
-            });
-
-            pb.finish();
-
-            // Check to see if want to preserve local neighborhoods as well.
-            if let Some(global_preserve) = self.local_stablization {
-                self.embed_neighborhood(global_preserve, &embeddings, &edges);
-            }
+        // Many passes
+        for pass in 0..self.passes {
+            self.global_local_embed(pass, &emb_slice, &distances, &embeddings, &edges);
         }
-
+        
         embeddings.into_inner().into_iter().flat_map(|mut hm| {
             hm.par_values_mut().for_each(|v| {
                 // Norm if we have to
@@ -204,40 +162,11 @@ impl <M: Metric> GCS<M> {
 
     }
 
-    // Locall embed each point by landmarks
-    fn local_emb(
+    fn global_local_embed<K: Hash + Eq + Clone + Send + Sync>(
         &self, 
-        emb_landmarks: &Vec<&[f32]>, 
-        dist: &[f32], 
-        x_in: &[f32],
-        idx: usize
-    ) -> (f32, Vec<f32>) {
-
-        let fitness = LocalLandmarkEmbedding{
-            landmarks: emb_landmarks, 
-            landmarks_dists: dist, 
-            metric: &self.metric
-        };
-
-        let init = self.metric.component_range(self.dims);
-        let de = DifferentialEvolution {
-            dims: self.dims,
-            lambda: 30,
-            f: (0.1, 0.9),
-            cr: 0.9,
-            m: 0.1,
-            exp: 3.,
-            restart_on_stale: 10,
-            range: init
-        };
-
-        de.fit(&fitness, self.local_fns, self.seed + idx as u64, 
-               Some(x_in), |_best_fit, _rem| { })
-    }
-
-    fn embed_neighborhood<K: Hash + Eq + Clone + Send + Sync>(
-        &self, 
-        global_preserve: f32,
+        pass: usize,
+        landmarks: &Vec<&[f32]>,
+        distances: &HashMap<K,Vec<f32>>,
         embeddings: &CHashMap<K, Vec<f32>>,
         edges: &HashMap<K,Vec<(K, f32)>>
     ) {
@@ -246,7 +175,7 @@ impl <M: Metric> GCS<M> {
         let de = DifferentialEvolution {
             dims: self.dims,
             lambda: 30,
-            f: (0.1, 0.9),
+            f: (0.1, 1.5),
             cr: 0.9,
             m: 0.1,
             exp: 3.,
@@ -254,7 +183,7 @@ impl <M: Metric> GCS<M> {
             range: init
         };
 
-        eprintln!("Computing neighborhoods...");
+        eprintln!("Computing global and local neighborhoods...");
         let pb = ProgressBar::new((edges.len()) as u64);
         pb.set_style(ProgressStyle::default_bar()
             .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
@@ -284,19 +213,26 @@ impl <M: Metric> GCS<M> {
                 (n_emb.as_slice(), w)
             }).unzip();
 
-            let fitness = LocalNeighborEmbedding {
-                global_preserve: global_preserve,
-                orig: emb_orig.as_slice(), 
-                neighbors: &neighbor_emb,
-                neighbors_dists: dists.as_slice(),
-                metric: &self.metric
+            let fitness = GlobalLocalEmbedding {
+                metric: &self.metric,
+                global: LocalLandmarkEmbedding {
+                    landmarks: landmarks,
+                    landmarks_dists: &distances[k],
+                    metric: &self.metric
+                },
+                neighborhood: LocalLandmarkEmbedding {
+                    landmarks: &neighbor_emb,
+                    landmarks_dists: &dists,
+                    metric: &self.metric
+                },
+                blend: self.global_bias 
             };
-
+            
             // Eh, local seed uses weights
             let local_seed = dists.iter().sum::<f32>() as u64;
             
             let (loss, new_emb) = de.fit(
-                &fitness, self.neighbor_fns, self.seed + local_seed, 
+                &fitness, self.local_fns, self.seed + local_seed, 
                    Some(emb_orig.as_slice()), |_best_fit, _rem| { }
             );
 
@@ -311,7 +247,8 @@ impl <M: Metric> GCS<M> {
                 (*pl).1 += 1;
                 pl.2.clear();
                 let rate = pl.0 / pl.1 as f32;
-                write!(pl.2, "Avg Loss: {:.5}", rate).unwrap();
+                write!(pl.2, "({}/{}), Avg Loss: {:.5}", pass + 1, 
+                       self.passes, rate).unwrap();
                 pb.set_message(&pl.2);
             };
 
@@ -319,6 +256,7 @@ impl <M: Metric> GCS<M> {
         pb.finish();
 
     }
+
 
     // computes the walk distances
     fn compute_landmark_distances<K: Hash + Eq + Ord + Clone + Send + Sync>(
@@ -512,31 +450,35 @@ impl <'a, M: Metric> Fitness for LocalLandmarkEmbedding<'a, M> {
     }
 }
 
-struct LocalNeighborEmbedding<'a, M> {
-    global_preserve: f32,
-    orig: &'a [f32], 
-    neighbors: &'a Vec<&'a [f32]>, 
-    neighbors_dists: &'a [f32],
-    metric: &'a M
+struct GlobalLocalEmbedding<'a, M> {
+    metric: &'a M,
+    global: LocalLandmarkEmbedding<'a, M>,
+    neighborhood: LocalLandmarkEmbedding<'a, M>,
+    blend: f32
 }
 
-impl <'a, M: Metric> Fitness for LocalNeighborEmbedding<'a,M> {
+impl <'a, M: Metric> Fitness for GlobalLocalEmbedding<'a, M> {
 
     fn score(&self, candidate: &[f32]) -> f32 {
         if !self.metric.in_domain(candidate) {
             return std::f32::NEG_INFINITY;
         }
-        let global_score = -self.metric.distance(self.orig, candidate);
-        let emb = LocalLandmarkEmbedding{
-            landmarks: self.neighbors, 
-            landmarks_dists: self.neighbors_dists, 
-            metric: self.metric
-        };
 
-        let neighbor_score = emb.score(candidate);
-        (self.global_preserve * global_score) + (1. - self.global_preserve) * neighbor_score
+        let mut score = 0.;
+        if self.blend > 0. {
+            let global_score = self.global.score(candidate);
+            score += self.blend * global_score;
+        }
+
+        if self.blend < 1. {
+            let neighbor_score = self.neighborhood.score(candidate);
+            score += (1. - self.blend) * neighbor_score;
+        }
+        score
     }
 }
+
+
 
 #[cfg(test)]
 mod test_ect_rw {
