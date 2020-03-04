@@ -391,7 +391,7 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     let local_fns    = value_t!(args, "local-embed-fns", usize).unwrap_or(1_000);
     let seed         = value_t!(args, "seed", u64).unwrap_or(2019);
     let chunks       = value_t!(args, "chunks", usize).unwrap_or(91);
-    let global_bias  = value_t!(args, "global-bias", f32).unwrap_or(0.5);
+    let global_bias  = value_t!(args, "global-bias", f32).unwrap_or(0.7);
     let passes       = value_t!(args, "passes", usize).unwrap_or(3);
     let l2norm       = args.is_present("l2");
     let only_walks   = args.is_present("only-walks");
@@ -738,7 +738,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("global-bias")
                  .long("global-bias")
                  .takes_value(true)
-                 .help("Amount to bias toward global distance versus local"))
+                 .help("Amount to bias toward global distance versus local.  Defaults to 0.7"))
             .arg(Arg::with_name("passes")
                  .long("passes")
                  .takes_value(true)
