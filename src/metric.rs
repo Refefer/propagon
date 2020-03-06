@@ -17,6 +17,11 @@ pub trait Metric: Send + Sync {
         true
     }
 
+    #[inline] 
+    fn square_distance(&self) -> bool {
+        true
+    }
+
 }
 
 // Euclidean distance
@@ -100,6 +105,12 @@ impl Metric for PoincareSpace {
         let norm = x.iter().map(|xi| xi.powi(2)).sum::<f32>().powf(0.5);
         norm <= 1.0
     }
+
+    #[inline] 
+    fn square_distance(&self) -> bool {
+        false
+    }
+
 }
 
 // We'll assume a -1 curvature for the time being
@@ -132,6 +143,12 @@ impl Metric for HyperboloidSpace {
         let max_value = (std::f32::MAX - 1.).powf(0.5) / x.len() as f32;
         x.iter().all(|xi| xi.abs() < max_value)
     }
+
+    #[inline] 
+    fn square_distance(&self) -> bool {
+        false
+    }
+
 }
 
 pub enum Space {
@@ -186,6 +203,16 @@ impl Metric for Space {
             Space::Poincare    => PoincareSpace.in_domain(x),
             Space::Hyperboloid => HyperboloidSpace.in_domain(x),
             Space::Manhattan   => ManhattanSpace.in_domain(x)
+        }
+    }
+
+    #[inline]
+    fn square_distance(&self) -> bool {
+        match self {
+            Space::Euclidean   => EuclideanSpace.square_distance(),
+            Space::Poincare    => PoincareSpace.square_distance(),
+            Space::Hyperboloid => HyperboloidSpace.square_distance(),
+            Space::Manhattan   => ManhattanSpace.square_distance()
         }
     }
 

@@ -407,6 +407,8 @@ impl <'a,M: Metric> Fitness for GlobalLandmarkEmbedding<'a, M> {
         let n_cands = self.1.len();
         let dims = self.0;
         let mut err = 0.;
+
+        let sq_dist = self.2.square_distance();
         for i in 0..n_cands {
             let i_start = i * dims;
             let v1 = &candidate[i_start..i_start + dims];
@@ -418,11 +420,16 @@ impl <'a,M: Metric> Fitness for GlobalLandmarkEmbedding<'a, M> {
             for j in (i+1)..n_cands {
                 let j_start = j * dims;
                 let v2 = &candidate[j_start..j_start + dims];
-                err += (self.2.distance(v1, v2) - self.1[i][j]).powi(2)
+                let dist = self.2.distance(v1, v2) - self.1[i][j];
+                err += if sq_dist {dist.powi(2)} else {dist.abs()};
             }
         }
 
-        -err.sqrt() / (n_cands as f32 * (n_cands as f32- 1.) / 2.)
+        if sq_dist {
+            err = err.sqrt();
+        }
+
+        -err / (n_cands as f32 * (n_cands as f32 - 1.) / 2.)
     }
 }
 
@@ -441,12 +448,17 @@ impl <'a, M: Metric> Fitness for LocalLandmarkEmbedding<'a, M> {
 
         let n_cands = self.landmarks.len();
         let mut err = 0.;
+        let sq_dist = self.metric.square_distance();
         for i in 0..n_cands {
             let d = self.metric.distance(candidate, self.landmarks[i]);
-            err += (d - self.landmarks_dists[i]).powi(2);
+            let dist = d - self.landmarks_dists[i];
+            err += if sq_dist {dist.powi(2)} else {dist.abs()};
         }
 
-        -err.sqrt() / (n_cands as f32)
+        if sq_dist {
+            err = err.sqrt();
+        }
+        -err / (n_cands as f32)
     }
 }
 
