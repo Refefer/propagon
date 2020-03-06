@@ -108,9 +108,19 @@ impl <M: Metric> GCS<M> {
         }));
 
         // Many passes
+        let pb = ProgressBar::new((self.passes * edges.len()) as u64);
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
+
+        pb.enable_steady_tick(200);
+        pb.set_draw_delta(edges.len() as u64 / 1000);
+
+        eprintln!("Computing global and local neighborhoods...");
+        
         for pass in 0..self.passes {
-            self.global_local_embed(pass, &emb_slice, &distances, &embeddings, &edges);
+            self.global_local_embed(&pb, pass, &emb_slice, &distances, &embeddings, &edges);
         }
+        pb.finish();
         
         embeddings.into_inner().into_iter().flat_map(|mut hm| {
             hm.par_values_mut().for_each(|v| {
@@ -164,6 +174,7 @@ impl <M: Metric> GCS<M> {
 
     fn global_local_embed<K: Hash + Eq + Clone + Send + Sync>(
         &self, 
+        pb: &ProgressBar,
         pass: usize,
         landmarks: &Vec<&[f32]>,
         distances: &HashMap<K,Vec<f32>>,
@@ -183,15 +194,7 @@ impl <M: Metric> GCS<M> {
             range: init
         };
 
-        eprintln!("Computing global and local neighborhoods...");
-        let pb = ProgressBar::new((edges.len()) as u64);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
-
-        pb.enable_steady_tick(200);
-        pb.set_draw_delta(edges.len() as u64 / 1000);
         // We store the running loss in a mutex
-
         let fits = Arc::new(Mutex::new((0f32, 0usize, String::new())));
 
         // Get keys and iterator
@@ -253,8 +256,6 @@ impl <M: Metric> GCS<M> {
             };
 
         });
-        pb.finish();
-
     }
 
 
