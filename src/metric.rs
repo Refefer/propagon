@@ -1,14 +1,11 @@
 pub trait Metric: Send + Sync {
     // Computes the distance between two points
-    #[inline] 
     fn distance(&self, x: &[f32], y: &[f32]) -> f32;
 
     // Normalizes the vectors, if necessary
-    #[inline] 
     fn normalize(&self, x: &mut [f32]);
 
     // Initialization component score for DE
-    #[inline] 
     fn component_range(&self, dims: usize) -> f32; 
 
     // Adds a score penalty to vectors.  It helps us avoid overflows.

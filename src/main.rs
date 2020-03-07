@@ -14,6 +14,7 @@ mod walker;
 mod gcs;
 mod de;
 mod metric;
+mod converter;
 
 mod utils;
 
@@ -445,6 +446,18 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     }));
 }
 
+fn dehydrate(path: &str, args: &&clap::ArgMatches<'_>) {
+    let delim = value_t!(args, "delim", String).unwrap_or('\t'.to_string());
+    let features = value_t!(args, "features", String).ok();
+    converter::Converter::dehydrate(path, &delim, features.as_deref());
+}
+
+fn hydrate(embedding: &str, args: &&clap::ArgMatches<'_>) {
+    let vocab = value_t!(args, "vocab", String).unwrap();
+    let output = value_t!(args, "output", String).ok();
+    converter::Converter::hydrate(embedding, vocab.as_str(), output.as_deref());
+}
+
 
 fn parse<'a>() -> ArgMatches<'a> {
     App::new("propagon")
@@ -688,6 +701,27 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("buffer-size")
                  .takes_value(true)
                  .help("Amount of temp space to use for parallel computation.  Default is 10000.")))
+        .subcommand(SubCommand::with_name("dehydrate")
+            .about("Converts a human readable graph format to a propagon compatible version.")
+            .arg(Arg::with_name("delim")
+                 .long("delim")
+                 .takes_value(true)
+                 .help("Uses the provided delimiter for splitting lines.  Default is tab"))
+            .arg(Arg::with_name("features")
+                 .long("features")
+                 .takes_value(true)
+                 .help("Converts an optional features file to the index format.")))
+        .subcommand(SubCommand::with_name("hydrate")
+            .about("Converts an embedding back to a readable format")
+            .arg(Arg::with_name("vocab")
+                 .long("vocab")
+                 .takes_value(true)
+                 .required(true)
+                 .help("Vocab file to convert the embedding back from."))
+            .arg(Arg::with_name("output")
+                 .long("output")
+                 .takes_value(true)
+                 .help("If provided, writes to the given file.  Otherwise, to stdout.")))
 
         .subcommand(SubCommand::with_name("label-rank")
             .about("Computes clusters using LabelRank")
@@ -774,12 +808,21 @@ fn parse<'a>() -> ArgMatches<'a> {
         .get_matches()
 }
 
+
 fn main() {
     let args = parse();
-    let path: Vec<_> = args.values_of("path")
+    let path: Vec<String> = args.values_of("path")
         .expect("Need a path to edges")
         .map(|x| x.into())
         .collect();
+
+    if let Some(ref sub_args) = args.subcommand_matches("dehydrate") {
+        dehydrate(&path[0], sub_args);
+        return
+    } else if let Some(ref sub_args) = args.subcommand_matches("hydrate") {
+        hydrate(&path[0], sub_args);
+        return
+    }
 
     let min_count  = value_t!(args, "min-count", usize).unwrap_or(1);
 

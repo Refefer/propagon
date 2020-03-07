@@ -6,12 +6,10 @@ extern crate indicatif;
 
 use std::fmt::Write;
 use std::hash::Hash;
-use std::collections::{VecDeque,BinaryHeap};
-use std::cmp::Reverse;
 use std::sync::{Arc,Mutex};
 
 use indicatif::{ProgressBar,ProgressStyle};
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use rand::prelude::*;
 use rayon::prelude::*;
 
@@ -19,9 +17,6 @@ use crate::utils;
 use crate::metric::Metric;
 use crate::chashmap::CHashMap;
 use crate::de::{Fitness,DifferentialEvolution};
-
-#[derive(Ord,Eq,PartialEq,PartialOrd)]
-struct BestDegree<K: Ord + Eq + PartialEq + PartialOrd>(usize, K);
 
 #[derive(PartialEq,Eq,Clone,Copy)]
 pub enum Distance {
@@ -290,16 +285,16 @@ impl <M: Metric> GCS<M> {
                 .choose_multiple(&mut rng, self.landmarks)
                 .collect()
         } else {
-            top_k_nodes(&keys, &edges, self.landmarks)
+            utils::top_k_nodes(&keys, &edges, self.landmarks)
         };
 
         // Compute walks for all 
         (0..self.landmarks).into_par_iter().for_each(|idx| {
             let new_distances = if self.distance == Distance::Uniform {
-                unweighted_walk_distance(&edges, &start_nodes[idx])
+                utils::unweighted_walk_distance(&edges, &start_nodes[idx])
             } else {
                 let degree_weighted = self.distance == Distance::DegreeWeighted;
-                weighted_walk_distance(&edges, &start_nodes[idx], degree_weighted)
+                utils::weighted_walk_distance(&edges, &start_nodes[idx], degree_weighted)
             };
 
             for (k, dist) in new_distances {
@@ -318,85 +313,6 @@ impl <M: Metric> GCS<M> {
 
         (es, start_nodes.into_iter().map(|v| (*v).clone()).collect())
     }
-}
-
-fn unweighted_walk_distance<'a, K: Hash + Eq>(
-    edges: &'a HashMap<K, Vec<(K,f32)>>,
-    start_node: &'a K
-) -> HashMap<&'a K, f32> {
-    let mut distance = HashMap::new();
-    let mut seen = HashSet::new();
-    let mut queue = VecDeque::new();
-
-    seen.insert(start_node);
-    queue.push_back((start_node, 0.));
-
-    while let Some((vert, cur_dist)) = queue.pop_front() {
-        distance.insert(vert, cur_dist);
-
-        for (out_edge, _) in edges[vert].iter() {
-            if !seen.contains(&out_edge) {
-                seen.insert(&out_edge);
-                queue.push_back((&out_edge, cur_dist + 1.));
-            }
-        }
-    }
-
-    distance
-}
-
-fn weighted_walk_distance<'a, K: Hash + Eq>(
-    edges: &'a HashMap<K, Vec<(K,f32)>>,
-    start_node: &'a K,
-    degree_weighted: bool
-) -> HashMap<&'a K, f32> {
-    let mut distance = HashMap::new();
-    distance.insert(start_node, 0f32);
-    let mut queue = VecDeque::new();
-
-    queue.push_back(start_node);
-
-    while let Some(vert) = queue.pop_front() {
-        let cur_dist = distance[vert];
-
-        let degrees = if degree_weighted {
-            (1. + edges[vert].len() as f32).ln()
-        } else {
-            1.
-        };
-        for (out_edge, wi) in edges[vert].iter() {
-            let new_dist = if degree_weighted {
-                let out_degrees = (1. + edges[out_edge].len() as f32).ln();
-                cur_dist + degrees.max(out_degrees) / (1. + wi).ln()
-            } else {
-                cur_dist + degrees / (1. + wi).ln()
-            };
-
-            let out_dist = *distance.get(&out_edge).unwrap_or(&std::f32::INFINITY);
-            if new_dist < out_dist {
-                distance.insert(&out_edge, new_dist);
-                queue.push_back(&out_edge);
-            }
-        }
-    }
-
-    distance
-}
-
-fn top_k_nodes<'a, 'b, K: Hash + Eq + Ord>(
-    keys: &'b Vec<&'a K>,
-    edges: &HashMap<K, Vec<(K, f32)>>,
-    dims: usize
-) -> Vec<&'b &'a K> {
-    let mut bh = BinaryHeap::with_capacity(dims + 1);
-    for k in keys.iter() {
-        let degrees = edges[k].len();
-        bh.push(Reverse(BestDegree(degrees, k)));
-        if bh.len() > dims {
-            bh.pop();
-        }
-    }
-    bh.into_iter().map(|Reverse(BestDegree(_, k))| k).collect()
 }
 
 struct GlobalLandmarkEmbedding<'a, M>(usize, &'a Vec<&'a [f32]>, &'a M);
@@ -493,50 +409,3 @@ impl <'a, M: Metric> Fitness for GlobalLocalEmbedding<'a, M> {
 
 
 
-#[cfg(test)]
-mod test_ect_rw {
-    use super::*;
-
-    #[test]
-    fn test_top_nodes() {
-        let edges: HashMap<_,_> = vec![
-            (0usize, vec![(1usize, 1.), (2usize, 1.)]),
-            (1usize, vec![(0usize, 1.), (4usize, 1.)]),
-            (2usize, vec![(0usize, 1.), (3usize, 1.), (5usize, 1.)]),
-            (3usize, vec![(2usize, 1.), (5usize, 1.), (4usize, 1.)]),
-            (4usize, vec![(1usize, 1.), (3usize, 2.)]),
-            (5usize, vec![(3usize, 1.), (2usize, 1.)])
-        ].into_iter().collect();
-
-        let keys = edges.keys().collect();
-        let mut v = top_k_nodes(&keys, &edges, 2);
-        v.sort();
-        assert_eq!(v[0], &&2);
-        assert_eq!(v[1], &&3);
-
-    }
-
-    #[test]
-    fn test_unweighted_walk() {
-        let hm: HashMap<_,_> = vec![
-            (0usize, vec![(1usize, 1.), (2usize, 1.)]),
-            (1usize, vec![(0usize, 1.), (4usize, 1.)]),
-            (2usize, vec![(0usize, 1.), (3usize, 1.)]),
-            (3usize, vec![(2usize, 1.), (5usize, 1.)]),
-            (4usize, vec![(1usize, 1.)]),
-            (5usize, vec![(3usize, 1.)])
-        ].into_iter().collect();
-
-        let start_node = 2;
-        let distances = unweighted_walk_distance(&hm, &start_node);
-
-        assert_eq!(distances[&0], 1.);
-        assert_eq!(distances[&1], 2.);
-        assert_eq!(distances[&2], 0.);
-        assert_eq!(distances[&3], 1.);
-        assert_eq!(distances[&4], 3.);
-        assert_eq!(distances[&5], 2.);
-
-    }
-
-}

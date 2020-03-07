@@ -3,7 +3,10 @@ extern crate hashbrown;
 
 use std::ops::Deref;
 use std::hash::Hash;
-use hashbrown::HashMap;
+use std::collections::{VecDeque,BinaryHeap};
+use std::cmp::Reverse;
+
+use hashbrown::{HashMap,HashSet};
 
 #[inline]
 pub fn l2_norm_hm<F: Hash>(features: &mut HashMap<F, f32>) {
@@ -160,6 +163,136 @@ mod test_utils {
             println!("{},{}", v, v2);
             assert!((v - v2).abs() < 1e-5);
         }
+    }
+
+}
+
+pub fn unweighted_walk_distance<'a, K: Hash + Eq>(
+    edges: &'a HashMap<K, Vec<(K,f32)>>,
+    start_node: &'a K
+) -> HashMap<&'a K, f32> {
+    let mut distance = HashMap::new();
+    let mut seen = HashSet::new();
+    let mut queue = VecDeque::new();
+
+    seen.insert(start_node);
+    queue.push_back((start_node, 0.));
+
+    while let Some((vert, cur_dist)) = queue.pop_front() {
+        distance.insert(vert, cur_dist);
+
+        for (out_edge, _) in edges[vert].iter() {
+            if !seen.contains(&out_edge) {
+                seen.insert(&out_edge);
+                queue.push_back((&out_edge, cur_dist + 1.));
+            }
+        }
+    }
+
+    distance
+}
+
+pub fn weighted_walk_distance<'a, K: Hash + Eq>(
+    edges: &'a HashMap<K, Vec<(K,f32)>>,
+    start_node: &'a K,
+    degree_weighted: bool
+) -> HashMap<&'a K, f32> {
+    let mut distance = HashMap::new();
+    distance.insert(start_node, 0f32);
+    let mut queue = VecDeque::new();
+
+    queue.push_back(start_node);
+
+    while let Some(vert) = queue.pop_front() {
+        let cur_dist = distance[vert];
+
+        let degrees = if degree_weighted {
+            (1. + edges[vert].len() as f32).ln()
+        } else {
+            1.
+        };
+        for (out_edge, wi) in edges[vert].iter() {
+            let new_dist = if degree_weighted {
+                let out_degrees = (1. + edges[out_edge].len() as f32).ln();
+                cur_dist + degrees.max(out_degrees) / (1. + wi).ln()
+            } else {
+                cur_dist + degrees / (1. + wi).ln()
+            };
+
+            let out_dist = *distance.get(&out_edge).unwrap_or(&std::f32::INFINITY);
+            if new_dist < out_dist {
+                distance.insert(&out_edge, new_dist);
+                queue.push_back(&out_edge);
+            }
+        }
+    }
+
+    distance
+}
+
+#[derive(Ord,Eq,PartialEq,PartialOrd)]
+struct BestDegree<K: Ord + Eq + PartialEq + PartialOrd>(usize, K);
+
+pub fn top_k_nodes<'a, 'b, K: Hash + Eq + Ord>(
+    keys: &'b Vec<&'a K>,
+    edges: &HashMap<K, Vec<(K, f32)>>,
+    dims: usize
+) -> Vec<&'b &'a K> {
+    let mut bh = BinaryHeap::with_capacity(dims + 1);
+    for k in keys.iter() {
+        let degrees = edges[k].len();
+        bh.push(Reverse(BestDegree(degrees, k)));
+        if bh.len() > dims {
+            bh.pop();
+        }
+    }
+    bh.into_iter().map(|Reverse(BestDegree(_, k))| k).collect()
+}
+
+#[cfg(test)]
+mod test_utils {
+    use super::*;
+
+    #[test]
+    fn test_top_nodes() {
+        let edges: HashMap<_,_> = vec![
+            (0usize, vec![(1usize, 1.), (2usize, 1.)]),
+            (1usize, vec![(0usize, 1.), (4usize, 1.)]),
+            (2usize, vec![(0usize, 1.), (3usize, 1.), (5usize, 1.)]),
+            (3usize, vec![(2usize, 1.), (5usize, 1.), (4usize, 1.)]),
+            (4usize, vec![(1usize, 1.), (3usize, 2.)]),
+            (5usize, vec![(3usize, 1.), (2usize, 1.)])
+        ].into_iter().collect();
+
+        let keys = edges.keys().collect();
+        let mut v = top_k_nodes(&keys, &edges, 2);
+        v.sort();
+        assert_eq!(v[0], &&2);
+        assert_eq!(v[1], &&3);
+
+    }
+
+    #[test]
+    fn test_unweighted_walk() {
+        let hm: HashMap<_,_> = vec![
+            (0usize, vec![(1usize, 1.), (2usize, 1.)]),
+            (1usize, vec![(0usize, 1.), (4usize, 1.)]),
+            (2usize, vec![(0usize, 1.), (3usize, 1.)]),
+            (3usize, vec![(2usize, 1.), (5usize, 1.)]),
+            (4usize, vec![(1usize, 1.)]),
+            (5usize, vec![(3usize, 1.)])
+        ].into_iter().collect();
+
+        let start_node = 2;
+        let distances = unweighted_walk_distance(&hm, &start_node);
+
+        assert_eq!(distances[&0], 1.);
+        assert_eq!(distances[&1], 2.);
+        assert_eq!(distances[&2], 0.);
+        assert_eq!(distances[&3], 1.);
+        assert_eq!(distances[&4], 3.);
+        assert_eq!(distances[&5], 2.);
+
     }
 
 }
