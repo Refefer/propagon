@@ -33,8 +33,11 @@ pub struct DifferentialEvolution {
     /// Expansion constant for random perturbation.  A good value is between 2 to 5
     pub exp: f32,
 
-    /// If enabled, early terminates if it doesn't improve after K iterations.  0 means
-    /// turn off
+    /// If enabled, restarts around the best value if it doesn't improve after 
+    /// K iterations.  0 means turn off completely
+    pub polish_on_stale: usize,
+
+    /// If enabled, fully restarts the job with new random values.  0 means turn off.
     pub restart_on_stale: usize,
 
     /// Random component range for generation of initial points
@@ -51,6 +54,35 @@ impl DifferentialEvolution {
         x_in: Option<&[f32]>,
         mut callback: FN
     ) -> (f32, Vec<f32>) {
+
+        let mut fits = 0;
+        let mut best_fit = std::f32::NEG_INFINITY;
+        let mut best_cand = vec![0.; self.dims];
+        while fits < total_fns {
+            let (fn_rem, fit, cand) = 
+                self.run_pass(fit_fn, total_fns, 
+                              seed + fits as u64, x_in, self.restart_on_stale, 
+                              &mut callback);
+
+            fits += fn_rem;
+            if fit > best_fit {
+                best_fit = fit;
+                best_cand = cand;
+            }
+        }
+
+        (best_fit, best_cand)
+    }
+
+    fn run_pass<F: Fitness, FN: FnMut(f32, usize) -> ()>(
+        &self, 
+        fit_fn: &F, 
+        total_fns: usize, 
+        seed: u64, 
+        x_in: Option<&[f32]>,
+        early_terminate: usize,
+        callback: &mut FN
+    ) -> (usize, f32, Vec<f32>) {
 
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
@@ -86,8 +118,13 @@ impl DifferentialEvolution {
 
         let norm_dist = Normal::new(0., 1.);
 
+        // Tracks time since last update of the best candidate.  We use this to
+        // determine polishing.
         let mut best_fit = std::f32::NEG_INFINITY;
         let mut stale_len = 0;
+
+        // Checks how long until the next update
+        let mut last_update = 0;
 
         while fns < total_fns {
             // Get the best candidate
@@ -98,9 +135,15 @@ impl DifferentialEvolution {
             if fits[best_idx] > best_fit {
                 best_fit = fits[best_idx];
                 stale_len = 0;
+                last_update = 0;
             }
 
-            if self.restart_on_stale > 0 && stale_len == self.restart_on_stale {
+            // check if we're early terminating
+            if early_terminate > 0 && last_update == early_terminate {
+                break
+            }
+
+            if self.polish_on_stale > 0 && stale_len == self.polish_on_stale {
 
                 let best = pop[best_idx].clone();
 
@@ -115,6 +158,7 @@ impl DifferentialEvolution {
             }
 
             stale_len += 1;
+            last_update += 1;
 
             let best = &pop[best_idx];
 
@@ -213,7 +257,7 @@ impl DifferentialEvolution {
         assert!(fits[best_idx].is_finite(), 
                 format!("IDX: {}, vec: {:?}", best_idx, pop[best_idx]));
 
-        (fits[best_idx], pop.swap_remove(best_idx))
+        (fns, fits[best_idx], pop.swap_remove(best_idx))
     }
 }
 

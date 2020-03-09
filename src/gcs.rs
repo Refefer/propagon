@@ -182,7 +182,8 @@ impl <M: Metric> GCS<M> {
             cr: 0.9,
             m: 0.1,
             exp: 3.,
-            restart_on_stale: 100,
+            polish_on_stale: 20,
+            restart_on_stale: 50,
             range: init
         };
 
@@ -223,7 +224,8 @@ impl <M: Metric> GCS<M> {
             cr: 0.9,
             m: 0.1,
             exp: 3.,
-            restart_on_stale: 10,
+            polish_on_stale: 10,
+            restart_on_stale: 0,
             range: init
         };
 
