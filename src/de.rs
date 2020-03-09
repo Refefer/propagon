@@ -154,7 +154,16 @@ impl DifferentialEvolution {
                             .for_each(|(vi, bi)| *vi = bi + dist1.sample(&mut rng));
                     }
                 });
+
+                // Recompute the fits, sans the best
+                fits.iter_mut().enumerate().for_each(|(i, f)| {
+                    if i != best_idx {
+                        *f = fit_fn.score(&pop[i]);
+                    }
+                });
+                fns += pop.len() - 1;
                 stale_len = 0;
+                continue
             }
 
             stale_len += 1;
