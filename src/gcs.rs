@@ -11,6 +11,7 @@ use std::sync::{Arc,Mutex};
 use indicatif::{ProgressBar,ProgressStyle};
 use hashbrown::HashMap;
 use rand::prelude::*;
+use rand::distributions::Uniform;
 use rayon::prelude::*;
 
 use crate::utils;
@@ -20,6 +21,9 @@ use crate::de::{Fitness,DifferentialEvolution};
 
 #[derive(PartialEq,Eq,Clone,Copy)]
 pub enum Distance {
+
+    // Uses the original weights on the graph
+    Original,
 
     // Distance is measured in hops rather than edge weights
     Uniform,
@@ -68,10 +72,39 @@ impl <M: Metric> GCS<M> {
         // Create graph
         let mut edges = HashMap::new();
         for (f_node, t_node, weight) in graph.into_iter() {
+            // Modify the weights, depending on our distance computation
+            let weight = match self.distance {
+                Distance::Original     => weight,
+                Distance::Uniform      => 1.,
+                _ => 1. / (1. + weight as f32).ln()
+            };
+
             let e = edges.entry(f_node.clone()).or_insert_with(|| vec![]);
             e.push((t_node.clone(), weight));
             let e = edges.entry(t_node.clone()).or_insert_with(|| vec![]);
             e.push((f_node.clone(), weight));
+        }
+
+        // Need to scale the weights by degree distance
+        if self.distance == Distance::DegreeWeighted {
+            let new_weights: Vec<_> = edges.iter().map(|(k, out)| {
+                let v_degree = (1. + out.len() as f32).ln();
+                let xs: Vec<_> = out.iter().map(|(v, w)| {
+                    let out_degree = (1. + edges[v].len() as f32).ln();
+                    w * v_degree.max(out_degree)
+                }).collect();
+
+                (k.clone(), xs)
+            }).collect();
+            
+            // Update weights
+            for (v, ws) in new_weights.into_iter() {
+                let out = edges.get_mut(&v).unwrap();
+                out.iter_mut().zip(ws.into_iter()).for_each(|(edge, nw)| {
+                    edge.1 = nw;
+                });
+            }
+
         }
 
         eprintln!("Number of Vertices: {}", edges.len());
@@ -98,11 +131,18 @@ impl <M: Metric> GCS<M> {
         let emb_slice = embedded_landmarks.iter().map(|v| v.as_slice()).collect();
 
         // Setup the embeddings for constant use
+        let mut emb_rng = rand::rngs::StdRng::seed_from_u64(self.seed + 10);
+        let c_range = self.metric.component_range(self.dims);
+        let dist = Uniform::new(-c_range, c_range);
         let embeddings = CHashMap::new(self.chunks).extend(distances.keys().map(|k| {
-            (k.clone(), vec![0f32; self.dims])
+            let mut emb = vec![0f32; self.dims];
+            emb.iter_mut().for_each(|vi| *vi = dist.sample(&mut emb_rng));
+            (k.clone(), emb)
         }));
 
         // Many passes
+        eprintln!("Computing global and local neighborhoods...");
+        
         let pb = ProgressBar::new((self.passes * edges.len()) as u64);
         pb.set_style(ProgressStyle::default_bar()
             .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
@@ -110,8 +150,6 @@ impl <M: Metric> GCS<M> {
         pb.enable_steady_tick(200);
         pb.set_draw_delta(edges.len() as u64 / 1000);
 
-        eprintln!("Computing global and local neighborhoods...");
-        
         for pass in 0..self.passes {
             self.global_local_embed(&pb, pass, &emb_slice, &distances, &embeddings, &edges);
         }
@@ -293,8 +331,7 @@ impl <M: Metric> GCS<M> {
             let new_distances = if self.distance == Distance::Uniform {
                 utils::unweighted_walk_distance(&edges, &start_nodes[idx])
             } else {
-                let degree_weighted = self.distance == Distance::DegreeWeighted;
-                utils::weighted_walk_distance(&edges, &start_nodes[idx], degree_weighted)
+                utils::weighted_walk_distance(&edges, &start_nodes[idx])
             };
 
             for (k, dist) in new_distances {

@@ -194,8 +194,7 @@ pub fn unweighted_walk_distance<'a, K: Hash + Eq>(
 
 pub fn weighted_walk_distance<'a, K: Hash + Eq>(
     edges: &'a HashMap<K, Vec<(K,f32)>>,
-    start_node: &'a K,
-    degree_weighted: bool
+    start_node: &'a K
 ) -> HashMap<&'a K, f32> {
     let mut distance = HashMap::new();
     distance.insert(start_node, 0f32);
@@ -205,20 +204,8 @@ pub fn weighted_walk_distance<'a, K: Hash + Eq>(
 
     while let Some(vert) = queue.pop_front() {
         let cur_dist = distance[vert];
-
-        let degrees = if degree_weighted {
-            (1. + edges[vert].len() as f32).ln()
-        } else {
-            1.
-        };
         for (out_edge, wi) in edges[vert].iter() {
-            let new_dist = if degree_weighted {
-                let out_degrees = (1. + edges[out_edge].len() as f32).ln();
-                cur_dist + degrees.max(out_degrees) / (1. + wi).ln()
-            } else {
-                cur_dist + degrees / (1. + wi).ln()
-            };
-
+            let new_dist = cur_dist + wi;
             let out_dist = *distance.get(&out_edge).unwrap_or(&std::f32::INFINITY);
             if new_dist < out_dist {
                 distance.insert(&out_edge, new_dist);

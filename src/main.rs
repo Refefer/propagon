@@ -398,9 +398,10 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     let only_walks   = args.is_present("only-walks");
 
     let distance = match args.value_of("weighting").unwrap_or("uniform") {
-        "uniform" => gcs::Distance::Uniform,
-        "edge"    => gcs::Distance::EdgeWeighted,
-        _         => gcs::Distance::DegreeWeighted
+        "original" => gcs::Distance::Original,
+        "uniform"  => gcs::Distance::Uniform,
+        "edge"     => gcs::Distance::EdgeWeighted,
+        _          => gcs::Distance::DegreeWeighted
     };
 
     let selection = match args.value_of("selection").unwrap_or("degree") {
@@ -784,8 +785,8 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("weighting")
                  .long("weighting")
                  .takes_value(true)
-                 .possible_values(&["uniform", "degree", "edge"])
-                 .help("Selects how edge weights are treated during distance calculations"))
+                 .possible_values(&["uniform", "degree", "edge", "original"])
+                 .help("Selects how edge weights are treated during distance calculations.  Default is uniform."))
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)

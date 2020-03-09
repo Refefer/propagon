@@ -1,4 +1,5 @@
 pub trait Metric: Send + Sync {
+
     // Computes the distance between two points
     fn distance(&self, x: &[f32], y: &[f32]) -> f32;
 
@@ -105,7 +106,7 @@ impl Metric for PoincareSpace {
 
     #[inline] 
     fn square_distance(&self) -> bool {
-        false
+        true 
     }
 
 }
@@ -143,7 +144,7 @@ impl Metric for HyperboloidSpace {
 
     #[inline] 
     fn square_distance(&self) -> bool {
-        false
+        true
     }
 
 }
