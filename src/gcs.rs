@@ -150,8 +150,11 @@ impl <M: Metric> GCS<M> {
         pb.enable_steady_tick(200);
         pb.set_draw_delta(edges.len() as u64 / 1000);
 
+        let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed + 1);
         for pass in 0..self.passes {
-            self.global_local_embed(&pb, pass, &emb_slice, &distances, &embeddings, &edges);
+            keys.shuffle(&mut rng);
+            self.global_local_embed(&pb, pass, &emb_slice, &distances, &embeddings, &edges, &keys);
         }
         pb.finish();
         
@@ -193,7 +196,7 @@ impl <M: Metric> GCS<M> {
 
         pb.inc(lambda as u64);
         let mut msg = String::new();
-        let (_, results) = de.fit(&fitness, self.global_fns, self.seed + 2, 
+        let (best_fit, results) = de.fit(&fitness, self.global_fns, self.seed + 2, 
                                   None, |best_fit, _rem| {
             msg.clear();
             write!(msg, "Loss: {:.5}", -best_fit).unwrap();
@@ -201,6 +204,8 @@ impl <M: Metric> GCS<M> {
             pb.inc(lambda as u64)
         });
         pb.finish();
+
+        eprintln!("Best fit for global optimization: {:.5}", -best_fit);
             
         results.chunks(self.dims).map(|chunks| chunks.to_vec()).collect()
 
@@ -213,7 +218,8 @@ impl <M: Metric> GCS<M> {
         landmarks: &Vec<&[f32]>,
         distances: &HashMap<K,Vec<f32>>,
         embeddings: &CHashMap<K, Vec<f32>>,
-        edges: &HashMap<K,Vec<(K, f32)>>
+        edges: &HashMap<K,Vec<(K, f32)>>,
+        keys: &Vec<K>
     ) {
         // Load everything into a concurrent hashmap
         let init = self.metric.component_range(self.dims);
@@ -233,7 +239,8 @@ impl <M: Metric> GCS<M> {
         let fits = Arc::new(Mutex::new((0f32, 0usize, String::new())));
 
         // Get keys and iterator
-        edges.par_iter().for_each(|(k, es)| {
+        keys.par_iter().for_each(|k| {
+            let es = &edges[k];
 
             // Get original embedding
             let emb_orig = {

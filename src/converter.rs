@@ -15,9 +15,13 @@ impl Converter {
         let br = BufReader::new(f);
 
         // Output paths
-        let vocab    = File::create(format!("{}.vocab", graph))
+        let vocab = File::create(format!("{}.vocab", graph))
             .expect("Cannot open vocab file for writing");
         let mut vocab = BufWriter::new(vocab);
+
+        let ids   = File::create(format!("{}.features.id", graph))
+            .expect("Cannot open id features file for writing");
+        let mut ids = BufWriter::new(ids);
 
         let edges    = File::create(format!("{}.edges", graph))
             .expect("Cannot open edges file for writing");
@@ -41,6 +45,8 @@ impl Converter {
                         let v_idx = node_to_idx.len();
                         node_to_idx.insert(pieces[idx].to_string(), v_idx);
                         write!(vocab, "{} {}\n", v_idx, pieces[idx])
+                            .expect("Couldn't write vocab!");
+                        write!(ids, "{} {}\n", v_idx, v_idx)
                             .expect("Couldn't write vocab!");
                     }
                 }
