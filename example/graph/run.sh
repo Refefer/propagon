@@ -30,10 +30,15 @@ awk 'rand() < 0.5' articles.features > articles.features.semi
 # This one uses the partial categories provided by each article
 propagon articles.edges vec-prop --prior articles.features.semi --alpha 0.9 --max-terms 10 > articles.algo.vec-prop.semi
 propagon articles.algo.vec-prop.semi hydrate --vocab articles.vocab > results.vec-prop.semi
-
-# GCS
-propagon articles.edges gcs --dims 5 --landmarks 10 --global-bias 1 --passes 20 > articles.algo.gcs.euc
+ 
+# GCS - Unweighted, no local neighbors
+propagon articles.edges gcs --dims 5 --landmarks 10 --global-bias 1 --passes 1 --local-embed-fns 20000 > articles.algo.gcs.euc
 propagon articles.algo.gcs.euc hydrate --vocab articles.vocab > results.gcs.euc
 
-propagon articles.edges gcs --dims 5 --landmarks 10 --global-bias 1 --space poincare --passes 20 > articles.algo.gcs.poin
+# GCS - Weighted, some local neighborhood preservation
+propagon articles.edges gcs --dims 5 --landmarks 10 --weighting degree --global-bias 0.9 --passes 20 > articles.algo.gcs.weighted.euc
+propagon articles.algo.gcs.weighted.euc hydrate --vocab articles.vocab > results.gcs.weighted.euc
+
+# GCS - Poincare embedding, no local neighbors
+propagon articles.edges gcs --dims 5 --landmarks 10 --global-bias 1 --space poincare --passes 1 --local-embed-fns 20000 > articles.algo.gcs.poin
 propagon articles.algo.gcs.poin hydrate --vocab articles.vocab > results.gcs.poin
