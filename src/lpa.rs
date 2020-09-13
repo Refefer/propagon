@@ -1,9 +1,12 @@
 extern crate hashbrown;
 extern crate rand;
 extern crate rayon;
+extern crate indicatif;
 
 use std::hash::Hash;
+use std::fmt::Write;
 
+use indicatif::{ProgressBar,ProgressStyle};
 use hashbrown::HashMap;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -44,9 +47,18 @@ impl LPA {
         let mut rngs: Vec<_> = (0..self.chunks)
             .map(|i| rand::rngs::StdRng::seed_from_u64(self.seed + 1 + i as u64))
             .collect();
+
+        let total_work = keys.len() * self.n_iters.unwrap_or(std::usize::MAX);
+        let pb = ProgressBar::new(total_work as u64);
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
+        pb.enable_steady_tick(200);
+        pb.set_draw_delta(total_work as u64 / 1000);
+        let mut msg: String = "Iter 0...".into();
+        pb.set_message(&msg);
+
         loop {
             let mut updated = 0;
-            eprintln!("Iteration: {}", n_iter);
             keys.shuffle(&mut rng);
             for key_subset in keys.as_slice().chunks(self.chunks) {
                 let it = key_subset.par_iter().zip(rngs.par_iter_mut());
@@ -73,6 +85,7 @@ impl LPA {
                         } 
                     }
 
+                    pb.inc(1);
                     // Get the best cluster.  if ties, select cluster at random
                     if ties {
                         let mut clusters: Vec<_> = counts.keys().collect();
@@ -99,11 +112,15 @@ impl LPA {
             n_iter += 1;
 
             let ratio = 100. * updated as f64 / keys.len() as f64;
-            eprintln!("Num vertices updated: {}/{} ({:.2}%)", updated, keys.len(), ratio);
+            msg.clear();
+            write!(msg, "Iter {}/{}, Updated Nodes {}/{} ({:.2}%)", n_iter, self.n_iters.unwrap_or(0), updated, keys.len(), ratio)
+                .expect("Failed to update message!");
+            pb.set_message(&msg);
             if updated == 0 || self.n_iters == Some(n_iter) {
                 break
             }
         }
+        pb.finish();
 
         clusters
     }

@@ -29,7 +29,11 @@ impl Converter {
 
         let mut node_to_idx = HashMap::new();
 
-        for line in br.lines() {
+        for (i, line) in br.lines().enumerate() {
+            if i % 1000000 == 0 {
+                eprintln!("Read {} lines...", i);
+            }
+
             let line = line.expect("Failed to read line!");
 
             let line = line.trim();

@@ -15,6 +15,7 @@ mod gcs;
 mod de;
 mod metric;
 mod converter;
+mod mccluster;
 
 mod utils;
 
@@ -204,9 +205,9 @@ fn birank(args: &&clap::ArgMatches<'_>, games: Games) {
     birank.emit();
 }
 
-fn fast_json<K>(
-    it: impl Iterator<Item=(K, Vec<(usize,f32)>)>, 
-    idx_to_vocab: HashMap<usize,String>
+fn fast_json<K,N: std::hash::Hash + Eq + std::fmt::Display>(
+    it: impl Iterator<Item=(K, Vec<(N,f32)>)>, 
+    idx_to_vocab: HashMap<N,String>
 ) -> impl Iterator<Item=(K,String)> {
     it.map(move |(id, mut emb)| {
         let mut string = String::new();
@@ -214,7 +215,11 @@ fn fast_json<K>(
         if emb.len() > 0 {
             emb.sort_by(|a,b| (b.1).partial_cmp(&a.1).unwrap());
             emb.into_iter().for_each(|(f, v)| {
-                string.push_str(format!("\"{}\":{},", idx_to_vocab[&f], v).as_str());
+                if idx_to_vocab.contains_key(&f) {
+                    string.push_str(format!("\"{}\":{},", idx_to_vocab[&f], v).as_str());
+                } else {
+                    string.push_str(format!("\"{}\":{},", f, v).as_str());
+                }
             });
             string.pop();
         }
@@ -445,6 +450,27 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
         s.push(']');
         (k, s)
     }));
+}
+
+fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
+    let walk_len    = value_t!(args, "walk-len", usize).unwrap_or(20);
+    let num_walks   = value_t!(args, "num-walks", usize).unwrap_or(80);
+    let biased_walk = value_t!(args, "biased-walk", bool).unwrap_or(false);
+    let max_terms   = value_t!(args, "max-terms", usize).unwrap_or(20);
+    let seed        = value_t!(args, "seed", u64).unwrap_or(2020);
+
+    let mc = mccluster::MCCluster {
+        num_walks,
+        walk_len,
+        max_terms,
+        biased_walk,
+        seed
+    };
+
+    // Load priors
+    let embeddings = mc.fit(games.into_iter());
+    let it = embeddings.into_iter();
+    emit_scores(fast_json(it, HashMap::with_capacity(0)));
 }
 
 fn dehydrate(path: &str, args: &&clap::ArgMatches<'_>) {
@@ -686,7 +712,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("iterations")
                  .long("iterations")
                  .takes_value(true)
-                 .help("Number of iterations to compute on the graph.  If omitted, runs until there are no more node membership shanges"))
+                 .help("Number of random walks starting at each node to run.  Default is 10"))
             .arg(Arg::with_name("walk-len")
                  .long("walk-len")
                  .takes_value(true)
@@ -805,7 +831,25 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("l2")
                  .help("If provided, L2-norms the embeddings.")))
 
-
+        .subcommand(SubCommand::with_name("mc-cluster")
+            .about("Community detection via random walks.")
+            .arg(Arg::with_name("num-walk")
+                 .long("num-walks")
+                 .takes_value(true)
+                 .help("Number of Random Walks per node to compute.  Default is 80"))
+            .arg(Arg::with_name("walk-len")
+                 .long("walk-len")
+                 .takes_value(true)
+                 .help("Length of random walk.  Default is 20"))
+            .arg(Arg::with_name("max-terms")
+                 .long("max-terms")
+                 .takes_value(true)
+                 .help("Keeps only the top K terms.  Default is 20"))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use.")))
+            
         .get_matches()
 }
 
@@ -880,6 +924,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("gcs") {
                 let all_games = games.into_iter().flatten().collect();
                 euc_emb(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("mc-cluster") {
+                let all_games = games.into_iter().flatten().collect();
+                mc_cluster(sub_args, all_games);
             }
 
             // print a separator
