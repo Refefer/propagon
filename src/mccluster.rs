@@ -5,8 +5,10 @@ extern crate thread_local;
 extern crate indicatif;
 
 use std::hash::Hash;
+use std::cmp::Ord;
 
 use indicatif::{ProgressBar,ProgressStyle};
+use thread_local::ThreadLocal;
 use hashbrown::HashMap;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -23,7 +25,7 @@ pub struct MCCluster {
 
 impl MCCluster {
 
-    pub fn fit<K: Hash + Eq + Clone + Send + Sync>(
+    pub fn fit<K: Hash + Eq + Clone + Send + Sync + Ord + std::fmt::Debug>(
         &self, 
         graph: impl Iterator<Item=(K,K,f32)>
     ) -> HashMap<K, Vec<(K, f32)>> {
@@ -43,12 +45,13 @@ impl MCCluster {
         embeddings
     }
 
-    fn generate_markov_embeddings<K: Hash + Eq + Clone + Send + Sync>(
+    fn generate_markov_embeddings<K: Hash + Eq + Clone + Send + Sync + Ord + std::fmt::Debug>(
         &self,
         edges: &HashMap<K, Vec<(K, f32)>>
     ) -> HashMap<K, Vec<(K, f32)>> {
         // Setup initial embeddings
-        let keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
+        let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
+        keys.sort();
         
         // Progress bar time
         let total_work = edges.len();
@@ -57,11 +60,11 @@ impl MCCluster {
             .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
         pb.enable_steady_tick(200);
         pb.set_draw_delta(total_work as u64 / 1000);
-    
+
         let embeddings: HashMap<_,_> = keys.into_par_iter().enumerate().map(|(i, key)| {
             let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed + i as u64);
             let rw = RandomWalk::new(&edges);
-            let mut counts: HashMap<K, usize> = HashMap::new();
+            let mut counts: HashMap<K, usize> = HashMap::with_capacity(self.walk_len * 10);
             let mut buffer = Vec::with_capacity(self.walk_len + 1);
             // Compute random walk counts
             for _walk_num in 0..self.num_walks {
@@ -77,8 +80,8 @@ impl MCCluster {
             }
             let mut items: Vec<_> = counts.into_iter().collect();
             items.sort_by_key(|(_, v)| *v);
-            items.reverse();
             let emb: Vec<(K, f32)> = items.into_iter()
+                .rev()
                 .take(self.max_terms)
                 .map(|(k, count)| {
                     let score: f32 = count as f32 / (self.walk_len * self.num_walks) as f32;
