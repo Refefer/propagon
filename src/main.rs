@@ -453,24 +453,27 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
-    let walk_len    = value_t!(args, "walk-len", usize).unwrap_or(20);
-    let num_walks   = value_t!(args, "num-walks", usize).unwrap_or(80);
-    let biased_walk = value_t!(args, "biased-walk", bool).unwrap_or(false);
-    let max_terms   = value_t!(args, "max-terms", usize).unwrap_or(20);
-    let seed        = value_t!(args, "seed", u64).unwrap_or(2020);
+    let walk_len         = value_t!(args, "walk-len", usize).unwrap_or(20);
+    let num_walks        = value_t!(args, "num-walks", usize).unwrap_or(80);
+    let biased_walk      = value_t!(args, "biased-walk", bool).unwrap_or(false);
+    let max_terms        = value_t!(args, "max-terms", usize).unwrap_or(20);
+    let threshold        = value_t!(args, "threshold", f32).unwrap_or(0.9);
+    let seed             = value_t!(args, "seed", u64).unwrap_or(2020);
+    let min_cluster_size = value_t!(args, "min-cluster-size", usize).unwrap_or(0);
 
     let mc = mccluster::MCCluster {
         num_walks,
         walk_len,
         max_terms,
         biased_walk,
+        threshold,
+        min_cluster_size,
         seed
     };
 
     // Load priors
     let embeddings = mc.fit(games.into_iter());
-    let it = embeddings.into_iter();
-    emit_scores(fast_json(it, HashMap::with_capacity(0)));
+    emit_scores(embeddings.into_iter());
 }
 
 fn dehydrate(path: &str, args: &&clap::ArgMatches<'_>) {
@@ -833,7 +836,7 @@ fn parse<'a>() -> ArgMatches<'a> {
 
         .subcommand(SubCommand::with_name("mc-cluster")
             .about("Community detection via random walks.")
-            .arg(Arg::with_name("num-walk")
+            .arg(Arg::with_name("num-walks")
                  .long("num-walks")
                  .takes_value(true)
                  .help("Number of Random Walks per node to compute.  Default is 80"))
@@ -848,6 +851,14 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("biased-walk")
                  .long("biased-walk")
                  .help("If provided, performs a biased walk instead of a uniform walk."))
+            .arg(Arg::with_name("threshold")
+                 .long("threshold")
+                 .takes_value(true)
+                 .help("Score threshold for adding node to cluster.  Default is 0.9"))
+            .arg(Arg::with_name("min-cluster-size")
+                 .long("min-cluster-size")
+                 .takes_value(true)
+                 .help("Minimum cluster size to emit.  Default is 1"))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
