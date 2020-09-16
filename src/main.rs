@@ -455,17 +455,21 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
 fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
     let walk_len         = value_t!(args, "walk-len", usize).unwrap_or(20);
     let num_walks        = value_t!(args, "num-walks", usize).unwrap_or(80);
-    let biased_walk      = value_t!(args, "biased-walk", bool).unwrap_or(false);
     let max_terms        = value_t!(args, "max-terms", usize).unwrap_or(20);
     let threshold        = value_t!(args, "threshold", f32).unwrap_or(0.9);
     let seed             = value_t!(args, "seed", u64).unwrap_or(2020);
     let min_cluster_size = value_t!(args, "min-cluster-size", usize).unwrap_or(0);
 
+    let sampler = match args.value_of("sampler").unwrap_or("random-walk") {
+        "metropolis-hastings" => mccluster::Sampler::MetropolisHastings,
+        _                     => mccluster::Sampler::RandomWalk
+    };
+
     let mc = mccluster::MCCluster {
         num_walks,
         walk_len,
         max_terms,
-        biased_walk,
+        sampler,
         threshold,
         min_cluster_size,
         seed
@@ -848,9 +852,11 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("max-terms")
                  .takes_value(true)
                  .help("Keeps only the top K terms.  Default is 20"))
-            .arg(Arg::with_name("biased-walk")
-                 .long("biased-walk")
-                 .help("If provided, performs a biased walk instead of a uniform walk."))
+            .arg(Arg::with_name("sampler")
+                 .long("sampler")
+                 .takes_value(true)
+                 .possible_values(&["random-walk", "metropolis-hastings"])
+                 .help("How to sample the distribution around the node.  Default is 'metropolist-hastings'"))
             .arg(Arg::with_name("threshold")
                  .long("threshold")
                  .takes_value(true)

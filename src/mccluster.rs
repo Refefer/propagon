@@ -11,15 +11,21 @@ use indicatif::{ProgressBar,ProgressStyle};
 use thread_local::ThreadLocal;
 use hashbrown::{HashMap,HashSet};
 use rand::prelude::*;
+use rand::distributions::Uniform;
 use rayon::prelude::*;
 
 use crate::walker::RandomWalk;
+
+pub enum Sampler {
+    MetropolisHastings,
+    RandomWalk
+}
 
 pub struct MCCluster {
     pub num_walks: usize,
     pub walk_len: usize,
     pub max_terms: usize,
-    pub biased_walk: bool,
+    pub sampler: Sampler,
     pub threshold: f32,
     pub min_cluster_size: usize,
     pub seed: u64
@@ -70,21 +76,30 @@ impl MCCluster {
 
         let embeddings: HashMap<_,_> = keys.into_par_iter().enumerate().map(|(i, key)| {
             let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed + i as u64);
-            let rw = RandomWalk::new(&edges);
             let mut counts: HashMap<K, usize> = HashMap::new();
-            let mut buffer = Vec::with_capacity(self.walk_len + 1);
             
             // Compute random walk counts to generate embeddings
             for _walk_num in 0..self.num_walks {
-                if self.biased_walk {
-                    rw.gen_biased_walk_with_buff(&key, &mut rng, self.walk_len, &mut buffer);
-                } else {
-                    rw.gen_uniform_walk_with_buff(&key, &mut rng, self.walk_len, &mut buffer);
-                }
-                buffer.iter().skip(1).for_each(|k| {
-                    let e = counts.entry((*k).clone()).or_insert(0);
+                counts.insert(key.clone(), self.num_walks);
+                let mut u = &key;
+                // Metropolis Hastings
+                for _ in 0..self.walk_len {
+                    let v = &edges[u]
+                        .choose(&mut rng)
+                        .expect("Should never be empty!").0;
+
+                    match self.sampler {
+                        Sampler::RandomWalk => u = v,
+                        Sampler::MetropolisHastings => {
+                            let acceptance = edges[v].len() as f32/ edges[u].len() as f32;
+                            if acceptance < rng.sample(Uniform::new(0f32, 1f32)) {
+                                u = v;
+                            }
+                        }
+                    };
+                    let e = counts.entry((*u).clone()).or_insert(0);
                     *e += 1;
-                });
+                }
             }
 
             // Take the top K terms by frequency
@@ -158,7 +173,7 @@ impl MCCluster {
             }
 
             pb.inc(cur_set.len() as u64);
-            if cur_set.len() > self.min_cluster_size {
+            if cur_set.len() >= self.min_cluster_size {
                 cur_set.sort();
                 clusters.push(cur_set);
             }
