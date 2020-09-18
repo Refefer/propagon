@@ -453,25 +453,35 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
-    let walk_len         = value_t!(args, "walk-len", usize).unwrap_or(20);
-    let num_walks        = value_t!(args, "num-walks", usize).unwrap_or(80);
+    let max_steps        = value_t!(args, "max-steps", usize).unwrap_or(1000);
+    let restarts         = value_t!(args, "restarts", f32).unwrap_or(0.1);
     let max_terms        = value_t!(args, "max-terms", usize).unwrap_or(20);
     let threshold        = value_t!(args, "threshold", f32).unwrap_or(0.9);
     let seed             = value_t!(args, "seed", u64).unwrap_or(2020);
     let min_cluster_size = value_t!(args, "min-cluster-size", usize).unwrap_or(0);
+    let emb_path         = value_t!(args, "save-embeddings", String).ok();
 
     let sampler = match args.value_of("sampler").unwrap_or("random-walk") {
         "metropolis-hastings" => mccluster::Sampler::MetropolisHastings,
         _                     => mccluster::Sampler::RandomWalk
     };
 
+    let similarity = match args.value_of("similarity").unwrap_or("cosine") {
+        "cosine"  => mccluster::Similarity::Cosine,
+        "jaccard" => mccluster::Similarity::Jaccard,
+        _         => mccluster::Similarity::Overlap
+    };
+
+
     let mc = mccluster::MCCluster {
-        num_walks,
-        walk_len,
+        max_steps,
+        restarts,
         max_terms,
         sampler,
+        similarity,
         threshold,
         min_cluster_size,
+        emb_path,
         seed
     };
 
@@ -840,14 +850,14 @@ fn parse<'a>() -> ArgMatches<'a> {
 
         .subcommand(SubCommand::with_name("mc-cluster")
             .about("Community detection via random walks.")
-            .arg(Arg::with_name("num-walks")
-                 .long("num-walks")
+            .arg(Arg::with_name("steps")
+                 .long("steps")
                  .takes_value(true)
-                 .help("Number of Random Walks per node to compute.  Default is 80"))
-            .arg(Arg::with_name("walk-len")
-                 .long("walk-len")
+                 .help("Total number of steps to take for sampling. Default is 1000."))
+            .arg(Arg::with_name("restarts")
+                 .long("restarts")
                  .takes_value(true)
-                 .help("Length of random walk.  Default is 20"))
+                 .help("Probability that a random walk restarts.  Default is 0.1"))
             .arg(Arg::with_name("max-terms")
                  .long("max-terms")
                  .takes_value(true)
@@ -857,6 +867,11 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .possible_values(&["random-walk", "metropolis-hastings"])
                  .help("How to sample the distribution around the node.  Default is 'metropolist-hastings'"))
+            .arg(Arg::with_name("similarity")
+                 .long("similarity")
+                 .takes_value(true)
+                 .possible_values(&["cosine", "jaccard", "ratio"])
+                 .help("Similarity metric to use.  Default is Cosine"))
             .arg(Arg::with_name("threshold")
                  .long("threshold")
                  .takes_value(true)
@@ -865,6 +880,10 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("min-cluster-size")
                  .takes_value(true)
                  .help("Minimum cluster size to emit.  Default is 1"))
+            .arg(Arg::with_name("save-embeddings")
+                 .long("save-embeddings")
+                 .takes_value(true)
+                 .help("If provided, writes out the markov embeddings to the provided file"))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
