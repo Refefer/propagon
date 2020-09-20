@@ -175,7 +175,7 @@ impl MCCluster {
         let mut seen_keys = HashSet::new();
         let mut clusters = Vec::new();
 
-        eprintln!("Cosine clustering...");
+        eprintln!("Clustering...");
         let total_work = adj_graph.len();
         let pb = ProgressBar::new(total_work as u64);
         pb.set_style(ProgressStyle::default_bar()
@@ -183,6 +183,7 @@ impl MCCluster {
         pb.enable_steady_tick(200);
         pb.set_draw_delta(total_work as u64 / 1000);
 
+        let mut clustered_nodes = 0;
         for key in adj_graph.keys() {
             if seen_keys.contains(key) { continue }
 
@@ -217,11 +218,37 @@ impl MCCluster {
             pb.inc(cur_set.len() as u64);
             if cur_set.len() >= self.min_cluster_size {
                 cur_set.sort();
+                clustered_nodes += cur_set.len();
                 clusters.push(cur_set);
             }
         }
         pb.finish();
-        
+
+        // If we're testing, compute average inbound/outbound ratios
+        eprintln!("Found {} clusters", clusters.len());
+        eprintln!("Computing modularity ratios...");
+        let total_edges = adj_graph.par_values().map(|v| v.len()).sum::<usize>();
+        let modularity = clusters.par_iter().map(|cluster| {
+            let in_cluster: HashSet<_> = cluster.iter().collect();
+            let mut eii = 0;
+            let mut ai = 0;
+            for c in cluster.iter() {
+                for edge in adj_graph[&c].iter() {
+                    if in_cluster.contains(&edge) {
+                        eii += 1;
+                    } 
+                    ai += 1;
+                }
+            }
+            let eii = eii as f64 / total_edges as f64;
+            let ai = ai as f64 / total_edges as f64;
+            eii as f64 - ai.powi(2)
+        }).sum::<f64>();
+
+        eprintln!("Modularity: {:.3}", modularity);
+        let coverage = clustered_nodes as f64 / adj_graph.len() as f64;
+        eprintln!("Coverage: {}/{}({:.3})", clustered_nodes, adj_graph.len(), coverage * 100.);
+
         clusters.sort_by_key(|s| s.len());
         clusters.reverse();
         clusters
