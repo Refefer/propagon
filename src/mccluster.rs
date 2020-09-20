@@ -32,7 +32,7 @@ pub struct MCCluster {
     pub max_terms: usize,
     pub sampler: Sampler,
     pub similarity: Similarity,
-    pub threshold: f32,
+    pub best_only: bool,
     pub min_cluster_size: usize,
     pub emb_path: Option<String>,
     pub seed: u64
@@ -114,11 +114,16 @@ impl MCCluster {
             let mut step = 0;
             while step < self.max_steps {
                 let mut u = &key;
+                let mut i = 0;
+                //let e = counts.entry((*u).clone()).or_insert(0);
+                //*e += 1;
+                //step += 1;
 
                 // Check for a restart
-                while rng.sample(Uniform::new(0f32, 1f32)) > self.restarts {
+                while i == 0 || rng.sample(Uniform::new(0f32, 1f32)) > self.restarts {
                     
                     // Update our step count and get our next proposed edge
+                    i += 1;
                     step += 1;
                     let v = &edges[u]
                         .choose(&mut rng)
@@ -172,62 +177,125 @@ impl MCCluster {
             .map(|(k, ls)| (k, ls.into_iter().map(|(k, _)| k).collect()))
             .collect();
 
-        let mut seen_keys = HashSet::new();
-        let mut clusters = Vec::new();
-
-        eprintln!("Clustering...");
+        eprintln!("Constructing sparse graph...");
         let total_work = adj_graph.len();
         let pb = ProgressBar::new(total_work as u64);
         pb.set_style(ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
         pb.enable_steady_tick(200);
         pb.set_draw_delta(total_work as u64 / 1000);
+        
+        let keys: Vec<_> = adj_graph.keys().collect();
+        let new_edges: Vec<_> = keys.par_iter().enumerate().map(|(i, f_node)| {
+            let neighbors = &adj_graph[f_node];
+            // Compute scores of the neighborhood
+            let emb = &embeddings[&f_node];
+            let scores = neighbors.par_iter().map(|n| {
+                let n_emb = &embeddings[&n];
+                match self.similarity {
+                    Similarity::Cosine => cosine(emb, n_emb),
+                    Similarity::Jaccard => jaccard(emb, n_emb),
+                    Similarity::Overlap => overlap(emb, n_emb),
+                }
+            }).collect::<Vec<_>>();
 
+            // If you only have one neighbor, choose it
+            if scores.len() < 2 {
+                pb.inc(1);
+                return (*f_node, vec![&neighbors[0]])
+            }
+
+            let threshold = if self.best_only {
+                
+                // Choose the best edge only
+                *scores.iter()
+                    .max_by_key(|s| float_ord::FloatOrd(**s))
+                    .unwrap()
+
+            } else if scores.len() > 30 {
+                
+                // If you have more than 30, pretend it's normal and do outlier analysis
+                let mu = scores.iter().sum::<f32>() / scores.len() as f32;
+                let var = scores.iter().map(|s| (s - mu).powi(2)).sum::<f32>() / scores.len() as f32;
+                let sigma = var.powf(0.5);
+                
+                // Use outlier numbers
+                let high_score = *scores.iter()
+                    .max_by_key(|s| float_ord::FloatOrd(**s))
+                    .unwrap();
+                (mu + 2.68 * sigma).min(high_score)
+
+            } else {
+
+                // Bootstrap estimate the 99th percentile!
+                let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed + i as u64);
+                let mut mus: Vec<_> = (0..500).map(|_| { 
+                    (0..scores.len())
+                        .map(|_| scores.choose(&mut rng).unwrap())
+                        .sum::<f32>() / scores.len() as f32
+                }).collect();
+                mus.sort_by_key(|x| float_ord::FloatOrd(*x));
+                mus[495]
+            };
+
+            // Add the edges with the highest density scores
+            let es = scores.iter().zip(neighbors.iter())
+                .filter(|(s, _)| **s >= threshold)
+                .map(|(_s, n)| n)
+                .collect::<Vec<_>>();
+
+            pb.inc(1);
+            (*f_node, es)
+        }).collect();
+
+        // Generate sparse graph
+        let mut sparse_graph = HashMap::with_capacity(keys.len());
+        for (f_n, t_ns) in new_edges {
+            for t_n in t_ns {
+                let e = sparse_graph.entry(f_n).or_insert_with(|| Vec::new());
+                e.push(t_n);
+                let e = sparse_graph.entry(t_n).or_insert_with(|| Vec::new());
+                e.push(f_n);
+            }
+        }
+
+        // BFS collect graphs
+        let mut clusters: Vec<Vec<_>> = Vec::new();
         let mut clustered_nodes = 0;
-        for key in adj_graph.keys() {
-            if seen_keys.contains(key) { continue }
-
-            seen_keys.insert(key);
-
-            let mut cur_set = vec![key.clone()];
+        for key in keys.into_iter() {
+            if !sparse_graph.contains_key(key) {
+                continue
+            }
             let mut stack = vec![key];
-            while let Some(node) = stack.pop() {
-                let emb = &embeddings[node];
-                // Look at immediate edges.  If the similarity between two edges is greater than
-                // the threshold, add it to the current set and explore queue.
-                for neighbor in adj_graph[node].iter() {
-                    if seen_keys.contains(&neighbor) {
-                        continue
-                    }
-
-                    let n_emb = &embeddings[&neighbor];
-                    let score = match self.similarity {
-                        Similarity::Cosine => cosine(emb, n_emb),
-                        Similarity::Jaccard => jaccard(emb, n_emb),
-                        Similarity::Overlap => overlap(emb, n_emb),
-                    };
-
-                    if score > self.threshold {
-                        stack.push(&neighbor);
-                        seen_keys.insert(&neighbor);
-                        cur_set.push(neighbor.clone());
+            let mut cur_set = HashSet::new();
+            cur_set.insert(key.clone());
+            while stack.len() > 0 {
+                let q = stack.pop().unwrap();
+                for n in sparse_graph[q].iter() {
+                    if !cur_set.contains(n) {
+                        cur_set.insert((*n).clone());
+                        stack.push(n);
                     }
                 }
             }
-
-            pb.inc(cur_set.len() as u64);
+            for n in cur_set.iter() {
+                sparse_graph.remove(n);
+            }
             if cur_set.len() >= self.min_cluster_size {
-                cur_set.sort();
                 clustered_nodes += cur_set.len();
-                clusters.push(cur_set);
+                clusters.push(cur_set.into_iter().collect());
             }
         }
+
         pb.finish();
 
         // If we're testing, compute average inbound/outbound ratios
         eprintln!("Found {} clusters", clusters.len());
         eprintln!("Computing modularity ratios...");
-        let total_edges = adj_graph.par_values().map(|v| v.len()).sum::<usize>();
+        let total_edges = adj_graph.par_values()
+            .map(|v| v.len())
+            .sum::<usize>() as f64;
+
         let modularity = clusters.par_iter().map(|cluster| {
             let in_cluster: HashSet<_> = cluster.iter().collect();
             let mut eii = 0;
@@ -240,9 +308,10 @@ impl MCCluster {
                     ai += 1;
                 }
             }
-            let eii = eii as f64 / total_edges as f64;
-            let ai = ai as f64 / total_edges as f64;
-            eii as f64 - ai.powi(2)
+            let eii = eii as f64 / total_edges;
+            let ai = ai as f64 / total_edges;
+            let diff = eii as f64 - ai.powi(2);
+            diff
         }).sum::<f64>();
 
         eprintln!("Modularity: {:.3}", modularity);

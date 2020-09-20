@@ -453,10 +453,10 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
-    let max_steps        = value_t!(args, "max-steps", usize).unwrap_or(1000);
-    let restarts         = value_t!(args, "restarts", f32).unwrap_or(0.1);
-    let max_terms        = value_t!(args, "max-terms", usize).unwrap_or(20);
-    let threshold        = value_t!(args, "threshold", f32).unwrap_or(0.9);
+    let max_steps        = value_t!(args, "steps", usize).unwrap_or(10000);
+    let restarts         = value_t!(args, "restarts", f32).unwrap_or(0.5);
+    let max_terms        = value_t!(args, "max-terms", usize).unwrap_or(50);
+    let best_only        = args.is_present("best-only");
     let seed             = value_t!(args, "seed", u64).unwrap_or(2020);
     let min_cluster_size = value_t!(args, "min-cluster-size", usize).unwrap_or(0);
     let emb_path         = value_t!(args, "save-embeddings", String).ok();
@@ -479,7 +479,7 @@ fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
         max_terms,
         sampler,
         similarity,
-        threshold,
+        best_only,
         min_cluster_size,
         emb_path,
         seed
@@ -853,15 +853,15 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("steps")
                  .long("steps")
                  .takes_value(true)
-                 .help("Total number of steps to take for sampling. Default is 1000."))
+                 .help("Total number of steps to take for sampling. Default is 10000."))
             .arg(Arg::with_name("restarts")
                  .long("restarts")
                  .takes_value(true)
-                 .help("Probability that a random walk restarts.  Default is 0.1"))
+                 .help("Probability that a random walk restarts.  Default is 0.5"))
             .arg(Arg::with_name("max-terms")
                  .long("max-terms")
                  .takes_value(true)
-                 .help("Keeps only the top K terms.  Default is 20"))
+                 .help("Keeps only the top K terms.  Default is 50"))
             .arg(Arg::with_name("sampler")
                  .long("sampler")
                  .takes_value(true)
@@ -872,10 +872,9 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .possible_values(&["cosine", "jaccard", "ratio"])
                  .help("Similarity metric to use.  Default is Cosine"))
-            .arg(Arg::with_name("threshold")
-                 .long("threshold")
-                 .takes_value(true)
-                 .help("Score threshold for adding node to cluster.  Default is 0.9"))
+            .arg(Arg::with_name("best-only")
+                 .long("best-only")
+                 .help("Chooses only the max score for each node.  Creates sparser, smaller graphs."))
             .arg(Arg::with_name("min-cluster-size")
                  .long("min-cluster-size")
                  .takes_value(true)
