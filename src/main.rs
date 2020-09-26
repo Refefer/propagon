@@ -460,6 +460,7 @@ fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
     let seed             = value_t!(args, "seed", u64).unwrap_or(2020);
     let min_cluster_size = value_t!(args, "min-cluster-size", usize).unwrap_or(0);
     let emb_path         = value_t!(args, "save-embeddings", String).ok();
+    let rem_weak_links   = args.is_present("rem-weak-links");
 
     let sampler = match args.value_of("sampler").unwrap_or("random-walk") {
         "metropolis-hastings" => mccluster::Sampler::MetropolisHastings,
@@ -472,7 +473,6 @@ fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
         _         => mccluster::Similarity::Overlap
     };
 
-
     let mc = mccluster::MCCluster {
         max_steps,
         restarts,
@@ -482,6 +482,7 @@ fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
         best_only,
         min_cluster_size,
         emb_path,
+        rem_weak_links,
         seed
     };
 
@@ -879,6 +880,9 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("min-cluster-size")
                  .takes_value(true)
                  .help("Minimum cluster size to emit.  Default is 1"))
+            .arg(Arg::with_name("rem-weak-links")
+                 .long("rem-weak-links")
+                 .help("If provided, removes weak links within clusters."))
             .arg(Arg::with_name("save-embeddings")
                  .long("save-embeddings")
                  .takes_value(true)
