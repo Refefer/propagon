@@ -1,7 +1,5 @@
-# Computes the power rankings for baseball's 2018 season
 # This assumes you have the propagon binary compiled and installed!
 propagon articles dehydrate --delim ' ' --features articles.categories
-
 
 # Node prominance algorithms
 propagon articles.edges page-rank --iterations 30 --sink-dispersion all > articles.algo.page-rank
@@ -13,6 +11,9 @@ propagon articles.algo.label-rank hydrate --vocab articles.vocab > results.label
 
 propagon articles.edges lpa --chunks 1 --iterations 5 > articles.algo.lpa
 propagon articles.algo.lpa hydrate --vocab articles.vocab > results.lpa
+
+propagon articles.edges mc-cluster --num-attractors 1 --min-cluster-size 5 --clusterer similarity > articles.algo.mc-cluster
+propagon articles.algo.mc-cluster hydrate --vocab articles.vocab > results.mc-cluster
 
 # Vec-Prop
 

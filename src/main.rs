@@ -16,6 +16,8 @@ mod de;
 mod metric;
 mod converter;
 mod mccluster;
+mod pb;
+mod cluster_strat;
 
 mod utils;
 
@@ -456,34 +458,51 @@ fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
     let max_steps        = value_t!(args, "steps", usize).unwrap_or(10000);
     let restarts         = value_t!(args, "restarts", f32).unwrap_or(0.5);
     let max_terms        = value_t!(args, "max-terms", usize).unwrap_or(50);
-    let best_only        = args.is_present("best-only");
     let seed             = value_t!(args, "seed", u64).unwrap_or(2020);
     let min_cluster_size = value_t!(args, "min-cluster-size", usize).unwrap_or(0);
     let emb_path         = value_t!(args, "save-embeddings", String).ok();
-    let rem_weak_links   = args.is_present("rem-weak-links");
 
     let sampler = match args.value_of("sampler").unwrap_or("random-walk") {
         "metropolis-hastings" => mccluster::Sampler::MetropolisHastings,
         _                     => mccluster::Sampler::RandomWalk
     };
 
-    let similarity = match args.value_of("similarity").unwrap_or("cosine") {
-        "cosine"  => mccluster::Similarity::Cosine,
-        "jaccard" => mccluster::Similarity::Jaccard,
-        _         => mccluster::Similarity::Overlap
-    };
+    let clusterer = match args.value_of("clusterer").unwrap_or("attractor") {
+        "similarity" => {
+            let best_only        = args.is_present("best-only");
+            let rem_weak_links   = args.is_present("rem-weak-links");
+            let metric = match args.value_of("metric").unwrap_or("cosine") {
+                "cosine"  => cluster_strat::Metric::Cosine,
+                "jaccard" => cluster_strat::Metric::Jaccard,
+                _         => cluster_strat::Metric::Overlap
+            };
 
+            let strategy = cluster_strat::SimStrategy {
+                best_only,
+                seed,
+                min_cluster_size,
+                rem_weak_links,
+                metric
+            };
+            cluster_strat::ClusterStrategy::Similarity(strategy)
+        },
+        _            => {
+            let strategy = cluster_strat::AttractorStrategy {
+                num: value_t!(args, "num-attractors", usize).unwrap_or(1),
+                min_cluster_size
+            };
+            cluster_strat::ClusterStrategy::Attractors(strategy)
+        }
+    };
+    
     let mc = mccluster::MCCluster {
         max_steps,
         restarts,
         max_terms,
         sampler,
-        similarity,
-        best_only,
-        min_cluster_size,
         emb_path,
-        rem_weak_links,
-        seed
+        seed,
+        clusterer
     };
 
     // Load priors
@@ -868,21 +887,30 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .possible_values(&["random-walk", "metropolis-hastings"])
                  .help("How to sample the distribution around the node.  Default is 'metropolist-hastings'"))
-            .arg(Arg::with_name("similarity")
-                 .long("similarity")
+            .arg(Arg::with_name("metric")
+                 .long("metric")
                  .takes_value(true)
                  .possible_values(&["cosine", "jaccard", "ratio"])
-                 .help("Similarity metric to use.  Default is Cosine"))
+                 .help("Similarity metric to use.  Default is Cosine.  Used by 'similarity'"))
             .arg(Arg::with_name("best-only")
                  .long("best-only")
-                 .help("Chooses only the max score for each node.  Creates sparser, smaller graphs."))
+                 .help("Chooses only the max score for each node.  Creates sparser, smaller graphs.  Used by 'similarity'"))
             .arg(Arg::with_name("min-cluster-size")
                  .long("min-cluster-size")
                  .takes_value(true)
                  .help("Minimum cluster size to emit.  Default is 1"))
             .arg(Arg::with_name("rem-weak-links")
                  .long("rem-weak-links")
-                 .help("If provided, removes weak links within clusters."))
+                 .help("If provided, removes weak links within clusters.  Used by 'similarity'"))
+            .arg(Arg::with_name("clusterer")
+                 .long("clusterer")
+                 .takes_value(true)
+                 .possible_values(&["attractor", "similarity"])
+                 .help("Which embedding clusterer to use.  Default is 'attractor'"))
+            .arg(Arg::with_name("num-attractors")
+                 .long("num-attractors")
+                 .takes_value(true)
+                 .help("Number of attractors to use.  Used by 'attractor'.  Default is '1'"))
             .arg(Arg::with_name("save-embeddings")
                  .long("save-embeddings")
                  .takes_value(true)
