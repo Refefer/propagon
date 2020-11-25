@@ -17,6 +17,7 @@ mod metric;
 mod converter;
 mod mccluster;
 mod pb;
+mod he;
 mod cluster_strat;
 
 mod utils;
@@ -510,6 +511,45 @@ fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
     emit_scores(embeddings.into_iter());
 }
 
+fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
+    let dims      = value_t!(args, "dims", usize).expect("Requires dimensions!");
+    let hashes    = value_t!(args, "hashes", usize).unwrap_or(3);
+    let max_steps = value_t!(args, "steps", usize).unwrap_or(10000);
+    let restarts  = value_t!(args, "restarts", f32).unwrap_or(0.1);
+    let b         = value_t!(args, "b", f32).unwrap_or(1.);
+    let seed      = value_t!(args, "seed", u64).unwrap_or(2020);
+
+    let sampler = match args.value_of("sampler").unwrap_or("random-walk") {
+        "metropolis-hastings" => he::Sampler::MetropolisHastings,
+        _                     => he::Sampler::RandomWalk
+    };
+
+    let hash_emb = he::HashEmbeddings {
+        dims,
+        hashes,
+        max_steps,
+        restarts,
+        sampler,
+        b,
+        seed
+    };
+
+    // Load priors
+    let embeddings = hash_emb.fit(games.into_iter());
+    emit_scores(embeddings.into_iter().map(|(k, v)| {
+        let mut s = String::new();
+        s.push('[');
+        for (i, vi) in v.into_iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            write!(&mut s, "{}", vi).expect("Should never fail");
+        }
+        s.push(']');
+        (k, s)
+    }));
+}
+
 fn dehydrate(path: &str, args: &&clap::ArgMatches<'_>) {
     let delim = value_t!(args, "delim", String).unwrap_or('\t'.to_string());
     let features = value_t!(args, "features", String).ok();
@@ -919,7 +959,40 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("seed")
                  .takes_value(true)
                  .help("Random seed to use.")))
-            
+       .subcommand(SubCommand::with_name("hash-embedding")
+            .about("Generates node embeddings based on hash kernels.")
+            .arg(Arg::with_name("dims")
+                 .long("dims")
+                 .required(true)
+                 .takes_value(true)
+                 .help("Embedding dimensions to use"))
+            .arg(Arg::with_name("hashes")
+                 .long("hashes")
+                 .takes_value(true)
+                 .help("Number of random hashes to use per value.  Default is 3"))
+            .arg(Arg::with_name("steps")
+                 .long("steps")
+                 .takes_value(true)
+                 .help("Total number of steps to take for sampling. Default is 10000."))
+            .arg(Arg::with_name("restarts")
+                 .long("restarts")
+                 .takes_value(true)
+                 .help("Probability that a random walk restarts.  Default is 0.1"))
+            .arg(Arg::with_name("sampler")
+                 .long("sampler")
+                 .takes_value(true)
+                 .possible_values(&["random-walk", "metropolis-hastings"])
+                 .help("How to sample the distribution around the node.  Default is 'metropolist-hastings'"))
+            .arg(Arg::with_name("b")
+                 .long("b")
+                 .allow_hyphen_values(true)
+                 .takes_value(true)
+                 .help("beta value to raise the node weight by.  Default is '1'"))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use.")))
+ 
         .get_matches()
 }
 
@@ -997,6 +1070,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("mc-cluster") {
                 let all_games = games.into_iter().flatten().collect();
                 mc_cluster(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("hash-embedding") {
+                let all_games = games.into_iter().flatten().collect();
+                hash_embedding(sub_args, all_games);
             }
 
             // print a separator
