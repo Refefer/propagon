@@ -9,6 +9,7 @@ use std::cmp::Ord;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use ahash::{AHasher};
 use indicatif::{ProgressBar,ProgressStyle};
 use hashbrown::HashMap;
 use rand::prelude::*;
@@ -21,12 +22,19 @@ pub enum Sampler {
     RandomWalk
 }
 
+pub enum Norm {
+    L1,
+    L2,
+    None
+}
+
 pub struct HashEmbeddings {
     pub dims: usize,
     pub max_steps: usize,
     pub restarts: f32,
     pub hashes: usize,
     pub sampler: Sampler,
+    pub norm: Norm,
     pub b: f32,
     pub seed: u64
 }
@@ -53,7 +61,7 @@ impl HashEmbeddings {
     }
 
     fn calculate_hash<T: Hash>(t: &T) -> u64 {
-        let mut s = DefaultHasher::new();
+        let mut s = AHasher::default();
         t.hash(&mut s);
         s.finish()
     }
@@ -63,6 +71,7 @@ impl HashEmbeddings {
         edges: &HashMap<K, Vec<(K, f32)>>
     ) -> Vec<(K, Vec<f32>)> {
 
+        // total edges is 2m
         let total_edges = edges.values().map(|v| v.len() as f32).sum::<f32>();
         
         // Sort keys for consistency
@@ -79,23 +88,25 @@ impl HashEmbeddings {
             
             // Compute random walk counts to generate embeddings
             let mut step = 0;
+            let mut u = &key;
             while step < self.max_steps {
-                let mut u = &key;
-                let mut i = 0;
                 step += 1;
 
                 // Check for a restart
-                while rng.sample(Uniform::new(0f32, 1f32)) > self.restarts {
+                if rng.sample(Uniform::new(0f32, 1f32)) < self.restarts {
+                    u = &key;
+                } else {
                     
                     // Update our step count and get our next proposed edge
-                    i += 1;
-                    step += 1;
                     let v = &edges[u]
                         .choose(&mut rng)
                         .expect("Should never be empty!").0;
 
                     match self.sampler {
+                        // Always accept
                         Sampler::RandomWalk => u = v,
+
+                        // We scale the acceptance based on node degree
                         Sampler::MetropolisHastings => {
                             let acceptance = edges[v].len() as f32 / edges[u].len() as f32;
                             if acceptance > rng.sample(Uniform::new(0f32, 1f32)) {
@@ -103,20 +114,31 @@ impl HashEmbeddings {
                             }
                         }
                     };
+                }
                     
-                    // Hash items
-                    let mut weight = (edges[u].len() as f32 / total_edges).powf(self.b);
-                    for i in 0..self.hashes {
-                        let hash = HashEmbeddings::calculate_hash(&(i, u)) as usize;
-                        let sign = (hash & 1);
-                        let idx = (hash >> 1) % self.dims;
-                        emb[idx] += if sign == 1 { weight } else { -weight };
-                    }
+                // Hash items, scaling by global beta and node prominance in the graph
+                let mut weight = (edges[u].len() as f32 / total_edges).powf(self.b);
+                for i in 0..self.hashes {
+                    let hash = HashEmbeddings::calculate_hash(&(i, u)) as usize;
+                    let sign = (hash & 1);
+                    let idx = (hash >> 1) % self.dims;
+                    emb[idx] += if sign == 1 { weight } else { -weight };
                 }
             }
 
-            let norm = emb.iter().map(|v| (*v).abs()).sum::<f32>();
-            emb.iter_mut().for_each(|e| { *e /= norm });
+            // Normalize if necessary
+            match self.norm {
+                Norm::L1 => {
+                    let norm = emb.iter().map(|v| (*v).abs()).sum::<f32>();
+                    emb.iter_mut().for_each(|e| { *e /= norm });
+                },
+                Norm::L2 => {
+                    let norm = emb.iter().map(|v| (*v).powf(2.)).sum::<f32>().powf(0.5);
+                    emb.iter_mut().for_each(|e| { *e /= norm });
+                },
+                Norm::None => {}
+            }
+
             pb.inc(1);
             (key, emb)
         }).collect();

@@ -524,12 +524,19 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
         _                     => he::Sampler::RandomWalk
     };
 
+    let norm = match args.value_of("normalize").unwrap_or("none") {
+        "none" => he::Norm::None,
+        "l1"   => he::Norm::L1,
+        _      => he::Norm::L2
+    };
+
     let hash_emb = he::HashEmbeddings {
         dims,
         hashes,
         max_steps,
         restarts,
         sampler,
+        norm,
         b,
         seed
     };
@@ -983,6 +990,11 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .possible_values(&["random-walk", "metropolis-hastings"])
                  .help("How to sample the distribution around the node.  Default is 'metropolist-hastings'"))
+            .arg(Arg::with_name("normalize")
+                 .long("normalize")
+                 .takes_value(true)
+                 .possible_values(&["none", "l1", "l2"])
+                 .help("Normalizes the embeddings.  Default is 'none'"))
             .arg(Arg::with_name("b")
                  .long("b")
                  .allow_hyphen_values(true)
