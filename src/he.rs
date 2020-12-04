@@ -33,6 +33,7 @@ pub struct HashEmbeddings {
     pub max_steps: usize,
     pub restarts: f32,
     pub hashes: usize,
+    pub sparse_walks: bool,
     pub sampler: Sampler,
     pub norm: Norm,
     pub b: f32,
@@ -47,17 +48,31 @@ impl HashEmbeddings {
     ) -> Vec<(K, Vec<f32>)> {
 
         // Create graph
-        let mut edges = HashMap::new();
+        let mut vocab = HashMap::new();
+        let mut edges = Vec::new();
+        let mut n_nodes = 0;
         for (f_node, t_node, weight) in graph.into_iter() {
-            let e = edges.entry(f_node.clone()).or_insert_with(|| vec![]);
-            e.push((t_node.clone(), weight));
-            let e = edges.entry(t_node.clone()).or_insert_with(|| vec![]);
-            e.push((f_node.clone(), weight));
+            for n in vec![&f_node, &t_node] {
+                if !vocab.contains_key(n) {
+                    vocab.insert((*n).clone(), n_nodes);
+                    edges.push(vec![]);
+                    n_nodes += 1;
+                }
+            }
+
+            let t_idx = vocab[&t_node];
+            let f_idx = vocab[&f_node];
+
+            edges[t_idx].push((f_idx, weight));
+            edges[f_idx].push((t_idx, weight));
         }
 
-        eprintln!("Number of Vertices: {}", edges.len());
+        let mut names: Vec<_> = vocab.into_iter().collect();
+        names.sort_by_key(|(name, idx)| *idx);
+        let names: Vec<_> = names.into_iter().map(|(name, _)| name).collect();
+        eprintln!("Number of Vertices: {}", n_nodes);
 
-        self.generate_embeddings(&edges)
+        self.generate_embeddings(&edges, &names)
     }
 
     fn calculate_hash<T: Hash>(t: &T) -> u64 {
@@ -68,37 +83,39 @@ impl HashEmbeddings {
 
     fn generate_embeddings<K: Hash + Eq + Clone + Send + Sync + Ord>(
         &self,
-        edges: &HashMap<K, Vec<(K, f32)>>
+        edges: &Vec<Vec<(usize, f32)>>,
+        names: &Vec<K>
     ) -> Vec<(K, Vec<f32>)> {
 
         // total edges is 2m
-        let total_edges = edges.values().map(|v| v.len() as f32).sum::<f32>();
-        
-        // Sort keys for consistency
-        let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
-        keys.sort();
+        let total_edges = edges.iter().map(|v| v.len() as f32).sum::<f32>();
         
         // Progress bar time
         eprintln!("Generating random walks...");
         let pb = self.create_pb(edges.len() as u64);
 
-        let embeddings: Vec<_> = keys.into_par_iter().enumerate().map(|(i, key)| {
-            let mut rng = XorShiftRng::seed_from_u64(self.seed + i as u64);
+        let embeddings: Vec<_> = edges.par_iter().enumerate().map(|(key, _)| {
+            let mut rng = XorShiftRng::seed_from_u64(self.seed + key as u64);
             let mut emb = vec![0f32; self.dims];
             
             // Compute random walk counts to generate embeddings
             let mut step = 0;
             let mut u = &key;
+            let mut terminated = false;
             while step < self.max_steps {
                 step += 1;
+                if terminated {
+                    u = &key;
+                    terminated = false;
+                }
 
                 // Check for a restart
                 if rng.sample(Uniform::new(0f32, 1f32)) < self.restarts {
-                    u = &key;
+                    terminated = true;
                 } else {
                     
                     // Update our step count and get our next proposed edge
-                    let v = &edges[u]
+                    let v = &edges[*u]
                         .choose(&mut rng)
                         .expect("Should never be empty!").0;
 
@@ -108,7 +125,7 @@ impl HashEmbeddings {
 
                         // We scale the acceptance based on node degree
                         Sampler::MetropolisHastings => {
-                            let acceptance = edges[v].len() as f32 / edges[u].len() as f32;
+                            let acceptance = edges[*v].len() as f32 / edges[*u].len() as f32;
                             if acceptance > rng.sample(Uniform::new(0f32, 1f32)) {
                                 u = v;
                             }
@@ -117,12 +134,14 @@ impl HashEmbeddings {
                 }
                     
                 // Hash items, scaling by global beta and node prominance in the graph
-                let mut weight = (edges[u].len() as f32 / total_edges).powf(self.b);
-                for i in 0..self.hashes {
-                    let hash = HashEmbeddings::calculate_hash(&(i, u)) as usize;
-                    let sign = (hash & 1);
-                    let idx = (hash >> 1) % self.dims;
-                    emb[idx] += if sign == 1 { weight } else { -weight };
+                if !self.sparse_walks || terminated {
+                    let mut weight = (edges[*u].len() as f32 / total_edges).powf(self.b);
+                    for i in 0..self.hashes {
+                        let hash = HashEmbeddings::calculate_hash(&(i, u)) as usize;
+                        let sign = (hash & 1);
+                        let idx = (hash >> 1) % self.dims;
+                        emb[idx] += if sign == 1 { weight } else { -weight };
+                    }
                 }
             }
 
@@ -140,7 +159,7 @@ impl HashEmbeddings {
             }
 
             pb.inc(1);
-            (key, emb)
+            (names[key].clone(), emb)
         }).collect();
 
         pb.finish();

@@ -53,9 +53,9 @@ fn filter_edges(game_sets: Vec<Games>, min_count: usize) -> Vec<Games> {
                     hm.get(w).unwrap() >= &min_count && hm.get(l).unwrap() >= &min_count
                 }).collect();
                 if games.len() == len { break }
-                eprintln!("Filtered {} matches ({} remaining)", len - games.len(), len);
+                eprintln!("Filtered {} edges ({} remaining)", len - games.len(), len);
             }
-            eprintln!("Filtered out {} total matches", total_games - games.len());
+            eprintln!("Filtered out {} total edges", total_games - games.len());
             new_games.push(games);
         }
     } else {
@@ -518,6 +518,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
     let restarts  = value_t!(args, "restarts", f32).unwrap_or(0.1);
     let b         = value_t!(args, "b", f32).unwrap_or(1.);
     let seed      = value_t!(args, "seed", u64).unwrap_or(2020);
+    let sparse_walks = args.is_present("sparse-walks");
 
     let sampler = match args.value_of("sampler").unwrap_or("random-walk") {
         "metropolis-hastings" => he::Sampler::MetropolisHastings,
@@ -535,6 +536,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
         hashes,
         max_steps,
         restarts,
+        sparse_walks,
         sampler,
         norm,
         b,
@@ -708,7 +710,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("alpha")
                  .long("alpha")
                  .takes_value(true)
-                 .help("Blend coefficiant for prior vector.  Lower values assumes a weaker prior."))
+                 .help("Blend coefficiant for prior vector.  Higher values assumes a weaker prior."))
             .arg(Arg::with_name("max-terms")
                  .long("max-terms")
                  .takes_value(true)
@@ -1000,6 +1002,9 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .allow_hyphen_values(true)
                  .takes_value(true)
                  .help("beta value to raise the node weight by.  Default is '1'"))
+            .arg(Arg::with_name("sparse-walks")
+                 .long("sparse-walks")
+                 .help("When provied, only uses walk terminations as the features."))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
@@ -1035,13 +1040,13 @@ fn main() {
     loop {
         if let Ok(Some(games)) = reader.next_set() {
             for (i, g) in games.iter().enumerate() {
-                eprintln!("Set {}: Read in {} games", i, g.len());
+                eprintln!("Set {}: Read in {} edges", i, g.len());
             }
 
             // Weed out matches with competitors less than min-count
             let games = filter_edges(games, min_count);
             for (i, g) in games.iter().enumerate() {
-                eprintln!("Post Filter - Set {}: Read in {} games", i, g.len());
+                eprintln!("Post Filter - Set {}: Read in {} edges", i, g.len());
             }
 
             if let Some(ref sub_args) = args.subcommand_matches("btm-mm") {
