@@ -75,6 +75,7 @@ impl HashEmbeddings {
         self.generate_embeddings(&edges, &names)
     }
 
+    #[inline(always)]
     fn calculate_hash<T: Hash>(t: &T) -> u64 {
         let mut s = AHasher::default();
         t.hash(&mut s);
@@ -93,6 +94,11 @@ impl HashEmbeddings {
         // Progress bar time
         eprintln!("Generating random walks...");
         let pb = self.create_pb(edges.len() as u64);
+        let mut rng = XorShiftRng::seed_from_u64(self.seed - 1);
+
+        let hashes: Vec<usize> = vec![0; self.hashes].into_iter()
+            .map(|_| rng.sample(Uniform::new(0usize, std::usize::MAX)))
+            .collect();
 
         let embeddings: Vec<_> = edges.par_iter().enumerate().map(|(key, _)| {
             let mut rng = XorShiftRng::seed_from_u64(self.seed + key as u64);
@@ -115,9 +121,8 @@ impl HashEmbeddings {
                 } else {
                     
                     // Update our step count and get our next proposed edge
-                    let v = &edges[*u]
-                        .choose(&mut rng)
-                        .expect("Should never be empty!").0;
+                    let out = &edges[*u];
+                    let v = &out[rng.sample(Uniform::new(0usize, out.len()))].0;
 
                     match self.sampler {
                         // Always accept
@@ -135,15 +140,25 @@ impl HashEmbeddings {
                     
                 // Hash items, scaling by global beta and node prominance in the graph
                 if !self.sparse_walks || terminated {
-                    let mut weight = (edges[*u].len() as f32 / total_edges).powf(self.b);
-                    for i in 0..self.hashes {
-                        let hash = HashEmbeddings::calculate_hash(&(i, u)) as usize;
-                        let sign = (hash & 1);
+                    //let mut weight = (edges[*u].len() as f32 / total_edges).powf(self.b);
+                    let weight = 1.;
+                    for h in &hashes {
+                        let hash = HashEmbeddings::calculate_hash(&(h, u)) as usize;
+                        let sign = hash & 1;
                         let idx = (hash >> 1) % self.dims;
                         emb[idx] += if sign == 1 { weight } else { -weight };
                     }
                 }
             }
+
+            // Normalize embeddings by the overall weight in the graph
+            let total_nodes = edges.len() as f32;
+            emb.iter_mut().for_each(|wi| {
+                let sign = if wi.is_sign_negative() { -1. } else { 1.};
+
+                // Scale item by log
+                *wi = sign * ((wi.abs() / self.max_steps as f32) * total_nodes).ln().max(0.);
+            });
 
             // Normalize if necessary
             match self.norm {
