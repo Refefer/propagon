@@ -85,6 +85,14 @@ impl HashEmbeddings {
         s.finish()
     }
 
+    #[inline]
+    fn compute_sign_idx(&self, h: usize, u: usize) -> (i32, usize) {
+        let hash = HashEmbeddings::calculate_hash((h, u)) as usize;
+        let sign = (hash & 1) as i32;
+        let idx = (hash >> 1) % self.dims as usize;
+        (2 * sign - 1, idx)
+    }
+
     /*
     fn hash_node(&self, hashes: &[usize], u: usize, emb: &mut [i32]) {
         // Hash items, scaling by global beta and node prominance in the graph
@@ -136,7 +144,8 @@ impl HashEmbeddings {
         // Progress bar time
         let mut rng = XorShiftRng::seed_from_u64(self.seed - 1);
 
-        // haha
+        // Hashing is surprisingly expensive, especially with large numbers of steps in the MCMC.
+        // Given that, we precompute the hashes and avoid the computation
         eprintln!("Precomputing hashes...");
         let mut hash_table = vec![(0i8, 0u16); edges.len() * self.hashes];
         eprintln!("Table Size: {}", std::mem::size_of::<(i8, u16)>() * self.hashes * edges.len());
@@ -146,19 +155,17 @@ impl HashEmbeddings {
             .collect();
 
         // Fill the hashtable
-        let d = self.dims as usize;
         hash_table.par_chunks_mut(self.hashes).enumerate().for_each(|(u, slice)| {
             for (i, h) in hashes.iter().enumerate() {
-                let hash = HashEmbeddings::calculate_hash((h, u)) as usize;
-                let sign = (hash & 1) as i8;
-                let idx = (hash >> 1) % d;
-                slice[i] = (2 * sign - 1, idx as u16);
+                let (sign, idx) = self.compute_sign_idx(*h, u);
+                slice[i] = (sign as i8, idx as u16);
             }
         });
 
         eprintln!("Generating random walks...");
         let pb = self.create_pb(edges.len() as u64);
 
+        // We use thread local storage to reduce allocations when counting hashes
         let counts = Arc::new(ThreadLocal::new());
         let uni_dist = Uniform::new(0f32, 1f32);
         let embeddings: Vec<_> = edges.par_iter().enumerate().map(|(key, _)| {
