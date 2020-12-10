@@ -48,7 +48,7 @@ impl HashEmbeddings {
     pub fn fit<K: Hash + Eq + Clone + Send + Sync + Ord>(
         &self, 
         graph: impl Iterator<Item=(K,K,f32)>
-    ) -> Vec<(K, Vec<f32>)> {
+    ) -> (Vec<K>, Vec<f32>) {
 
         // Create graph
         let mut vocab = HashMap::new();
@@ -75,7 +75,7 @@ impl HashEmbeddings {
         let names: Vec<_> = names.into_iter().map(|(name, _)| name).collect();
         eprintln!("Number of Vertices: {}", n_nodes);
 
-        self.generate_embeddings(&edges, &names)
+        (names, self.generate_embeddings(&edges))
     }
 
     #[inline(always)]
@@ -108,35 +108,30 @@ impl HashEmbeddings {
     }
     */
 
-    fn norm_embedding(&self, total_nodes: f32, emb: &mut [i32]) -> Vec<f32> {
+    fn norm_embedding(&self, total_nodes: f32, emb: &mut [i32], dense_emb: &mut [f32]) {
         // Normalize embeddings by the overall weight in the graph
-        let mut emb: Vec<_> = emb.iter().map(|wi| {
+        emb.iter().zip(dense_emb.iter_mut()).for_each(|(wi, ei)| {
             let sign = if wi.is_negative() { -1. } else { 1.};
 
             // Scale item by log
-            sign * ((wi.abs() as f32 / self.max_steps as f32) * total_nodes).ln().max(0.)
-        }).collect();
+            *ei = sign * ((wi.abs() as f32 / self.max_steps as f32) * total_nodes).ln().max(0.);
+        });
 
         // Normalize if necessary
         match self.norm {
             Norm::L1 => {
-                let norm = emb.iter().map(|v| (*v).abs()).sum::<f32>();
-                emb.iter_mut().for_each(|e| { *e /= norm });
+                let norm = dense_emb.iter().map(|v| (*v).abs()).sum::<f32>();
+                dense_emb.iter_mut().for_each(|e| { *e /= norm });
             },
             Norm::L2 => {
-                let norm = emb.iter().map(|v| (*v).powf(2.)).sum::<f32>().powf(0.5);
-                emb.iter_mut().for_each(|e| { *e /= norm });
+                let norm = dense_emb.iter().map(|v| (*v).powf(2.)).sum::<f32>().powf(0.5);
+                dense_emb.iter_mut().for_each(|e| { *e /= norm });
             },
             Norm::None => {}
         }
-        emb
     }
 
-    fn generate_embeddings<K: Hash + Eq + Clone + Send + Sync + Ord>(
-        &self,
-        edges: &Vec<Vec<(usize, f32)>>,
-        names: &Vec<K>
-    ) -> Vec<(K, Vec<f32>)> {
+    fn generate_embeddings(&self, edges: &Vec<Vec<(usize, f32)>>) -> Vec<f32> {
 
         // total edges is 2m
         let total_edges = edges.iter().map(|v| v.len() as f32).sum::<f32>();
@@ -145,10 +140,11 @@ impl HashEmbeddings {
         let mut rng = XorShiftRng::seed_from_u64(self.seed - 1);
 
         // Hashing is surprisingly expensive, especially with large numbers of steps in the MCMC.
-        // Given that, we precompute the hashes and avoid the computation
+        // Given that, we precompute the hashes and avoid the computation, using 3 bytes per hash,
+        // per embedding.
         eprintln!("Precomputing hashes...");
+        eprintln!("Hashes Table Size: {}", std::mem::size_of::<(i8, u16)>() * self.hashes * edges.len());
         let mut hash_table = vec![(0i8, 0u16); edges.len() * self.hashes];
-        eprintln!("Table Size: {}", std::mem::size_of::<(i8, u16)>() * self.hashes * edges.len());
 
         let hashes: Vec<usize> = vec![0; self.hashes].into_iter()
             .map(|_| rng.sample(Uniform::new(0usize, std::usize::MAX)))
@@ -162,13 +158,15 @@ impl HashEmbeddings {
             }
         });
 
-        eprintln!("Generating random walks...");
-        let pb = self.create_pb(edges.len() as u64);
 
         // We use thread local storage to reduce allocations when counting hashes
         let counts = Arc::new(ThreadLocal::new());
         let uni_dist = Uniform::new(0f32, 1f32);
-        let embeddings: Vec<_> = edges.par_iter().enumerate().map(|(key, _)| {
+        eprintln!("Embeddings Size: {}", std::mem::size_of::<f32>() * self.dims as usize * edges.len());
+        let mut embeddings = vec![0f32; edges.len() * self.dims as usize];
+        eprintln!("Generating random walks...");
+        let pb = self.create_pb(edges.len() as u64);
+        embeddings.par_chunks_mut(self.dims as usize).enumerate().for_each(|(key, dense_emb)| {
             let mut rng = XorShiftRng::seed_from_u64(self.seed + key as u64);
 
             let mut emb = counts.get_or(|| {
@@ -220,11 +218,10 @@ impl HashEmbeddings {
 
             
             let total_nodes = edges.len() as f32;
-            let emb = self.norm_embedding(total_nodes, &mut emb);
+            self.norm_embedding(total_nodes, &mut emb, dense_emb);
 
             pb.inc(1);
-            (names[key].clone(), emb)
-        }).collect();
+        });
 
         pb.finish();
         embeddings

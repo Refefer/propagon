@@ -542,18 +542,18 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
     };
 
     // Load priors
-    let embeddings = hash_emb.fit(games.into_iter());
-    emit_scores(embeddings.into_iter().map(|(k, v)| {
+    let (names, embeddings) = hash_emb.fit(games.into_iter());
+    emit_scores(embeddings.chunks(dims as usize).enumerate().map(|(i, v)| {
         let mut s = String::new();
         s.push('[');
-        for (i, vi) in v.into_iter().enumerate() {
+        for (i, vi) in v.iter().enumerate() {
             if i > 0 {
                 s.push(',');
             }
             write!(&mut s, "{}", vi).expect("Should never fail");
         }
         s.push(']');
-        (k, s)
+        (names[i], s)
     }));
 }
 
