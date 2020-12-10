@@ -8,7 +8,10 @@ extern crate rand_xorshift;
 use std::cmp::Ord;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
+use std::cell::RefCell;
+use thread_local::ThreadLocal;
 use ahash::{AHasher};
 use indicatif::{ProgressBar,ProgressStyle};
 use hashbrown::HashMap;
@@ -17,6 +20,7 @@ use rand::distributions::Uniform;
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
+#[derive(PartialEq,Eq)]
 pub enum Sampler {
     MetropolisHastings,
     RandomWalk
@@ -33,7 +37,6 @@ pub struct HashEmbeddings {
     pub max_steps: usize,
     pub restarts: f32,
     pub hashes: usize,
-    pub sparse_walks: bool,
     pub sampler: Sampler,
     pub norm: Norm,
     pub b: f32,
@@ -76,10 +79,47 @@ impl HashEmbeddings {
     }
 
     #[inline(always)]
-    fn calculate_hash<T: Hash>(t: &T) -> u64 {
+    fn calculate_hash<T: Hash>(t: T) -> u64 {
         let mut s = AHasher::default();
         t.hash(&mut s);
         s.finish()
+    }
+
+    fn hash_node(&self, hashes: &[usize], u: usize, emb: &mut [i32]) {
+        // Hash items, scaling by global beta and node prominance in the graph
+        for h in hashes {
+            let hash = HashEmbeddings::calculate_hash((h, u)) as usize;
+            let sign = (hash & 1) as i32;
+            let idx = (hash >> 1) % self.dims;
+            let w = unsafe {
+                emb.get_unchecked_mut(idx)
+            };
+            *w += 2 * sign - 1;
+        }
+    }
+
+    fn norm_embedding(&self, total_nodes: f32, emb: &mut [i32]) -> Vec<f32> {
+        // Normalize embeddings by the overall weight in the graph
+        let mut emb: Vec<_> = emb.iter().map(|wi| {
+            let sign = if wi.is_negative() { -1. } else { 1.};
+
+            // Scale item by log
+            sign * ((wi.abs() as f32 / self.max_steps as f32) * total_nodes).ln().max(0.)
+        }).collect();
+
+        // Normalize if necessary
+        match self.norm {
+            Norm::L1 => {
+                let norm = emb.iter().map(|v| (*v).abs()).sum::<f32>();
+                emb.iter_mut().for_each(|e| { *e /= norm });
+            },
+            Norm::L2 => {
+                let norm = emb.iter().map(|v| (*v).powf(2.)).sum::<f32>().powf(0.5);
+                emb.iter_mut().for_each(|e| { *e /= norm });
+            },
+            Norm::None => {}
+        }
+        emb
     }
 
     fn generate_embeddings<K: Hash + Eq + Clone + Send + Sync + Ord>(
@@ -100,78 +140,53 @@ impl HashEmbeddings {
             .map(|_| rng.sample(Uniform::new(0usize, std::usize::MAX)))
             .collect();
 
-        let embeddings: Vec<_> = edges.par_iter().enumerate().map(|(key, _)| {
+        let counts = Arc::new(ThreadLocal::new());
+        let embeddings: Vec<_> = edges.iter().enumerate().map(|(key, _)| {
             let mut rng = XorShiftRng::seed_from_u64(self.seed + key as u64);
-            let mut emb = vec![0f32; self.dims];
-            
-            // Compute random walk counts to generate embeddings
-            let mut step = 0;
-            let mut u = &key;
-            let mut terminated = false;
-            while step < self.max_steps {
-                step += 1;
-                if terminated {
-                    u = &key;
-                    terminated = false;
-                }
 
+            let mut emb = counts.get_or(|| {
+                RefCell::new(vec![0i32; self.dims])
+            }).borrow_mut();
+
+            emb.iter_mut().for_each(|ei| {
+                *ei = 0;
+            });
+
+            // Compute random walk counts to generate embeddings
+            let mut u = &key;
+            for _ in 0..self.max_steps {
+                
                 // Check for a restart
                 if rng.sample(Uniform::new(0f32, 1f32)) < self.restarts {
-                    terminated = true;
+                    u = &key;
                 } else {
                     
                     // Update our step count and get our next proposed edge
-                    let out = &edges[*u];
-                    let v = &out[rng.sample(Uniform::new(0usize, out.len()))].0;
-
-                    match self.sampler {
-                        // Always accept
-                        Sampler::RandomWalk => u = v,
-
-                        // We scale the acceptance based on node degree
-                        Sampler::MetropolisHastings => {
-                            let acceptance = edges[*v].len() as f32 / edges[*u].len() as f32;
-                            if acceptance > rng.sample(Uniform::new(0f32, 1f32)) {
-                                u = v;
-                            }
-                        }
+                    let v = unsafe {
+                        let out = &edges.get_unchecked(*u);
+                        &out.get_unchecked(rng.sample(Uniform::new(0usize, out.len()))).0
                     };
-                }
-                    
-                // Hash items, scaling by global beta and node prominance in the graph
-                if !self.sparse_walks || terminated {
-                    //let mut weight = (edges[*u].len() as f32 / total_edges).powf(self.b);
-                    let weight = 1.;
-                    for h in &hashes {
-                        let hash = HashEmbeddings::calculate_hash(&(h, u)) as usize;
-                        let sign = hash & 1;
-                        let idx = (hash >> 1) % self.dims;
-                        emb[idx] += if sign == 1 { weight } else { -weight };
+
+                    if self.sampler == Sampler::RandomWalk {
+                        // Always accept
+                        u = v
+                    } else {
+                        // We scale the acceptance based on node degree
+                        let (v_len, u_len) = unsafe {
+                            (edges.get_unchecked(*v).len() as f32,  edges.get_unchecked(*u).len() as f32)
+                        };
+                        if v_len > u_len || (v_len / u_len) > rng.sample(Uniform::new(0f32, 1f32)) {
+                            u = v;
+                        }
                     }
                 }
+                    
+                self.hash_node(&hashes, *u, &mut emb);
             }
 
-            // Normalize embeddings by the overall weight in the graph
+            
             let total_nodes = edges.len() as f32;
-            emb.iter_mut().for_each(|wi| {
-                let sign = if wi.is_sign_negative() { -1. } else { 1.};
-
-                // Scale item by log
-                *wi = sign * ((wi.abs() / self.max_steps as f32) * total_nodes).ln().max(0.);
-            });
-
-            // Normalize if necessary
-            match self.norm {
-                Norm::L1 => {
-                    let norm = emb.iter().map(|v| (*v).abs()).sum::<f32>();
-                    emb.iter_mut().for_each(|e| { *e /= norm });
-                },
-                Norm::L2 => {
-                    let norm = emb.iter().map(|v| (*v).powf(2.)).sum::<f32>().powf(0.5);
-                    emb.iter_mut().for_each(|e| { *e /= norm });
-                },
-                Norm::None => {}
-            }
+            let emb = self.norm_embedding(total_nodes, &mut emb);
 
             pb.inc(1);
             (names[key].clone(), emb)
