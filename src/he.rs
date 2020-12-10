@@ -138,8 +138,8 @@ impl HashEmbeddings {
 
         // haha
         eprintln!("Precomputing hashes...");
-        let mut hash_table = vec![(true, 0u16); edges.len() * self.hashes];
-        eprintln!("Table Size: {}", std::mem::size_of::<(bool, u16)>() * self.hashes * edges.len());
+        let mut hash_table = vec![(0i8, 0u16); edges.len() * self.hashes];
+        eprintln!("Table Size: {}", std::mem::size_of::<(i8, u16)>() * self.hashes * edges.len());
 
         let hashes: Vec<usize> = vec![0; self.hashes].into_iter()
             .map(|_| rng.sample(Uniform::new(0usize, std::usize::MAX)))
@@ -150,9 +150,9 @@ impl HashEmbeddings {
         hash_table.par_chunks_mut(self.hashes).enumerate().for_each(|(u, slice)| {
             for (i, h) in hashes.iter().enumerate() {
                 let hash = HashEmbeddings::calculate_hash((h, u)) as usize;
-                let sign = (hash & 1) == 1;
+                let sign = (hash & 1) as i8;
                 let idx = (hash >> 1) % d;
-                slice[i] = (sign, idx as u16);
+                slice[i] = (2 * sign - 1, idx as u16);
             }
         });
 
@@ -193,9 +193,9 @@ impl HashEmbeddings {
                     } else {
                         // We scale the acceptance based on node degree
                         let (v_len, u_len) = unsafe {
-                            (edges.get_unchecked(*v).len() as f32,  edges.get_unchecked(*u).len() as f32)
+                            (edges.get_unchecked(*v).len() as f32, edges.get_unchecked(*u).len() as f32)
                         };
-                        if v_len > u_len || (v_len / u_len) > rng.sample(Uniform::new(0f32, 1f32)) {
+                        if v_len > u_len || (v_len / u_len) > rng.sample(uni_dist) {
                             u = v;
                         }
                     }
@@ -205,7 +205,7 @@ impl HashEmbeddings {
                 let start = *u * self.hashes;
                 let end = (*u + 1) * self.hashes;
                 for (ref pos, ref idx) in &hash_table[start..end] {
-                    emb[*idx as usize] += 2 * (*pos as i32) - 1;
+                    emb[*idx as usize] += *pos as i32;
                 }
                 
                 //self.hash_node(&hashes, *u, &mut emb);
