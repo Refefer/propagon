@@ -512,7 +512,7 @@ fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
-    let dims      = value_t!(args, "dims", usize).expect("Requires dimensions!");
+    let dims      = value_t!(args, "dims", u16).expect("Requires dimensions!");
     let hashes    = value_t!(args, "hashes", usize).unwrap_or(3);
     let max_steps = value_t!(args, "steps", usize).unwrap_or(10000);
     let restarts  = value_t!(args, "restarts", f32).unwrap_or(0.1);

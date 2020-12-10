@@ -33,7 +33,7 @@ pub enum Norm {
 }
 
 pub struct HashEmbeddings {
-    pub dims: usize,
+    pub dims: u16,
     pub max_steps: usize,
     pub restarts: f32,
     pub hashes: usize,
@@ -85,6 +85,7 @@ impl HashEmbeddings {
         s.finish()
     }
 
+    /*
     fn hash_node(&self, hashes: &[usize], u: usize, emb: &mut [i32]) {
         // Hash items, scaling by global beta and node prominance in the graph
         for h in hashes {
@@ -97,6 +98,7 @@ impl HashEmbeddings {
             *w += 2 * sign - 1;
         }
     }
+    */
 
     fn norm_embedding(&self, total_nodes: f32, emb: &mut [i32]) -> Vec<f32> {
         // Normalize embeddings by the overall weight in the graph
@@ -132,20 +134,38 @@ impl HashEmbeddings {
         let total_edges = edges.iter().map(|v| v.len() as f32).sum::<f32>();
         
         // Progress bar time
-        eprintln!("Generating random walks...");
-        let pb = self.create_pb(edges.len() as u64);
         let mut rng = XorShiftRng::seed_from_u64(self.seed - 1);
+
+        // haha
+        eprintln!("Precomputing hashes...");
+        let mut hash_table = vec![(true, 0u16); edges.len() * self.hashes];
+        eprintln!("Table Size: {}", std::mem::size_of::<(bool, u16)>() * self.hashes * edges.len());
 
         let hashes: Vec<usize> = vec![0; self.hashes].into_iter()
             .map(|_| rng.sample(Uniform::new(0usize, std::usize::MAX)))
             .collect();
 
+        // Fill the hashtable
+        let d = self.dims as usize;
+        hash_table.par_chunks_mut(self.hashes).enumerate().for_each(|(u, slice)| {
+            for (i, h) in hashes.iter().enumerate() {
+                let hash = HashEmbeddings::calculate_hash((h, u)) as usize;
+                let sign = (hash & 1) == 1;
+                let idx = (hash >> 1) % d;
+                slice[i] = (sign, idx as u16);
+            }
+        });
+
+        eprintln!("Generating random walks...");
+        let pb = self.create_pb(edges.len() as u64);
+
         let counts = Arc::new(ThreadLocal::new());
-        let embeddings: Vec<_> = edges.iter().enumerate().map(|(key, _)| {
+        let uni_dist = Uniform::new(0f32, 1f32);
+        let embeddings: Vec<_> = edges.par_iter().enumerate().map(|(key, _)| {
             let mut rng = XorShiftRng::seed_from_u64(self.seed + key as u64);
 
             let mut emb = counts.get_or(|| {
-                RefCell::new(vec![0i32; self.dims])
+                RefCell::new(vec![0i32; self.dims as usize])
             }).borrow_mut();
 
             emb.iter_mut().for_each(|ei| {
@@ -157,7 +177,7 @@ impl HashEmbeddings {
             for _ in 0..self.max_steps {
                 
                 // Check for a restart
-                if rng.sample(Uniform::new(0f32, 1f32)) < self.restarts {
+                if rng.sample(uni_dist) < self.restarts {
                     u = &key;
                 } else {
                     
@@ -180,8 +200,15 @@ impl HashEmbeddings {
                         }
                     }
                 }
-                    
-                self.hash_node(&hashes, *u, &mut emb);
+
+                // Hash
+                let start = *u * self.hashes;
+                let end = (*u + 1) * self.hashes;
+                for (ref pos, ref idx) in &hash_table[start..end] {
+                    emb[*idx as usize] += 2 * (*pos as i32) - 1;
+                }
+                
+                //self.hash_node(&hashes, *u, &mut emb);
             }
 
             
