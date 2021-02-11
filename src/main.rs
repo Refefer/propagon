@@ -18,6 +18,7 @@ mod converter;
 mod mccluster;
 mod pb;
 mod he;
+mod cc;
 mod cluster_strat;
 
 mod utils;
@@ -557,6 +558,11 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
     }));
 }
 
+fn components(args: &&clap::ArgMatches<'_>, path: &str, games: Games) {
+    let min_size = value_t!(args, "min-graph-size", usize).unwrap_or(1);
+    cc::extract_components(path, min_size, games.into_iter());
+}
+
 fn dehydrate(path: &str, args: &&clap::ArgMatches<'_>) {
     let delim = value_t!(args, "delim", String).unwrap_or('\t'.to_string());
     let features = value_t!(args, "features", String).ok();
@@ -812,6 +818,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("buffer-size")
                  .takes_value(true)
                  .help("Amount of temp space to use for parallel computation.  Default is 10000.")))
+
         .subcommand(SubCommand::with_name("dehydrate")
             .about("Converts a human readable graph format to a propagon compatible version.")
             .arg(Arg::with_name("delim")
@@ -822,6 +829,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("features")
                  .takes_value(true)
                  .help("Converts an optional features file to the index format.")))
+
         .subcommand(SubCommand::with_name("hydrate")
             .about("Converts an embedding back to a readable format")
             .arg(Arg::with_name("vocab")
@@ -966,6 +974,7 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("seed")
                  .takes_value(true)
                  .help("Random seed to use.")))
+
        .subcommand(SubCommand::with_name("hash-embedding")
             .about("Generates node embeddings based on hash kernels.")
             .arg(Arg::with_name("dims")
@@ -1004,6 +1013,13 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("seed")
                  .takes_value(true)
                  .help("Random seed to use.")))
+
+        .subcommand(SubCommand::with_name("extract-components")
+            .about("Extracts fully connected components from a graph and writes them to separate files")
+            .arg(Arg::with_name("min-graph-size")
+                 .long("min-size")
+                 .takes_value(true)
+                 .help("Minimum graph size to emit.  Default is 1")))
  
         .get_matches()
 }
@@ -1027,9 +1043,9 @@ fn main() {
     let min_count  = value_t!(args, "min-count", usize).unwrap_or(1);
 
     let mut reader: Box<dyn reader::GameReader> = if args.is_present("groups-are-separate") {
-        Box::new(reader::EachSetSeparate::new(path))
+        Box::new(reader::EachSetSeparate::new(path.clone()))
     } else {
-        Box::new(reader::AllGames::new(path))
+        Box::new(reader::AllGames::new(path.clone()))
     };
 
     loop {
@@ -1085,6 +1101,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("hash-embedding") {
                 let all_games = games.into_iter().flatten().collect();
                 hash_embedding(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("extract-components") {
+                let all_games = games.into_iter().flatten().collect();
+                components(sub_args, &path[0], all_games);
             }
 
             // print a separator
