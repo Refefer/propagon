@@ -35,10 +35,11 @@ impl BtmLr {
     }
 
     fn norm(&mut self) {
-        let norm = self.scores.values().map(|x| x.powi(2)).sum::<f32>().powf(0.5);
-        for wi in self.scores.values_mut() {
-            *wi = self.decay * *wi / norm;
-        }
+        let norm = self.scores.par_values().map(|x| x.powi(2)).sum::<f32>().powf(0.5);
+        let decay = self.decay;
+        self.scores.par_values_mut().for_each(|wi| {
+            *wi -= decay * *wi / norm;
+        })
     }
 
     #[inline]
@@ -61,7 +62,7 @@ impl BtmLr {
     pub fn update(&mut self, games: &Games) {
 
         let weights: f32 = games.par_iter().map(|(_,_,w)| w).sum();
-        let mut grads = Vec::new();
+        let mut grads = vec![(0u32, 0f32); games.len() * 2];
         for it in 0..self.passes {
             eprintln!("Iteration: {}", it);
 
@@ -77,17 +78,32 @@ impl BtmLr {
             } else {
                 // Compute all the gradients, in parallel, and update them all
                 // at once
-                games.par_iter().map(|(w, l, weight)| {
-                    self.gen_gradient(w, l, weight, &weights)
-                }).collect_into_vec(&mut grads);
+                grads.par_chunks_mut(2).zip(games.par_iter()).for_each(|(arr, game)| {
+                    let (w, l, weight) = game;
+                    let (winner, w_w, loser, l_w) = self.gen_gradient(w, l, weight, &weights);
+                    arr[0].0 = winner;
+                    arr[0].1 = w_w;
+                    arr[1].0 = loser;
+                    arr[1].1 = l_w;
+                });
+
+                // Sort the gradients so we can avoid multiple hash look ups
+                grads.par_sort_by(|x, y| x.0.cmp(&y.0));
 
                 // Update games
-                for (w, g, l, g2) in grads.drain(0..) {
-                    self.update_grads(w, g, l, g2);
+                let mut entry_key = grads[0].0;
+                let mut entry = self.scores.entry(entry_key).or_insert(0.);
+                for (idx, g) in grads.iter() {
+                    if *idx != entry_key {
+                        entry_key = *idx;
+                        entry = self.scores.entry(entry_key).or_insert(0.);
+                    }
+                    *entry -= g;
                 }
             }
+
+            // Normalize the weights
+            self.norm();
         }
-        // Normalize the weights
-        self.norm();
     }
 }
