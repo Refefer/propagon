@@ -40,6 +40,7 @@ pub struct HashEmbeddings {
     pub sampler: Sampler,
     pub norm: Norm,
     pub b: f32,
+    pub ppr: bool,
     pub seed: u64
 }
 
@@ -92,21 +93,6 @@ impl HashEmbeddings {
         let idx = (hash >> 1) % self.dims as usize;
         (2 * sign - 1, idx)
     }
-
-    /*
-    fn hash_node(&self, hashes: &[usize], u: usize, emb: &mut [i32]) {
-        // Hash items, scaling by global beta and node prominance in the graph
-        for h in hashes {
-            let hash = HashEmbeddings::calculate_hash((h, u)) as usize;
-            let sign = (hash & 1) as i32;
-            let idx = (hash >> 1) % self.dims;
-            let w = unsafe {
-                emb.get_unchecked_mut(idx)
-            };
-            *w += 2 * sign - 1;
-        }
-    }
-    */
 
     fn norm_embedding(&self, total_nodes: f32, emb: &mut [i32], dense_emb: &mut [f32]) {
         // Normalize embeddings by the overall weight in the graph
@@ -173,9 +159,8 @@ impl HashEmbeddings {
                 RefCell::new(vec![0i32; self.dims as usize])
             }).borrow_mut();
 
-            emb.iter_mut().for_each(|ei| {
-                *ei = 0;
-            });
+            // Zero out the embedding
+            emb.iter_mut().for_each(|ei| { *ei = 0; });
 
             // Compute random walk counts to generate embeddings
             let mut u = &key;
@@ -183,7 +168,14 @@ impl HashEmbeddings {
                 
                 // Check for a restart
                 if rng.sample(uni_dist) < self.restarts {
+                    // If we're doing ppr, this is the place to run it
+                    if self.ppr {
+                        self.hash_into(*u, emb.as_mut_slice(), &hash_table);
+                    }
+                    
+                    // Reset back to start
                     u = &key;
+
                 } else {
                     
                     // Update our step count and get our next proposed edge
@@ -206,14 +198,10 @@ impl HashEmbeddings {
                     }
                 }
 
-                // Hash
-                let start = *u * self.hashes;
-                let end = (*u + 1) * self.hashes;
-                for (ref pos, ref idx) in &hash_table[start..end] {
-                    emb[*idx as usize] += *pos as i32;
+                // If we're hashing all nodes along the way, run it here:
+                if !self.ppr {
+                    self.hash_into(*u, emb.as_mut_slice(), &hash_table);
                 }
-                
-                //self.hash_node(&hashes, *u, &mut emb);
             }
 
             
@@ -225,6 +213,15 @@ impl HashEmbeddings {
 
         pb.finish();
         embeddings
+    }
+
+    fn hash_into(&self, u: usize, emb: &mut [i32], hash_table: &[(i8, u16)]) {
+        // Hash
+        let start = u * self.hashes;
+        let end = (u + 1) * self.hashes;
+        for (ref pos, ref idx) in &hash_table[start..end] {
+            emb[*idx as usize] += *pos as i32;
+        }
     }
 
     fn create_pb(&self, total_work: u64) -> ProgressBar {

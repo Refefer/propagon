@@ -163,7 +163,6 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
     let thrifty = args.is_present("thrifty");
     let mut btm = lr::BtmLr::new(passes, alpha, decay, thrifty);
     for (i, games_set) in games.into_iter().enumerate() {
-
         eprintln!("Processing GameSet {}", i);
         btm.update(&games_set);
     }
@@ -517,6 +516,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
     let hashes    = value_t!(args, "hashes", usize).unwrap_or(3);
     let max_steps = value_t!(args, "steps", usize).unwrap_or(10000);
     let restarts  = value_t!(args, "restarts", f32).unwrap_or(0.1);
+    let ppr       = args.is_present("ppr");
     let b         = value_t!(args, "b", f32).unwrap_or(1.);
     let seed      = value_t!(args, "seed", u64).unwrap_or(2020);
 
@@ -539,6 +539,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
         sampler,
         norm,
         b,
+        ppr,
         seed
     };
 
@@ -994,6 +995,9 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("restarts")
                  .takes_value(true)
                  .help("Probability that a random walk restarts.  Default is 0.1"))
+            .arg(Arg::with_name("ppr")
+                 .long("ppr")
+                 .help("If provided, estimates using PPR estimation."))
             .arg(Arg::with_name("sampler")
                  .long("sampler")
                  .takes_value(true)
