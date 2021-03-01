@@ -31,6 +31,7 @@ pub enum Similarity {
 pub struct MCCluster {
     pub max_steps: usize,
     pub restarts: f32,
+    pub ppr: bool,
     pub max_terms: usize,
     pub sampler: Sampler,
     pub clusterer: ClusterStrategy,
@@ -106,20 +107,19 @@ impl MCCluster {
             let mut counts: HashMap<K, usize> = HashMap::new();
             
             // Compute random walk counts to generate embeddings
-            let mut step = 0;
-            while step < self.max_steps {
-                let mut u = &key;
-                let mut i = 0;
-                let e = counts.entry((*u).clone()).or_insert(0);
-                *e += 1;
-                step += 1;
+            let mut u = &key;
+            let mut count = 0;
+            for _ in 0..self.max_steps {
+                if !self.ppr {
+                    let e = counts.entry((*u).clone()).or_insert(0);
+                    *e += 1;
+                    count += 1;
+                }
 
                 // Check for a restart
-                while rng.sample(Uniform::new(0f32, 1f32)) > self.restarts {
+                if rng.sample(Uniform::new(0f32, 1f32)) > self.restarts {
                     
                     // Update our step count and get our next proposed edge
-                    i += 1;
-                    step += 1;
                     let v = &edges[u]
                         .choose(&mut rng)
                         .expect("Should never be empty!").0;
@@ -127,14 +127,19 @@ impl MCCluster {
                     match self.sampler {
                         Sampler::RandomWalk => u = v,
                         Sampler::MetropolisHastings => {
-                            let acceptance = edges[v].len() as f32/ edges[u].len() as f32;
+                            let acceptance = edges[v].len() as f32 / edges[u].len() as f32;
                             if acceptance > rng.sample(Uniform::new(0f32, 1f32)) {
                                 u = v;
                             }
                         }
                     };
-                    let e = counts.entry((*u).clone()).or_insert(0);
-                    *e += 1;
+                } else {
+                    if self.ppr {
+                        let e = counts.entry((*u).clone()).or_insert(0);
+                        *e += 1;
+                        count += 1;
+                    }
+                    u = &key;
                 }
             }
 
@@ -144,12 +149,13 @@ impl MCCluster {
             let mut emb: HashMap<_,f32> = items.into_iter()
                 .rev()
                 .take(self.max_terms)
-                .map(|(k, count)| {
-                    let score: f32 = count as f32 / self.max_steps as f32;
+                .map(|(k, c)| {
+                    let score: f32 = c as f32 / count as f32;
                     (k, score)
                 })
                 .collect();
 
+            // L2 Norm the results
             let norm = emb.values().map(|v| v.powi(2)).sum::<f32>().sqrt();
             emb.values_mut().for_each(|v| {
                 *v /= norm;

@@ -286,10 +286,12 @@ impl AttractorStrategy {
         adj_graph: &HashMap<K, Vec<K>>,
         embeddings: HashMap<K, HashMap<K, f32>>
     ) -> Vec<Vec<K>> {
-       let mut clusters = HashMap::new();
 
+       // Retrieves the top K attractors for each item
        let it: Vec<_> = adj_graph.par_iter().map(|(k, vs)| {
             let mut vs: Vec<_> = embeddings[k].iter().collect();
+            
+            // Take the top K most influential nodes
             vs.sort_by_key(|(_, v)| FloatOrd(-**v));
             let out = vs.into_iter()
                 .take(self.num)
@@ -298,6 +300,7 @@ impl AttractorStrategy {
             (k.clone(), out)
        }).collect();
 
+       let mut clusters = HashMap::new();
        for (node, cidxs) in it.into_iter() {
            for cidx in cidxs.into_iter() {
                let e = clusters.entry(cidx).or_insert_with(|| Vec::new());
@@ -306,7 +309,7 @@ impl AttractorStrategy {
        }
 
        clusters.into_iter()
-           .filter(|(_k, cluster)| cluster.len() > self.min_cluster_size)
+           .filter(|(_k, cluster)| cluster.len() >= self.min_cluster_size)
            .map(|(_, cluster)| cluster)
            .collect()
    }
