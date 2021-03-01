@@ -42,6 +42,7 @@ pub struct HashEmbeddings {
     pub sampler: Sampler,
     pub weighted: bool,
     pub max_weighted_search: Option<usize>,
+    pub directed: bool,
     pub norm: Norm,
     pub b: f32,
     pub ppr: bool,
@@ -63,7 +64,7 @@ impl HashEmbeddings {
             for n in vec![&f_node, &t_node] {
                 if !vocab.contains_key(n) {
                     vocab.insert((*n).clone(), n_nodes);
-                    edges.push(vec![]);
+                    edges.push(Vec::new());
                     n_nodes += 1;
                 }
             }
@@ -71,25 +72,18 @@ impl HashEmbeddings {
             let t_idx = vocab[&t_node];
             let f_idx = vocab[&f_node];
 
-            edges[t_idx].push((f_idx, weight));
             edges[f_idx].push((t_idx, weight));
+            
+            // Add edges each direction if not directed
+            if !self.directed {
+                edges[t_idx].push((f_idx, weight));
+            } 
         }
 
-        // Normalize the probabilities and sort them in descending order
-        edges.par_iter_mut().for_each(|values| {
-            let sum = values.iter().map(|(_, wi)| *wi).sum::<f32>();
-            values.iter_mut().for_each(|(_, wi)| {
-                *wi /= sum
-            });
-            
-            // Compute the cumulative sum
-            values.sort_by_key(|(_k, wi)| FloatOrd(-wi));
-            let mut s = 0.;
-            for (_k, wi) in values.iter_mut() {
-                s += *wi;
-                *wi = s;
-            }
-        });
+        // Normalize edges if weighted
+        if self.weighted {
+            self.normalize_edges(&mut edges);
+        }
 
         let mut names: Vec<_> = vocab.into_iter().collect();
         names.sort_by_key(|(name, idx)| *idx);
@@ -97,6 +91,27 @@ impl HashEmbeddings {
         eprintln!("Number of Vertices: {}", n_nodes);
 
         (names, self.generate_embeddings(&edges))
+    }
+
+    // Optimize the edges for linear scans by front loading higher probability edges
+    fn normalize_edges(&self, edges: &mut Vec<Vec<(usize,f32)>>) {
+        // Normalize the probabilities and sort them in descending order
+        edges.par_iter_mut().for_each(|values| {
+            let sum = values.iter().map(|(_, wi)| *wi).sum::<f32>();
+            values.iter_mut().for_each(|(_, wi)| {
+                *wi /= sum
+            });
+            
+
+            values.sort_by_key(|(_k, wi)| FloatOrd(-wi));
+            
+            // Compute the cumulative sum of each edge
+            let mut s = 0.;
+            for (_k, wi) in values.iter_mut() {
+                s += *wi;
+                *wi = s;
+            }
+        });
     }
 
     #[inline(always)]
@@ -115,6 +130,7 @@ impl HashEmbeddings {
     }
 
     fn norm_embedding(&self, total_nodes: f32, emb: &mut [i32], dense_emb: &mut [f32]) {
+
         // Normalize embeddings by the overall weight in the graph
         emb.iter().zip(dense_emb.iter_mut()).for_each(|(wi, ei)| {
             let sign = if wi.is_negative() { -1. } else { 1.};
@@ -197,24 +213,26 @@ impl HashEmbeddings {
                     u = &key;
 
                 } else {
+                    let u_edges = &edges[*u];
                     
                     // Update our step count and get our next proposed edge
-                    let v = if self.weighted {
+                    let v = if u_edges.len() == 0 {
+                        // dead end, not much we can do
+                        u
+                    } else if self.weighted {
                         // We have a couple of approaches.  In cases where the number of edges is
                         // large, we uniformly sample from the tail rather than linearly search
                         // through it.
                         let p = rng.sample(uni_dist);
                         unsafe {
-                            let es = &edges.get_unchecked(*u);
-                            
                             // Max number of edges to search
                             let max_search = self.max_weighted_search
-                                .unwrap_or(es.len() - 1)
-                                .min(es.len() - 1);
+                                .unwrap_or(u_edges.len() - 1)
+                                .min(u_edges.len() - 1);
 
                             let mut best = None;
                             for i in 0..max_search {
-                                if es.get_unchecked(i).1 > p {
+                                if u_edges.get_unchecked(i).1 > p {
                                     best = Some(i);
                                     break
                                 }
@@ -223,16 +241,15 @@ impl HashEmbeddings {
                             // If we search up to the last node and fail to find one below p,
                             // we uniformly sample from the remaining nodes
                             if let Some(idx) = best {
-                                &es[idx].0
+                                &u_edges[idx].0
                             } else {
-                                &es.get_unchecked(rng.sample(Uniform::new(max_search, es.len()))).0
+                                &u_edges.get_unchecked(rng.sample(Uniform::new(max_search, u_edges.len()))).0
                             }
                         }
                     } else {
                         // Ignore weighting and randomly choose.
                         unsafe {
-                            let out = &edges.get_unchecked(*u);
-                            &out.get_unchecked(rng.sample(Uniform::new(0usize, out.len()))).0
+                            &u_edges.get_unchecked(rng.sample(Uniform::new(0usize, u_edges.len()))).0
                         }
                     };
 
@@ -255,7 +272,6 @@ impl HashEmbeddings {
                     self.hash_into(*u, emb.as_mut_slice(), &hash_table);
                 }
             }
-
             
             let total_nodes = edges.len() as f32;
             self.norm_embedding(total_nodes, &mut emb, dense_emb);

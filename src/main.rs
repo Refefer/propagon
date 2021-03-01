@@ -520,6 +520,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
     let restarts  = value_t!(args, "restarts", f32).unwrap_or(0.1);
     let weighted  = args.is_present("weighted");
     let ppr       = args.is_present("ppr");
+    let directed  = args.is_present("directed");
     let b         = value_t!(args, "b", f32).unwrap_or(1.);
     let seed      = value_t!(args, "seed", u64).unwrap_or(2020);
     let max_weighted_search  = value_t!(args, "max-weighted-search", usize).ok();
@@ -544,6 +545,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
         norm,
         b,
         weighted,
+        directed,
         max_weighted_search,
         ppr,
         seed
