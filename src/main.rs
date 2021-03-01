@@ -458,6 +458,7 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
 fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
     let max_steps        = value_t!(args, "steps", usize).unwrap_or(10000);
     let restarts         = value_t!(args, "restarts", f32).unwrap_or(0.5);
+    let ppr              = args.is_present("ppr");
     let max_terms        = value_t!(args, "max-terms", usize).unwrap_or(50);
     let seed             = value_t!(args, "seed", u64).unwrap_or(2020);
     let min_cluster_size = value_t!(args, "min-cluster-size", usize).unwrap_or(0);
@@ -499,6 +500,7 @@ fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
     let mc = mccluster::MCCluster {
         max_steps,
         restarts,
+        ppr,
         max_terms,
         sampler,
         emb_path,
@@ -516,9 +518,11 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
     let hashes    = value_t!(args, "hashes", usize).unwrap_or(3);
     let max_steps = value_t!(args, "steps", usize).unwrap_or(10000);
     let restarts  = value_t!(args, "restarts", f32).unwrap_or(0.1);
+    let weighted  = args.is_present("weighted");
     let ppr       = args.is_present("ppr");
     let b         = value_t!(args, "b", f32).unwrap_or(1.);
     let seed      = value_t!(args, "seed", u64).unwrap_or(2020);
+    let max_weighted_search  = value_t!(args, "max-weighted-search", usize).ok();
 
     let sampler = match args.value_of("sampler").unwrap_or("random-walk") {
         "metropolis-hastings" => he::Sampler::MetropolisHastings,
@@ -539,6 +543,8 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
         sampler,
         norm,
         b,
+        weighted,
+        max_weighted_search,
         ppr,
         seed
     };
@@ -934,6 +940,9 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("restarts")
                  .takes_value(true)
                  .help("Probability that a random walk restarts.  Default is 0.5"))
+            .arg(Arg::with_name("ppr")
+                 .long("ppr")
+                 .help("Walk uses Personalized Page Rank instead of all-node accounting"))
             .arg(Arg::with_name("max-terms")
                  .long("max-terms")
                  .takes_value(true)
@@ -998,6 +1007,13 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("ppr")
                  .long("ppr")
                  .help("If provided, estimates using PPR estimation."))
+            .arg(Arg::with_name("weighted")
+                 .long("weighted")
+                 .help("If provided, uses edge weights to guide hashing"))
+            .arg(Arg::with_name("max-weighted-search")
+                 .long("max-weighted-search")
+                 .takes_value(true)
+                 .help("If provided, performs an approximation for nodes with degrees greater than provided.  Default is no optimization"))
             .arg(Arg::with_name("sampler")
                  .long("sampler")
                  .takes_value(true)

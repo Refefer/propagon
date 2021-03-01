@@ -4,6 +4,7 @@ extern crate rayon;
 extern crate thread_local;
 extern crate indicatif;
 extern crate rand_xorshift;
+extern crate float_ord;
 
 use std::cmp::Ord;
 use std::collections::hash_map::DefaultHasher;
@@ -19,6 +20,7 @@ use rand::prelude::*;
 use rand::distributions::Uniform;
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
+use float_ord::FloatOrd;
 
 #[derive(PartialEq,Eq)]
 pub enum Sampler {
@@ -38,6 +40,8 @@ pub struct HashEmbeddings {
     pub restarts: f32,
     pub hashes: usize,
     pub sampler: Sampler,
+    pub weighted: bool,
+    pub max_weighted_search: Option<usize>,
     pub norm: Norm,
     pub b: f32,
     pub ppr: bool,
@@ -70,6 +74,22 @@ impl HashEmbeddings {
             edges[t_idx].push((f_idx, weight));
             edges[f_idx].push((t_idx, weight));
         }
+
+        // Normalize the probabilities and sort them in descending order
+        edges.par_iter_mut().for_each(|values| {
+            let sum = values.iter().map(|(_, wi)| *wi).sum::<f32>();
+            values.iter_mut().for_each(|(_, wi)| {
+                *wi /= sum
+            });
+            
+            // Compute the cumulative sum
+            values.sort_by_key(|(_k, wi)| FloatOrd(-wi));
+            let mut s = 0.;
+            for (_k, wi) in values.iter_mut() {
+                s += *wi;
+                *wi = s;
+            }
+        });
 
         let mut names: Vec<_> = vocab.into_iter().collect();
         names.sort_by_key(|(name, idx)| *idx);
@@ -179,9 +199,41 @@ impl HashEmbeddings {
                 } else {
                     
                     // Update our step count and get our next proposed edge
-                    let v = unsafe {
-                        let out = &edges.get_unchecked(*u);
-                        &out.get_unchecked(rng.sample(Uniform::new(0usize, out.len()))).0
+                    let v = if self.weighted {
+                        // We have a couple of approaches.  In cases where the number of edges is
+                        // large, we uniformly sample from the tail rather than linearly search
+                        // through it.
+                        let p = rng.sample(uni_dist);
+                        unsafe {
+                            let es = &edges.get_unchecked(*u);
+                            
+                            // Max number of edges to search
+                            let max_search = self.max_weighted_search
+                                .unwrap_or(es.len() - 1)
+                                .min(es.len() - 1);
+
+                            let mut best = None;
+                            for i in 0..max_search {
+                                if es.get_unchecked(i).1 > p {
+                                    best = Some(i);
+                                    break
+                                }
+                            }
+                            
+                            // If we search up to the last node and fail to find one below p,
+                            // we uniformly sample from the remaining nodes
+                            if let Some(idx) = best {
+                                &es[idx].0
+                            } else {
+                                &es.get_unchecked(rng.sample(Uniform::new(max_search, es.len()))).0
+                            }
+                        }
+                    } else {
+                        // Ignore weighting and randomly choose.
+                        unsafe {
+                            let out = &edges.get_unchecked(*u);
+                            &out.get_unchecked(rng.sample(Uniform::new(0usize, out.len()))).0
+                        }
                     };
 
                     if self.sampler == Sampler::RandomWalk {
