@@ -521,9 +521,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
     let weighted  = args.is_present("weighted");
     let ppr       = args.is_present("ppr");
     let directed  = args.is_present("directed");
-    let b         = value_t!(args, "b", f32).unwrap_or(1.);
     let seed      = value_t!(args, "seed", u64).unwrap_or(2020);
-    let max_weighted_search  = value_t!(args, "max-weighted-search", usize).ok();
 
     let sampler = match args.value_of("sampler").unwrap_or("random-walk") {
         "metropolis-hastings" => he::Sampler::MetropolisHastings,
@@ -543,10 +541,8 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
         restarts,
         sampler,
         norm,
-        b,
         weighted,
         directed,
-        max_weighted_search,
         ppr,
         seed
     };
@@ -1012,10 +1008,6 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("weighted")
                  .long("weighted")
                  .help("If provided, uses edge weights to guide hashing"))
-            .arg(Arg::with_name("max-weighted-search")
-                 .long("max-weighted-search")
-                 .takes_value(true)
-                 .help("If provided, performs an approximation for nodes with degrees greater than provided.  Default is no optimization"))
             .arg(Arg::with_name("sampler")
                  .long("sampler")
                  .takes_value(true)
@@ -1026,11 +1018,6 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .possible_values(&["none", "l1", "l2"])
                  .help("Normalizes the embeddings.  Default is 'none'"))
-            .arg(Arg::with_name("b")
-                 .long("b")
-                 .allow_hyphen_values(true)
-                 .takes_value(true)
-                 .help("beta value to raise the node weight by.  Default is '1'"))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)

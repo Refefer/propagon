@@ -41,10 +41,8 @@ pub struct HashEmbeddings {
     pub hashes: usize,
     pub sampler: Sampler,
     pub weighted: bool,
-    pub max_weighted_search: Option<usize>,
     pub directed: bool,
     pub norm: Norm,
-    pub b: f32,
     pub ppr: bool,
     pub seed: u64
 }
@@ -153,6 +151,22 @@ impl HashEmbeddings {
         }
     }
 
+    fn exp_search<'a>(&self, haystack: &'a [(usize, f32)], needle: f32) -> &'a usize {
+        let n_edges = haystack.len();
+        let mut i = 1;
+        while i < n_edges && haystack[i].1 < needle {
+            i *= 2;
+        }
+        // binary search
+        let start = i / 2;
+        let end = (i + 1).min(n_edges);
+        let idx = haystack[start..end]
+            .binary_search_by(|(_, w)| FloatOrd(*w).cmp(&FloatOrd(needle)))
+            .unwrap_or_else(|idx| idx) + start;
+
+        &haystack[idx.min(n_edges - 1)].0
+    }
+
     fn generate_embeddings(&self, edges: &Vec<Vec<(usize, f32)>>) -> Vec<f32> {
 
         // total edges is 2m
@@ -220,32 +234,10 @@ impl HashEmbeddings {
                         // dead end, not much we can do
                         u
                     } else if self.weighted {
-                        // We have a couple of approaches.  In cases where the number of edges is
-                        // large, we uniformly sample from the tail rather than linearly search
-                        // through it.
+                        // We use exponential search to find the item
                         let p = rng.sample(uni_dist);
-                        unsafe {
-                            // Max number of edges to search
-                            let max_search = self.max_weighted_search
-                                .unwrap_or(u_edges.len() - 1)
-                                .min(u_edges.len() - 1);
+                        self.exp_search(&u_edges, p)
 
-                            let mut best = None;
-                            for i in 0..max_search {
-                                if u_edges.get_unchecked(i).1 > p {
-                                    best = Some(i);
-                                    break
-                                }
-                            }
-                            
-                            // If we search up to the last node and fail to find one below p,
-                            // we uniformly sample from the remaining nodes
-                            if let Some(idx) = best {
-                                &u_edges[idx].0
-                            } else {
-                                &u_edges.get_unchecked(rng.sample(Uniform::new(max_search, u_edges.len()))).0
-                            }
-                        }
                     } else {
                         // Ignore weighting and randomly choose.
                         unsafe {
