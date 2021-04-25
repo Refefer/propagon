@@ -133,21 +133,25 @@ fn rate(args: &&clap::ArgMatches<'_>, games: Games) {
 
 // glicko score
 fn glicko(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
-    let tau = value_t!(args, "tau", f64).unwrap_or(0.5);
-    let use_mu = args.is_present("use-mu");
-    let env = g2::Env::default();
+    let tau        = value_t!(args, "tau", f64).unwrap_or(0.5);
+    let use_mu     = args.is_present("use-mu");
+    let env        = g2::Env::default();
     let mut series = env.new_match_set(tau);
+
     for (i, game_set) in games.into_iter().enumerate() {
         eprintln!("Game set {}, Known teams: {}", i, series.teams().len());
         let gs = game_set.into_iter().map(|(w,l,_)| (w, l)).collect();
         series.update(gs);
     }
+
     let mut scores: Vec<_> = series.teams().iter()
         .map(|(t, p)| {
             if use_mu {
-                (t, p.mu(&env))
+                (t, format!("{}",p.mu(&env)))
             } else {
-                (t, p.bounds().0)
+                let (lb, ub) = p.bounds();
+                let mu = p.mu(&env);
+                (t, format!("{:.4}\t{:.4}\t{:.4}\t{:.4}", mu, p.rd, lb, ub))
             }
         }).collect();
 
