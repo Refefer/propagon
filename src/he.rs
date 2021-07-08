@@ -7,7 +7,6 @@ extern crate rand_xorshift;
 extern crate float_ord;
 
 use std::cmp::Ord;
-use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -17,7 +16,7 @@ use ahash::{AHasher};
 use indicatif::{ProgressBar,ProgressStyle};
 use hashbrown::HashMap;
 use rand::prelude::*;
-use rand::distributions::Uniform;
+use rand::distributions::{Distribution,Uniform,Normal};
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 use float_ord::FloatOrd;
@@ -45,6 +44,39 @@ pub struct HashEmbeddings {
     pub norm: Norm,
     pub ppr: bool,
     pub seed: u64
+}
+
+struct McEdgeSampler<'a, D> {
+    p: f64,
+    dist: D,
+    haystack: &'a [(usize, f32)]
+}
+
+impl <'a, D: Distribution<f64>> McEdgeSampler<'a, D> {
+
+    fn new<R: Rng>(haystack: &'a [(usize, f32)], dist: D, rng: &mut R) -> Self {
+        let p = rng.gen();
+        McEdgeSampler { p, dist, haystack}
+    }
+
+    fn sample<R: Rng>(&mut self, rng: &mut R) -> &'a usize {
+        let u = (self.p + self.dist.sample(rng)).abs();
+        let u_idx = (u * self.haystack.len() as f64) as usize;
+        let p_idx = (self.p * self.haystack.len() as f64) as usize;
+        if u_idx >= self.haystack.len() {
+            // Out of bounds, return current proposal
+            return &self.haystack[p_idx].0
+        } else if u_idx > p_idx {
+            // Rejection sampling
+            let ratio = self.haystack[u_idx].1 / self.haystack[p_idx].1;
+            if ratio < rng.gen() {
+                return &self.haystack[p_idx].0
+            }
+        }
+        // Accept new proposal
+        self.p = u;
+        &self.haystack[u_idx].0
+    }
 }
 
 impl HashEmbeddings {
@@ -84,7 +116,7 @@ impl HashEmbeddings {
         }
 
         let mut names: Vec<_> = vocab.into_iter().collect();
-        names.sort_by_key(|(name, idx)| *idx);
+        names.sort_by_key(|(_name, idx)| *idx);
         let names: Vec<_> = names.into_iter().map(|(name, _)| name).collect();
         eprintln!("Number of Vertices: {}", n_nodes);
 
@@ -169,9 +201,6 @@ impl HashEmbeddings {
 
     fn generate_embeddings(&self, edges: &Vec<Vec<(usize, f32)>>) -> Vec<f32> {
 
-        // total edges is 2m
-        let total_edges = edges.iter().map(|v| v.len() as f32).sum::<f32>();
-        
         // Progress bar time
         let mut rng = XorShiftRng::seed_from_u64(self.seed - 1);
 
@@ -213,6 +242,7 @@ impl HashEmbeddings {
             emb.iter_mut().for_each(|ei| { *ei = 0; });
 
             // Compute random walk counts to generate embeddings
+            let mut sampler_cache = HashMap::new();
             let mut u = &key;
             for _ in 0..self.max_steps {
                 
@@ -234,10 +264,14 @@ impl HashEmbeddings {
                         // dead end, not much we can do
                         u
                     } else if self.weighted {
+                        
+                        let e = sampler_cache.entry(u)
+                            .or_insert_with(|| McEdgeSampler::new(u_edges, Normal::new(0.0, 0.2), &mut rng));
+                        e.sample(&mut rng)
+                            
                         // We use exponential search to find the item
-                        let p = rng.sample(uni_dist);
-                        self.exp_search(&u_edges, p)
-
+                        //let p = rng.sample(uni_dist);
+                        //self.exp_search(&u_edges, p)
                     } else {
                         // Ignore weighting and randomly choose.
                         unsafe {

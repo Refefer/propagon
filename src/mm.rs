@@ -3,7 +3,7 @@ use super::{Games,Match,emit_scores,filter_edges,tally_winners_losers};
 
 use random::Source;
 
-use std::collections::{HashMap,HashSet};
+use hashbrown::{HashMap,HashSet};
 
 fn compute_err(p: &HashMap<u32,f32>, np: &HashMap<u32, f32>) -> f32 {
     let mut err = 0.;
@@ -194,6 +194,7 @@ fn mm_opti(games: &Games, sgi: usize, sg: Vec<u32>, iterations: usize, tol: f32)
             eprintln!("Iteration: {}, Error: {}", iter, err);
         }
         if err < tol {
+            eprintln!("Error is less than tolerance, exiting early...");
             break;
         }
     }
@@ -268,5 +269,3 @@ pub fn minor_maxim(args: &&clap::ArgMatches<'_>, mut games: Games, min_count: us
     println!("");
     emit_scores(vec.into_iter().map(|(k, cnt)| (k, - (cnt as f32))));
 }
-
-

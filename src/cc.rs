@@ -3,7 +3,6 @@ use std::fmt::Display;
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::BufReader;
 use std::io::BufWriter;
 
 use hashbrown::{HashMap,HashSet};
@@ -16,7 +15,7 @@ fn dfs<K: Hash + Eq + Clone>(n: K, graph: &HashMap<K, Vec<(K, f32)>>) -> Vec<K> 
     while !stack.is_empty() {
         let n = stack.pop().unwrap();
         
-        for (out_edge, w) in graph[&n].iter() {
+        for (out_edge, _w) in graph[&n].iter() {
             if !seen.contains(out_edge) {
                 seen.insert(out_edge.clone());
                 stack.push(out_edge.clone());
