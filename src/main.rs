@@ -180,16 +180,17 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 
 fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
     let passes    = value_t!(args, "passes", usize).unwrap_or(100);
-    let alpha      = value_t!(args, "alpha", f32).unwrap_or(0.9);
-    let gradients  = value_t!(args, "gradients", usize).unwrap_or(50);
+    let alpha      = value_t!(args, "alpha", f32).unwrap_or(1f32);
+    let gradients  = value_t!(args, "gradients", usize).unwrap_or(20);
     let children   = value_t!(args, "children", usize).unwrap_or(5);
     let k          = value_t!(args, "k", usize).unwrap_or(100);
     let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let distribution = match args.value_of("distribution").unwrap_or("normal") {
-        "normal" => esrum::Distribution::Gaussian,
-        "beta"   => esrum::Distribution::Beta,
-        _        => esrum::Distribution::Gamma,
+        "normal"       => esrum::Distribution::Gaussian,
+        "fixed-normal" => esrum::Distribution::FixedNormal,
+        "beta"         => esrum::Distribution::Beta,
+        _              => esrum::Distribution::Gamma,
     };
 
     let esrum = esrum::EsRum {
@@ -1083,7 +1084,7 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("distribution")
                  .long("distribution")
                  .takes_value(true)
-                 .possible_values(&["normal", "beta", "gamma"])
+                 .possible_values(&["normal", "fixed-normal", "beta", "gamma"])
                  .help("Distribution for each parameter to fit to."))
             .arg(Arg::with_name("seed")
                  .long("seed")
