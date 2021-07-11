@@ -3,8 +3,9 @@ extern crate rayon;
 extern crate hashbrown;
 
 use std::hash::Hash;
-use std::boxed::Box;
 use std::fmt::Write;
+use std::cell::RefCell;
+use std::sync::Arc;
 
 use indicatif::{ProgressBar,ProgressStyle};
 use rayon::prelude::*;
@@ -13,8 +14,7 @@ use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use rand_distr::{Distribution as Dist,Gamma,Normal,Beta};
 use float_ord::FloatOrd;
-
-use super::Games;
+use thread_local::ThreadLocal;
 
 pub enum Distribution {
     Gaussian,
@@ -102,30 +102,38 @@ impl EsRum {
                 std::mem::swap(&mut l_idx, &mut w_idx);
                 false
             };
-            let w = graph.entry(w_idx).or_insert_with(|| HashMap::new());
-            let s = w.entry(l_idx).or_insert((0, 0));
-            if is_win {
-               s.0 += margin;
+            // Add bi-directional
+            {
+                let w = graph.entry(w_idx.clone()).or_insert_with(|| HashMap::new());
+                let s = w.entry(l_idx.clone()).or_insert((0, 0));
+
+                if is_win { s.0 += margin; }
+                s.1 += margin;
             }
-            s.1 += margin;
+
+            // Add loser relationship
+            {
+                let l = graph.entry(l_idx).or_insert_with(|| HashMap::new());
+                let s = l.entry(w_idx).or_insert((0, 0));
+
+                if !is_win { s.0 += margin; }
+                s.1 += margin;
+            }
         });
 
         // Flatten
-        let mut edges = Vec::new();
-        graph.into_iter().for_each(|(w, sg)| {
-            sg.into_iter().for_each(|(l, s)| {
-                edges.push((w.clone(), l, s));
-            });
-        });
+        let graph: HashMap<_,_> = graph.into_iter().map(|(w, sg)| {
+            (w, sg.into_iter().collect::<Vec<_>>())
+        }).collect();
 
         let mut rng = XorShiftRng::seed_from_u64(self.seed);
         
         // Create initial policy
-        let mut policy = vec![0f32; n_vocab * 2];
-        policy.iter_mut().for_each(|pi| *pi = rng.gen());
-
-        // Gradients
-        let mut gradients = vec![(0f32, policy.clone()); self.gradients];
+        let mut policy = vec![[0f32, 0f32]; n_vocab];
+        policy.iter_mut().for_each(|pi| {
+            pi[0] = rng.gen();
+            pi[1] = rng.gen();
+        });
 
         // Compute the decay weights for each child
         let weights = {
@@ -138,60 +146,72 @@ impl EsRum {
             weights
         };
 
-        let pb = self.create_pb((self.passes * (self.gradients + 1)) as u64);
+        let pb = self.create_pb((self.passes * n_vocab) as u64);
 
         let mut msg = format!("Pass: 0, Fitness: inf");
         pb.set_message(&msg);
+
+        let tl_grads = Arc::new(ThreadLocal::new());
         for it in 0..self.passes {
 
-            // Randomize gradients and evaluate
-            gradients.par_iter_mut().enumerate().for_each(|(idx, (fit, g))| {
-                let mut rng = XorShiftRng::seed_from_u64(self.seed + (idx + (it + 1) * self.gradients) as u64);
+            let new_policy: Vec<_> = policy.par_iter().enumerate().map(|(c_idx, arr)| {
+                let mut grads = tl_grads.get_or(|| {
+                    RefCell::new(vec![(0f32, [0f32, 0f32]); self.gradients])
+                }).borrow_mut();
+
+                // Randomize gradients and compute
                 let normal = Normal::new(0f32, 1f32).unwrap();
-                g.iter_mut().zip(policy.iter()).for_each(|(vi, pi)| { 
-                    *vi = normal.sample(&mut rng) + *pi; 
+                let mut rng = XorShiftRng::seed_from_u64(self.seed + (c_idx + (it + 1) * self.gradients) as u64);
+                grads.iter_mut().enumerate().for_each(|(idx, (fit, g))| {
+                    g.iter_mut().zip(arr.iter()).for_each(|(vi, pi)| { 
+                        *vi = normal.sample(&mut rng) + *pi; 
+                    });
+
+                    *fit = self.score(g as &[f32], &graph[&c_idx].as_slice(), policy.as_slice(), it);
                 });
-                *fit = self.score(edges.as_slice(), g.as_slice(), it);
+
+                // Fitness sort them in ascending order
+                grads.sort_by_key(|(f, _g)| FloatOrd(*f));
+
+                // Combine into new policy
+                let mut new_policy = arr.clone();
+                new_policy.iter_mut().enumerate().for_each(|(p_idx, pi)| {
+                    *pi += self.alpha * grads[..self.children].iter().zip(weights.iter()).map(|((_, g), wi)| {
+                        wi * (g[p_idx] - *pi)
+                    }).sum::<f32>();
+                });
                 pb.inc(1);
-            });
+                new_policy
+            }).collect();
 
-            // Fitness sort them in ascending order
-            gradients.sort_by_key(|(f, _g)| FloatOrd(*f));
-
-            // Combine into new policy
-            policy.par_iter_mut().enumerate().for_each(|(p_idx, pi)| {
-                *pi += self.alpha * gradients[..self.children].iter().zip(weights.iter()).map(|((_, g), wi)| {
-                    wi * (g[p_idx] - *pi)
-                }).sum::<f32>();
-            });
-
+            policy = new_policy;
             // Evaluate new fitness
-            let s = self.score(edges.as_slice(), policy.as_slice(), self.passes + 1);
+            let s = policy.par_iter().enumerate().map(|(idx, stats)| {
+                self.score(stats as &[f32], &graph[&idx].as_slice(), policy.as_slice(), it)
+            }).sum::<f32>() / n_vocab as f32;
 
-            pb.inc(1);
             msg.clear();
             write!(msg, "Pass: {}, Fitness: {:.5}", it + 1, s);
             pb.set_message(&msg);
         }
         pb.finish();
 
-        std::mem::drop(gradients);
-
         vocab.into_iter().map(|(k, idx)| {
-            (k, [policy[2*idx], policy[2*idx+1]])
+            (k, policy[idx].clone())
         }).collect()
     }
 
-    fn score(&self, rels: &[(usize, usize, (usize, usize))], dist: &[f32], pass: usize) -> f32 {
-        rels.par_iter().enumerate().map(|(idx, (w_idx, l_idx, (wins, n)))| {
-            let wd = self.distribution.create(dist[2*w_idx],dist[2*w_idx + 1]);
-            let ld = self.distribution.create(dist[2*l_idx],dist[2*l_idx + 1]);
-            let mut rng = XorShiftRng::seed_from_u64(self.seed + idx as u64 + pass as u64);
+    fn score(&self, dist: &[f32], graph: &[(usize, (usize, usize))], policy: &[[f32; 2]], pass: usize) -> f32 {
+        let cd = self.distribution.create(dist[0], dist[1]);
+        let mut rng = XorShiftRng::seed_from_u64(self.seed + pass as u64);
+        graph.iter().enumerate().map(|(idx, (o_idx, (wins, n)))| {
+            let policy_dist = policy[*o_idx];
+            let od = self.distribution.create(policy_dist[0], policy_dist[1]);
             let s_wins = (0..self.k).map(|_| {
-                (wd.sample(&mut rng) > ld.sample(&mut rng)) as usize
+                (cd.sample(&mut rng) > od.sample(&mut rng)) as usize
             }).sum::<usize>();
             (s_wins as f32 / self.k as f32 - *wins as f32 / *n as f32).powi(2)
-        }).sum::<f32>() / rels.len() as f32
+        }).sum::<f32>() / self.gradients as f32
     }
 
     fn create_pb(&self, total_work: u64) -> ProgressBar {
