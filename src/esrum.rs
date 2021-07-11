@@ -92,11 +92,16 @@ impl EsRum {
         let mut n_vocab = 0usize;
         graph_iter.for_each(|(winner, loser, margin)| {
             // Numbers are better
-            let w_idx = *vocab.entry(winner).or_insert_with(||{ n_vocab += 1; n_vocab - 1 });
-            let l_idx = *vocab.entry(loser).or_insert_with(||{  n_vocab += 1; n_vocab - 1 });
+            let mut w_idx = *vocab.entry(winner).or_insert_with(||{ n_vocab += 1; n_vocab - 1 });
+            let mut l_idx = *vocab.entry(loser).or_insert_with(||{  n_vocab += 1; n_vocab - 1 });
 
             let margin = margin as usize;
-            let is_win = w_idx > l_idx;
+            let is_win = if w_idx > l_idx {
+                true
+            } else {
+                std::mem::swap(&mut l_idx, &mut w_idx);
+                false
+            };
             let w = graph.entry(w_idx).or_insert_with(|| HashMap::new());
             let s = w.entry(l_idx).or_insert((0, 0));
             if is_win {
@@ -186,7 +191,7 @@ impl EsRum {
                 (wd.sample(&mut rng) > ld.sample(&mut rng)) as usize
             }).sum::<usize>();
             (s_wins as f32 / self.k as f32 - *wins as f32 / *n as f32).powi(2)
-        }).sum::<f32>() / (dist.len() / 2) as f32
+        }).sum::<f32>() / rels.len() as f32
     }
 
     fn create_pb(&self, total_work: u64) -> ProgressBar {
