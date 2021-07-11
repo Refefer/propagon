@@ -8,7 +8,6 @@ use hashbrown::HashMap;
 
 use super::Games;
 
-
 pub struct BtmLr {
     pub scores: HashMap<u32, f32>,
     pub passes: usize,

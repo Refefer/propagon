@@ -16,7 +16,7 @@ use ahash::{AHasher};
 use indicatif::{ProgressBar,ProgressStyle};
 use hashbrown::HashMap;
 use rand::prelude::*;
-use rand::distributions::{Distribution,Uniform,Normal};
+use rand_distr::{Distribution,Uniform,Normal};
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 use float_ord::FloatOrd;
@@ -266,7 +266,7 @@ impl HashEmbeddings {
                     } else if self.weighted {
                         
                         let e = sampler_cache.entry(u)
-                            .or_insert_with(|| McEdgeSampler::new(u_edges, Normal::new(0.0, 0.2), &mut rng));
+                            .or_insert_with(|| McEdgeSampler::new(u_edges, Normal::new(0.0, 0.2).unwrap(), &mut rng));
                         e.sample(&mut rng)
                             
                         // We use exponential search to find the item

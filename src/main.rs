@@ -20,6 +20,7 @@ mod pb;
 mod he;
 mod cc;
 mod cluster_strat;
+mod esrum;
 
 mod utils;
 
@@ -176,6 +177,36 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
     scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).unwrap());
     emit_scores(scores.into_iter());
 }
+
+fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
+    let passes    = value_t!(args, "passes", usize).unwrap_or(100);
+    let alpha      = value_t!(args, "alpha", f32).unwrap_or(0.9);
+    let gradients  = value_t!(args, "gradients", usize).unwrap_or(50);
+    let children   = value_t!(args, "children", usize).unwrap_or(5);
+    let k          = value_t!(args, "k", usize).unwrap_or(100);
+    let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
+
+    let distribution = match args.value_of("distribution").unwrap_or("normal") {
+        "normal" => esrum::Distribution::Gaussian,
+        "beta"   => esrum::Distribution::Beta,
+        _        => esrum::Distribution::Gamma,
+    };
+
+    let esrum = esrum::EsRum {
+        distribution,
+        passes,
+        alpha,
+        gradients,
+        children,
+        k,
+        seed
+    };
+
+    // Load priors
+    let rums = esrum.fit(games.into_iter());
+    emit_scores(rums.into_iter().map(|(k, v)| (k, format!("[{},{}]", v[0], v[1]))));
+}
+
 
 fn page_rank(args: &&clap::ArgMatches<'_>, games: Games) {
     let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
@@ -1027,6 +1058,38 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Random seed to use.")))
 
+        .subcommand(SubCommand::with_name("es-rum")
+            .about("Fits a Random Utility Model to partial orderings")
+            .arg(Arg::with_name("passes")
+                 .long("passes")
+                 .takes_value(true)
+                 .help("Number of optimization steps to run"))
+            .arg(Arg::with_name("alpha")
+                 .long("alpha")
+                 .takes_value(true)
+                 .help("Learning rate for the gradient-free step"))
+            .arg(Arg::with_name("gradients")
+                 .long("gradients")
+                 .takes_value(true)
+                 .help("Number of search gradients to perform each pass"))
+            .arg(Arg::with_name("children")
+                 .long("children")
+                 .takes_value(true)
+                 .help("Number of children to use for the Evolutionary Strategies update"))
+            .arg(Arg::with_name("children")
+                 .long("children")
+                 .takes_value(true)
+                 .help("Number of samples for the montecarlo PDF estimate"))
+            .arg(Arg::with_name("distribution")
+                 .long("distribution")
+                 .takes_value(true)
+                 .possible_values(&["normal", "beta", "gamma"])
+                 .help("Distribution for each parameter to fit to."))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use.")))
+
         .subcommand(SubCommand::with_name("extract-components")
             .about("Extracts fully connected components from a graph and writes them to separate files")
             .arg(Arg::with_name("min-graph-size")
@@ -1084,6 +1147,9 @@ fn main() {
                 glicko(sub_args, games);
             } else if let Some(ref sub_args) = args.subcommand_matches("btm-lr") {
                 btm_lr(sub_args, games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("es-rum") {
+                let all_games = games.into_iter().flatten().collect();
+                es_rum(sub_args, all_games);
             } else if let Some(ref sub_args) = args.subcommand_matches("page-rank") {
                 let all_games = games.into_iter().flatten().collect();
                 page_rank(sub_args, all_games);

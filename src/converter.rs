@@ -41,7 +41,7 @@ impl Converter {
                 let pieces: Vec<&str> = line.trim().split(delim).collect();
                 if pieces.len() != 2 && pieces.len() != 3 {
                     eprintln!("Got {} pieces", pieces.len());
-                    panic!(format!("Improper line: `{}`", line));
+                    panic!("Improper line: `{}`", line);
                 }
 
                 for idx in 0..2 {

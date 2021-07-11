@@ -264,7 +264,7 @@ impl DifferentialEvolution {
             .expect("Should never be empty!");
 
         assert!(fits[best_idx].is_finite(), 
-                format!("IDX: {}, vec: {:?}", best_idx, pop[best_idx]));
+                "IDX: {}, vec: {:?}", best_idx, pop[best_idx]);
 
         (fns, fits[best_idx], pop.swap_remove(best_idx))
     }
