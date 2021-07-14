@@ -16,6 +16,10 @@ use rand_distr::{Distribution as Dist,Gamma,Normal,Beta};
 use float_ord::FloatOrd;
 use thread_local::ThreadLocal;
 
+use crate::lr::BtmLr;
+
+
+#[derive(Debug)]
 pub enum Distribution {
     Gaussian,
     FixedNormal,
@@ -41,19 +45,41 @@ impl Sampler {
 
 impl Distribution {
     // Fills a vector with samples from the given distribution
-    fn create(&self, a: f32, b: f32) -> Sampler {
+    fn create(&self, mut a: f32, mut b: f32) -> Sampler {
+        self.bound(&mut a, &mut b);
         match self {
             Distribution::Gaussian => {
-                Sampler::Normal(Normal::new(a, b.max(0.)).unwrap())
+                Sampler::Normal(Normal::new(a, b).unwrap())
             },
             Distribution::FixedNormal => {
-                Sampler::Normal(Normal::new(a, 1.).unwrap())
+                Sampler::Normal(Normal::new(a, b).unwrap())
             },
             Distribution::Gamma => {
-                Sampler::Gamma(Gamma::new(a.max(1e-5), b.max(1e-5)).unwrap())
+                Sampler::Gamma(Gamma::new(a, b).unwrap())
             },
             Distribution::Beta => {
-                Sampler::Beta(Beta::new(a.max(1e-5), b.max(1e-5)).unwrap())
+                Sampler::Beta(Beta::new(a, b).unwrap())
+            }
+        }
+    }
+
+    fn sigmoid(x: f32) -> f32 {
+        1. / (1. + (-x).exp())
+    }
+
+    fn bound(&self, a: &mut f32, b: &mut f32) {
+        match self {
+            Distribution::Gaussian => {
+                *a = Distribution::sigmoid(*a);
+                *b = Distribution::sigmoid(*b);
+            },
+            Distribution::FixedNormal => {
+                *a = a.abs();
+                *b = 1f32;
+            },
+            Distribution::Gamma | Distribution::Beta=> {
+                *a = a.abs().max(1e-5);
+                *b = b.abs().max(1e-5);
             }
         }
     }
@@ -80,14 +106,15 @@ pub struct EsRum {
     pub alpha: f32,
 
     // Random Seed
-    pub seed: u64,
+    pub seed: u64
 }
 
 impl EsRum {
 
     pub fn fit<K: Hash + Eq + Clone + Send + Sync + Ord>(
         &self, 
-        graph_iter: impl Iterator<Item=(K,K,f32)>
+        graph_iter: impl Iterator<Item=(K,K,f32)>,
+        pretrained: Option<HashMap<K, f32>>
     ) -> HashMap<K, [f32; 2]> {
 
         // Load up graph
@@ -117,8 +144,8 @@ impl EsRum {
 
             // Add loser relationship
             {
-                let l = graph.entry(l_idx).or_insert_with(|| HashMap::new());
-                let s = l.entry(w_idx).or_insert((0, 0));
+                let l = graph.entry(l_idx.clone()).or_insert_with(|| HashMap::new());
+                let s = l.entry(w_idx.clone()).or_insert((0, 0));
 
                 if !is_win { s.0 += margin; }
                 s.1 += margin;
@@ -135,10 +162,22 @@ impl EsRum {
         
         // Create initial policy
         let mut policy = vec![[0f32, 0f32]; n_vocab];
-        policy.iter_mut().for_each(|pi| {
-            pi[0] = rng.gen();
-            pi[1] = rng.gen();
-        });
+
+        if let Some(hm) = pretrained {
+            let smallest = *hm.values()
+                .min_by_key(|v| FloatOrd(**v))
+                .unwrap_or(&0.);
+            for (v, score) in hm.into_iter() {
+                let idx = vocab[&v];
+                policy[idx][0] = score - smallest;
+                policy[idx][1] = 0f32;
+            }
+        } else {
+            policy.iter_mut().for_each(|pi| {
+                pi[0] = rng.gen();
+                pi[1] = rng.gen();
+            });
+        }
 
         // Compute the decay weights for each child
         let weights = {
@@ -171,42 +210,38 @@ impl EsRum {
 
             let new_policy: Vec<_> = policy.par_iter().enumerate().map(|(c_idx, arr)| {
                 let mut grads = vec![(0f32, [0f32, 0f32]); self.gradients];
-
-                // Randomize gradients and compute
+                let mut new_policy = arr.clone();
                 let normal = Normal::new(0f32, 1f32).unwrap();
                 let mut rng = XorShiftRng::seed_from_u64(self.seed + (c_idx + (it + 1) * self.gradients) as u64);
-                grads.iter_mut().enumerate().for_each(|(idx, (fit, g))| {
-                    g.iter_mut().zip(arr.iter()).for_each(|(vi, pi)| { 
+                // Randomize gradients and compute
+                let comps = &graph[&c_idx].as_slice();
+                grads.iter_mut().for_each(|(fit, g)| {
+                    g.iter_mut().zip(new_policy.iter()).for_each(|(vi, pi)| { 
                         *vi = normal.sample(&mut rng) + *pi; 
                     });
 
-                    *fit = self.score(g as &[f32], &graph[&c_idx].as_slice(), samples.as_slice(), it + c_idx);
+                    *fit = self.score(g as &[f32], comps, samples.as_slice(), it + c_idx);
                 });
 
                 // Fitness sort them in ascending order
                 grads.sort_by_key(|(f, _g)| FloatOrd(*f));
 
                 // Combine into new policy
-                let mut new_policy = arr.clone();
                 new_policy.par_iter_mut().enumerate().for_each(|(p_idx, pi)| {
                     *pi += alpha * grads[..self.children].iter().zip(weights.iter()).map(|((_, g), wi)| {
                         wi * (g[p_idx] - *pi)
                     }).sum::<f32>();
                 });
 
-                /*
-                let old_score = self.score(arr as &[f32], &graph[&c_idx].as_slice(), samples.as_slice(), it + c_idx);
-                let new_score = self.score(&new_policy as &[f32], &graph[&c_idx].as_slice(), samples.as_slice(), it + c_idx);
+                let old_score = self.score(arr as &[f32], comps, samples.as_slice(), it + c_idx);
+                let new_score = self.score(&new_policy as &[f32], comps, samples.as_slice(), it + c_idx);
 
                 pb.inc(1);
-                if rng.gen::<f32>() < old_score / new_score {
+                if new_score < old_score {
                     new_policy
                 } else {
                     arr.clone()
                 }
-                */
-                pb.inc(1);
-                new_policy
             }).collect();
 
             policy = new_policy;
@@ -216,13 +251,16 @@ impl EsRum {
             }).sum::<f32>() / n_vocab as f32;
 
             msg.clear();
-            write!(msg, "Pass: {}, Alpha: {:.3}, Fitness: {:.5}", it + 1, alpha, s);
+            write!(msg, "Pass: {}, Alpha: {:.3}, Fitness: {:.5}", it + 1, alpha, s)
+                .expect("Oh my, shouldn't have failed!");
             pb.set_message(&msg);
         }
         pb.finish();
 
         vocab.into_iter().map(|(k, idx)| {
-            (k, policy[idx].clone())
+            let [mut a, mut b] = policy[idx];
+            self.distribution.bound(&mut a, &mut b);
+            (k, [a, b])
         }).collect()
     }
 
@@ -235,6 +273,7 @@ impl EsRum {
                 .map(|(w,l)| (w > l) as usize)
                 .sum::<usize>();
 
+            // Scale MSE by the number of comparisons
             *n as f32 * (s_wins as f32 / self.k as f32 - *wins as f32 / *n as f32).powi(2)
         }).sum::<f32>() / graph.len() as f32
     }

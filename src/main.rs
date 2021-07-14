@@ -163,7 +163,7 @@ fn glicko(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 
 fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
     let alpha = value_t!(args, "alpha", f32).unwrap_or(1.);
-    let decay = value_t!(args, "decay", f32).unwrap_or(1.);
+    let decay = value_t!(args, "decay", f32).unwrap_or(1e-5);
     let passes = value_t!(args, "passes", usize).unwrap_or(10);
     let thrifty = args.is_present("thrifty");
     let mut btm = lr::BtmLr::new(passes, alpha, decay, thrifty);
@@ -180,11 +180,12 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 
 fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
     let passes    = value_t!(args, "passes", usize).unwrap_or(100);
-    let alpha      = value_t!(args, "alpha", f32).unwrap_or(1f32);
-    let gradients  = value_t!(args, "gradients", usize).unwrap_or(20);
-    let children   = value_t!(args, "children", usize).unwrap_or(5);
-    let k          = value_t!(args, "k", usize).unwrap_or(100);
-    let seed       = value_t!(args, "seed", u64).unwrap_or(2019);
+    let alpha     = value_t!(args, "alpha", f32).unwrap_or(1f32);
+    let gradients = value_t!(args, "gradients", usize).unwrap_or(200);
+    let children  = value_t!(args, "children", usize).unwrap_or(5);
+    let k         = value_t!(args, "k", usize).unwrap_or(100);
+    let pretrain  = args.is_present("pretrain");
+    let seed      = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let distribution = match args.value_of("distribution").unwrap_or("normal") {
         "normal"       => esrum::Distribution::Gaussian,
@@ -203,9 +204,17 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
         seed
     };
 
+    let scores = if pretrain {
+        let mut btm = lr::BtmLr::new(3, 1., 1e-5, false);
+        btm.update(&games);
+        Some(btm.scores)
+    } else {
+        None
+    };
+
     // Load priors
-    let rums = esrum.fit(games.into_iter());
-    emit_scores(rums.into_iter().map(|(k, v)| (k, format!("[{},{}]", v[0], v[1]))));
+    let rums = esrum.fit(games.into_iter(), scores);
+    emit_scores(rums.into_iter().map(|(k, v)| (k, format!("{:.4} {:.4}", v[0], v[1]))));
 }
 
 
@@ -1086,6 +1095,9 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .possible_values(&["normal", "fixed-normal", "beta", "gamma"])
                  .help("Distribution for each parameter to fit to."))
+            .arg(Arg::with_name("pretrain")
+                 .long("pretrain")
+                 .help("If enabled, fits a bradley-terry model first to get relative ordering"))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
