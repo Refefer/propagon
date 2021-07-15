@@ -6,6 +6,7 @@ use std::hash::Hash;
 use std::fmt::Write;
 use std::cell::RefCell;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize,Ordering};
 
 use indicatif::{ProgressBar,ProgressStyle};
 use rayon::prelude::*;
@@ -104,6 +105,9 @@ pub struct EsRum {
 
     // Learning rate for the gradient
     pub alpha: f32,
+    
+    // Regularization for distributions
+    pub gamma: f32,
 
     // Random Seed
     pub seed: u64
@@ -113,8 +117,7 @@ impl EsRum {
 
     pub fn fit<K: Hash + Eq + Clone + Send + Sync + Ord>(
         &self, 
-        graph_iter: impl Iterator<Item=(K,K,f32)>,
-        pretrained: Option<HashMap<K, f32>>
+        graph_iter: impl Iterator<Item=(K,K,f32)>
     ) -> HashMap<K, [f32; 2]> {
 
         // Load up graph
@@ -163,21 +166,10 @@ impl EsRum {
         // Create initial policy
         let mut policy = vec![[0f32, 0f32]; n_vocab];
 
-        if let Some(hm) = pretrained {
-            let smallest = *hm.values()
-                .min_by_key(|v| FloatOrd(**v))
-                .unwrap_or(&0.);
-            for (v, score) in hm.into_iter() {
-                let idx = vocab[&v];
-                policy[idx][0] = score - smallest;
-                policy[idx][1] = 0f32;
-            }
-        } else {
-            policy.iter_mut().for_each(|pi| {
-                pi[0] = rng.gen();
-                pi[1] = rng.gen();
-            });
-        }
+        policy.iter_mut().for_each(|pi| {
+            pi[0] = rng.gen();
+            pi[1] = rng.gen();
+        });
 
         // Compute the decay weights for each child
         let weights = {
@@ -198,8 +190,9 @@ impl EsRum {
         let mut samples = vec![vec![0f32; self.k]; n_vocab];
 
         for it in 0..self.passes {
-            let alpha = (self.alpha / (2. + it as f32).ln()).min(self.alpha);
-            //let alpha = self.alpha * 0.99f32.powf(it as f32);
+            //let sigma = (self.alpha / (2. + it as f32).ln()).min(self.alpha);
+            let sigma = self.alpha * 0.99f32.powf(it as f32);
+            let updated = AtomicUsize::new(0);
 
             // Fill the samples
             samples.par_iter_mut().zip(policy.par_iter()).enumerate().for_each(|(idx, (pulls, pi))| {
@@ -211,7 +204,7 @@ impl EsRum {
             let new_policy: Vec<_> = policy.par_iter().enumerate().map(|(c_idx, arr)| {
                 let mut grads = vec![(0f32, [0f32, 0f32]); self.gradients];
                 let mut new_policy = arr.clone();
-                let normal = Normal::new(0f32, 1f32).unwrap();
+                let normal = Normal::new(0f32, sigma).unwrap();
                 let mut rng = XorShiftRng::seed_from_u64(self.seed + (c_idx + (it + 1) * self.gradients) as u64);
                 // Randomize gradients and compute
                 let comps = &graph[&c_idx].as_slice();
@@ -228,7 +221,7 @@ impl EsRum {
 
                 // Combine into new policy
                 new_policy.par_iter_mut().enumerate().for_each(|(p_idx, pi)| {
-                    *pi += alpha * grads[..self.children].iter().zip(weights.iter()).map(|((_, g), wi)| {
+                    *pi += grads[..self.children].iter().zip(weights.iter()).map(|((_, g), wi)| {
                         wi * (g[p_idx] - *pi)
                     }).sum::<f32>();
                 });
@@ -238,6 +231,7 @@ impl EsRum {
 
                 pb.inc(1);
                 if new_score < old_score {
+                    updated.fetch_add(1, Ordering::SeqCst);
                     new_policy
                 } else {
                     arr.clone()
@@ -251,7 +245,7 @@ impl EsRum {
             }).sum::<f32>() / n_vocab as f32;
 
             msg.clear();
-            write!(msg, "Pass: {}, Alpha: {:.3}, Fitness: {:.5}", it + 1, alpha, s)
+            write!(msg, "Pass: {}, Updated: {}, Sigma: {:.3}, Fitness: {:.5}", it + 1, updated.load(Ordering::SeqCst), sigma, s)
                 .expect("Oh my, shouldn't have failed!");
             pb.set_message(&msg);
         }
@@ -274,7 +268,8 @@ impl EsRum {
                 .sum::<usize>();
 
             // Scale MSE by the number of comparisons
-            *n as f32 * (s_wins as f32 / self.k as f32 - *wins as f32 / *n as f32).powi(2)
+            let fitness = *n as f32 * (s_wins as f32 / self.k as f32 - *wins as f32 / *n as f32).powi(2);
+            fitness + self.gamma * (samples[*o_idx][0].powf(2.) + samples[*o_idx][1].powf(2.)).powf(0.5)
         }).sum::<f32>() / graph.len() as f32
     }
 

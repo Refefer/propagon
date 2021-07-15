@@ -181,10 +181,10 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
     let passes    = value_t!(args, "passes", usize).unwrap_or(100);
     let alpha     = value_t!(args, "alpha", f32).unwrap_or(1f32);
+    let gamma     = value_t!(args, "gamma", f32).unwrap_or(1e-5f32);
     let gradients = value_t!(args, "gradients", usize).unwrap_or(200);
     let children  = value_t!(args, "children", usize).unwrap_or(5);
     let k         = value_t!(args, "k", usize).unwrap_or(100);
-    let pretrain  = args.is_present("pretrain");
     let seed      = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let distribution = match args.value_of("distribution").unwrap_or("normal") {
@@ -198,23 +198,16 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
         distribution,
         passes,
         alpha,
+        gamma,
         gradients,
         children,
         k,
         seed
     };
 
-    let scores = if pretrain {
-        let mut btm = lr::BtmLr::new(3, 1., 1e-5, false);
-        btm.update(&games);
-        Some(btm.scores)
-    } else {
-        None
-    };
-
     // Load priors
-    let rums = esrum.fit(games.into_iter(), scores);
-    emit_scores(rums.into_iter().map(|(k, v)| (k, format!("{:.4} {:.4}", v[0], v[1]))));
+    let rums = esrum.fit(games.into_iter());
+    emit_scores(rums.into_iter().map(|(k, v)| (k, format!("{:.5} {:.5}", v[0], v[1]))));
 }
 
 
@@ -1077,27 +1070,28 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("alpha")
                  .long("alpha")
                  .takes_value(true)
-                 .help("Learning rate for the gradient-free step"))
+                 .help("Learning rate for the gradient-free step.  Default is 1"))
+            .arg(Arg::with_name("gamma")
+                 .long("gamma")
+                 .takes_value(true)
+                 .help("Regularization on the distribution scores.  Default is 1e-5"))
             .arg(Arg::with_name("gradients")
                  .long("gradients")
                  .takes_value(true)
-                 .help("Number of search gradients to perform each pass"))
+                 .help("Number of search gradients to perform on each alternative.  Default is 200"))
             .arg(Arg::with_name("children")
                  .long("children")
                  .takes_value(true)
-                 .help("Number of children to use for the Evolutionary Strategies update"))
+                 .help("Number of children to use for the Evolutionary Strategies update.  Default is 5"))
             .arg(Arg::with_name("k")
                  .long("k")
                  .takes_value(true)
-                 .help("Number of samples for the montecarlo PDF estimate"))
+                 .help("Number of samples for the montecarlo PDF estimate.  Default is 100"))
             .arg(Arg::with_name("distribution")
                  .long("distribution")
                  .takes_value(true)
                  .possible_values(&["normal", "fixed-normal", "beta", "gamma"])
-                 .help("Distribution for each parameter to fit to."))
-            .arg(Arg::with_name("pretrain")
-                 .long("pretrain")
-                 .help("If enabled, fits a bradley-terry model first to get relative ordering"))
+                 .help("Distribution for each parameter to fit to.  Default is normal"))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
