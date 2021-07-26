@@ -30,6 +30,12 @@ Implements the glicko2 ranking system for pairs of teams.  Generally provides go
 
 Outputs a ranking score per node where higher is better.
 
+#### ES-RUM
+
+Uses evolutionary strategies to estimate the Random Utility Model for each alternative.  Since RUMs lack identifiability, the distributions should be treated relative to each other only.
+
+Outputs distribution parameters for each node, unordered.
+
 #### Rate
 
 Computes rankings based on win/loss record, ignoring relative strength of the opponent.  This should only ever be used as a baseline since the above methods will almost certainly work better in nearly all cases.
