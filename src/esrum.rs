@@ -15,10 +15,6 @@ use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
 use rand_distr::{Distribution as Dist,Gamma,Normal,Beta};
 use float_ord::FloatOrd;
-use thread_local::ThreadLocal;
-
-use crate::lr::BtmLr;
-
 
 #[derive(Debug)]
 pub enum Distribution {
@@ -109,6 +105,9 @@ pub struct EsRum {
     // Regularization for distributions
     pub gamma: f32,
 
+    // Samples a fraction of pairs for each MC
+    //pub sample: f32,
+
     // Random Seed
     pub seed: u64
 }
@@ -130,36 +129,34 @@ impl EsRum {
             let mut l_idx = *vocab.entry(loser).or_insert_with(||{  n_vocab += 1; n_vocab - 1 });
 
             let margin = margin as usize;
-            let is_win = if w_idx > l_idx {
-                true
-            } else {
-                std::mem::swap(&mut l_idx, &mut w_idx);
-                false
-            };
             // Add bi-directional
             {
                 let w = graph.entry(w_idx.clone()).or_insert_with(|| HashMap::new());
                 let s = w.entry(l_idx.clone()).or_insert((0, 0));
 
-                if is_win { s.0 += margin; }
+                s.0 += margin;
                 s.1 += margin;
             }
 
             // Add loser relationship
             {
-                let l = graph.entry(l_idx.clone()).or_insert_with(|| HashMap::new());
-                let s = l.entry(w_idx.clone()).or_insert((0, 0));
+                let l = graph.entry(l_idx).or_insert_with(|| HashMap::new());
+                let s = l.entry(w_idx).or_insert((0, 0));
 
-                if !is_win { s.0 += margin; }
                 s.1 += margin;
             }
         });
         eprintln!("Total nodes: {}", n_vocab);
 
         // Flatten
+        let mut n_edges = 0usize;
         let graph: HashMap<_,_> = graph.into_iter().map(|(w, sg)| {
-            (w, sg.into_iter().collect::<Vec<_>>())
+            let arr = sg.into_iter().collect::<Vec<_>>();
+            n_edges += arr.len();
+            (w, arr)
         }).collect();
+
+        eprintln!("Total comparisons: {}", n_edges);
 
         let mut rng = XorShiftRng::seed_from_u64(self.seed);
         
@@ -190,7 +187,6 @@ impl EsRum {
         let mut samples = vec![vec![0f32; self.k]; n_vocab];
 
         for it in 0..self.passes {
-            //let sigma = (self.alpha / (2. + it as f32).ln()).min(self.alpha);
             let sigma = self.alpha * 0.99f32.powf(it as f32);
             let updated = AtomicUsize::new(0);
 
@@ -206,6 +202,7 @@ impl EsRum {
                 let mut new_policy = arr.clone();
                 let normal = Normal::new(0f32, sigma).unwrap();
                 let mut rng = XorShiftRng::seed_from_u64(self.seed + (c_idx + (it + 1) * self.gradients) as u64);
+                //
                 // Randomize gradients and compute
                 let comps = &graph[&c_idx].as_slice();
                 grads.iter_mut().for_each(|(fit, g)| {
@@ -221,7 +218,7 @@ impl EsRum {
 
                 // Combine into new policy
                 new_policy.par_iter_mut().enumerate().for_each(|(p_idx, pi)| {
-                    *pi += grads[..self.children].iter().zip(weights.iter()).map(|((_, g), wi)| {
+                    *pi += grads.iter().take(self.children).zip(weights.iter()).map(|((_, g), wi)| {
                         wi * (g[p_idx] - *pi)
                     }).sum::<f32>();
                 });
@@ -258,6 +255,20 @@ impl EsRum {
         }).collect()
     }
 
+    fn kemeny_loss(&self, o_wins: usize, o_n: usize, s_wins: usize, s_n: usize) -> f32 {
+        // Add inversion loss
+        let o_rate = o_wins as f32 / o_n as f32;
+        let s_rate = s_wins as f32 / s_n as f32;
+
+        if s_rate > 0.5 && o_rate > 0.5 {
+            (o_n - o_wins) as f32
+        } else if s_rate < 0.5 && o_rate < 0.5 {
+            o_wins as f32
+        } else {
+            (o_wins).max(o_n - o_wins) as f32
+        }
+    }
+
     fn score(&self, dist: &[f32], graph: &[(usize, (usize, usize))], samples: &[Vec<f32>], pass: usize) -> f32 {
         let cd = self.distribution.create(dist[0], dist[1]);
         let mut rng = XorShiftRng::seed_from_u64(self.seed + pass as u64);
@@ -269,7 +280,9 @@ impl EsRum {
 
             // Scale MSE by the number of comparisons
             let fitness = *n as f32 * (s_wins as f32 / self.k as f32 - *wins as f32 / *n as f32).powi(2);
-            fitness + self.gamma * (samples[*o_idx][0].powf(2.) + samples[*o_idx][1].powf(2.)).powf(0.5)
+            let smooth_fit = fitness + self.gamma * samples[*o_idx][0].powf(2.) / *n as f32;
+
+            smooth_fit + self.kemeny_loss(*wins, *n, s_wins, self.k)
         }).sum::<f32>() / graph.len() as f32
     }
 

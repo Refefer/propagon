@@ -84,8 +84,12 @@ fn emit_scores<K: Display, V: Display>(it: impl Iterator<Item=(K,V)>) {
     use std::io::{BufWriter,stdout,Write};
     let stdout = stdout();
     let mut handle = BufWriter::new(stdout.lock());
-    for (id, s) in it {
-        write!(handle, "{}: {}\n", id, s)
+    for (idx, (id, s)) in it.enumerate() {
+        if idx > 0 {
+            write!(handle, "\n")
+                .expect("Error when writing out results!");
+        }
+        write!(handle, "{}: {}", id, s)
             .expect("Error when writing out results!");
     }
 }
@@ -179,11 +183,11 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 }
 
 fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
-    let passes    = value_t!(args, "passes", usize).unwrap_or(100);
+    let passes    = value_t!(args, "passes", usize).unwrap_or(10);
     let alpha     = value_t!(args, "alpha", f32).unwrap_or(1f32);
-    let gamma     = value_t!(args, "gamma", f32).unwrap_or(1e-5f32);
-    let gradients = value_t!(args, "gradients", usize).unwrap_or(200);
-    let children  = value_t!(args, "children", usize).unwrap_or(5);
+    let gamma     = value_t!(args, "gamma", f32).unwrap_or(1e-3f32);
+    let gradients = value_t!(args, "gradients", usize).unwrap_or(20);
+    let children  = value_t!(args, "children", usize).unwrap_or(3);
     let k         = value_t!(args, "k", usize).unwrap_or(100);
     let seed      = value_t!(args, "seed", u64).unwrap_or(2019);
 
@@ -207,9 +211,8 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
 
     // Load priors
     let rums = esrum.fit(games.into_iter());
-    emit_scores(rums.into_iter().map(|(k, v)| (k, format!("{:.5} {:.5}", v[0], v[1]))));
+    emit_scores(rums.into_iter().map(|(k, v)| (k, format!("{:.6} {:.6}", v[0], v[1]))));
 }
-
 
 fn page_rank(args: &&clap::ArgMatches<'_>, games: Games) {
     let iterations = value_t!(args, "iterations", usize).unwrap_or(10);
