@@ -186,6 +186,7 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
     let passes    = value_t!(args, "passes", usize).unwrap_or(10);
     let alpha     = value_t!(args, "alpha", f32).unwrap_or(1f32);
     let gamma     = value_t!(args, "gamma", f32).unwrap_or(1e-3f32);
+    let smoothing = value_t!(args, "smoothing", usize).unwrap_or(0);
     let gradients = value_t!(args, "gradients", usize).unwrap_or(20);
     let children  = value_t!(args, "children", usize).unwrap_or(3);
     let k         = value_t!(args, "k", usize).unwrap_or(100);
@@ -203,6 +204,7 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
         passes,
         alpha,
         gamma,
+        smoothing,
         gradients,
         children,
         k,
@@ -1078,6 +1080,10 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("gamma")
                  .takes_value(true)
                  .help("Regularization on the distribution scores.  Default is 1e-5"))
+            .arg(Arg::with_name("smoothing")
+                 .long("smoothing")
+                 .takes_value(true)
+                 .help("Adds a smoothing function to the empirical success rates."))
             .arg(Arg::with_name("gradients")
                  .long("gradients")
                  .takes_value(true)

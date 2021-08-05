@@ -67,7 +67,6 @@ impl Distribution {
     fn bound(&self, a: &mut f32, b: &mut f32) {
         match self {
             Distribution::Gaussian => {
-                *a = Distribution::sigmoid(*a);
                 *b = Distribution::sigmoid(*b);
             },
             Distribution::FixedNormal => {
@@ -105,8 +104,8 @@ pub struct EsRum {
     // Regularization for distributions
     pub gamma: f32,
 
-    // Samples a fraction of pairs for each MC
-    //pub sample: f32,
+    // Smoothing
+    pub smoothing: usize,
 
     // Random Seed
     pub seed: u64
@@ -125,8 +124,8 @@ impl EsRum {
         let mut n_vocab = 0usize;
         graph_iter.for_each(|(winner, loser, margin)| {
             // Numbers are better
-            let mut w_idx = *vocab.entry(winner).or_insert_with(||{ n_vocab += 1; n_vocab - 1 });
-            let mut l_idx = *vocab.entry(loser).or_insert_with(||{  n_vocab += 1; n_vocab - 1 });
+            let w_idx = *vocab.entry(winner).or_insert_with(||{ n_vocab += 1; n_vocab - 1 });
+            let l_idx = *vocab.entry(loser).or_insert_with(|| { n_vocab += 1; n_vocab - 1 });
 
             let margin = margin as usize;
             // Add bi-directional
@@ -151,7 +150,9 @@ impl EsRum {
         // Flatten
         let mut n_edges = 0usize;
         let graph: HashMap<_,_> = graph.into_iter().map(|(w, sg)| {
-            let arr = sg.into_iter().collect::<Vec<_>>();
+            let arr = sg.into_iter()
+                .map(|(l, (w, n))| (l, (w + self.smoothing, n + self.smoothing * 2)))
+                .collect::<Vec<_>>();
             n_edges += arr.len();
             (w, arr)
         }).collect();
@@ -197,19 +198,19 @@ impl EsRum {
                 pulls.iter_mut().for_each(|pi| *pi = cd.sample(&mut rng));
             });
 
+            let normal = Normal::new(0f32, sigma).unwrap();
             let new_policy: Vec<_> = policy.par_iter().enumerate().map(|(c_idx, arr)| {
                 let mut grads = vec![(0f32, [0f32, 0f32]); self.gradients];
                 let mut new_policy = arr.clone();
-                let normal = Normal::new(0f32, sigma).unwrap();
-                let mut rng = XorShiftRng::seed_from_u64(self.seed + (c_idx + (it + 1) * self.gradients) as u64);
-                //
-                // Randomize gradients and compute
+                let seed = self.seed + (c_idx + (it + 1) * self.gradients) as u64;
+                
+                // Create search gradients and compute fitness scores for each
                 let comps = &graph[&c_idx].as_slice();
-                grads.iter_mut().for_each(|(fit, g)| {
+                grads.par_iter_mut().enumerate().for_each(|(g_idx, (fit, g))| {
+                    let mut rng = XorShiftRng::seed_from_u64(seed + g_idx as u64);
                     g.iter_mut().zip(new_policy.iter()).for_each(|(vi, pi)| { 
                         *vi = normal.sample(&mut rng) + *pi; 
                     });
-
                     *fit = self.score(g as &[f32], comps, samples.as_slice(), it + c_idx);
                 });
 
@@ -273,14 +274,17 @@ impl EsRum {
         let cd = self.distribution.create(dist[0], dist[1]);
         let mut rng = XorShiftRng::seed_from_u64(self.seed + pass as u64);
         let cd_dist: Vec<_> = (0..self.k).map(|_| cd.sample(&mut rng)).collect();
-        graph.par_iter().enumerate().map(|(idx, (o_idx, (wins, n)))| {
+        graph.par_iter().map(|(o_idx, (wins, n))| {
             let s_wins = cd_dist.iter().zip(samples[*o_idx].iter())
                 .map(|(w,l)| (w > l) as usize)
                 .sum::<usize>();
 
-            // Scale MSE by the number of comparisons
-            let fitness = *n as f32 * (s_wins as f32 / self.k as f32 - *wins as f32 / *n as f32).powi(2);
-            let smooth_fit = fitness + self.gamma * samples[*o_idx][0].powf(2.) / *n as f32;
+            // Wasserstein
+            let fitness = (s_wins as f32 / self.k as f32 - *wins as f32 / *n as f32).abs();
+
+        
+            // penalize the distance from 0
+            let smooth_fit = fitness + self.gamma * samples[*o_idx][0].powf(2.);
 
             smooth_fit + self.kemeny_loss(*wins, *n, s_wins, self.k)
         }).sum::<f32>() / graph.len() as f32
@@ -296,3 +300,4 @@ impl EsRum {
     }
 
 }
+

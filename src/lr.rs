@@ -3,6 +3,7 @@ extern crate rayon;
 extern crate hashbrown;
 
 use rayon::prelude::*;
+use indicatif::{ProgressBar,ProgressStyle};
 
 use hashbrown::HashMap;
 
@@ -58,12 +59,24 @@ impl BtmLr {
         *e -= l_g;
     }
 
+    fn create_pb(&self, total_work: u64) -> ProgressBar {
+        let pb = ProgressBar::new(total_work);
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
+        pb.enable_steady_tick(200);
+        pb.set_draw_delta(total_work as u64 / 1000);
+        pb
+    }
+
     pub fn update(&mut self, games: &Games) {
 
         let weights: f32 = games.par_iter().map(|(_,_,w)| w).sum();
         let mut grads = vec![(0u32, 0f32); games.len() * 2];
+        let pb = self.create_pb(self.passes as u64);
+        let mut msg = "Pass: 0".into();
         for it in 0..self.passes {
-            eprintln!("Iteration: {}", it);
+            msg = format!("Pass: {}/{}", it+1, self.passes);
+            pb.set_message(&msg);
 
             if self.thrifty {
                 // No parallel updates; compute weights on the fly, which
@@ -100,9 +113,11 @@ impl BtmLr {
                     *entry -= g;
                 }
             }
+            pb.inc(1);
 
             // Normalize the weights
             self.norm();
         }
+        pb.finish();
     }
 }
