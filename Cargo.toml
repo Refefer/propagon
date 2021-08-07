@@ -16,6 +16,7 @@ thread_local = "1.0.0"
 indicatif = "0.13.0"
 float-ord = "0.2.0"
 ahash = "0.6.1"
+statrs = " 0.15.0"
 
 [dependencies.hashbrown]
 version = "0.9.1"

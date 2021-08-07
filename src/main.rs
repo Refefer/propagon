@@ -183,7 +183,7 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 }
 
 fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
-    let passes    = value_t!(args, "passes", usize).unwrap_or(10);
+    let passes    = value_t!(args, "passes", usize).unwrap_or(100);
     let alpha     = value_t!(args, "alpha", f32).unwrap_or(1f32);
     let gamma     = value_t!(args, "gamma", f32).unwrap_or(1e-3f32);
     let smoothing = value_t!(args, "smoothing", usize).unwrap_or(0);
@@ -192,11 +192,10 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
     let k         = value_t!(args, "k", usize).unwrap_or(100);
     let seed      = value_t!(args, "seed", u64).unwrap_or(2019);
 
-    let distribution = match args.value_of("distribution").unwrap_or("normal") {
-        "normal"       => esrum::Distribution::Gaussian,
-        "fixed-normal" => esrum::Distribution::FixedNormal,
-        "beta"         => esrum::Distribution::Beta,
-        _              => esrum::Distribution::Gamma,
+    let distribution = if args.is_present("fixed") {
+        esrum::Distribution::FixedNormal
+    } else {
+        esrum::Distribution::Gaussian
     };
 
     let esrum = esrum::EsRum {
@@ -1096,11 +1095,9 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("k")
                  .takes_value(true)
                  .help("Number of samples for the montecarlo PDF estimate.  Default is 100"))
-            .arg(Arg::with_name("distribution")
-                 .long("distribution")
-                 .takes_value(true)
-                 .possible_values(&["normal", "fixed-normal", "beta", "gamma"])
-                 .help("Distribution for each parameter to fit to.  Default is normal"))
+            .arg(Arg::with_name("fixed")
+                 .long("fixed")
+                 .help("If set, fixes the variance for each distribution to 1, only learning mu."))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)
