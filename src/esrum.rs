@@ -48,26 +48,14 @@ pub struct EsRum {
     // Distribution to model RUM after
     pub distribution: Distribution,
 
-    // Number of draws per distribution
-    pub k: usize,
-
     // Number of updates to run
     pub passes: usize, 
    
-    // Number of gradients to evaluate per run
-    pub gradients: usize, 
-    
-    // Number of children to use for offspring
-    pub children: usize, 
-
     // Learning rate for the gradient
     pub alpha: f32,
     
     // Regularization for distributions
     pub gamma: f32,
-
-    // Smoothing
-    pub smoothing: usize,
 
     // Random Seed
     pub seed: u64
@@ -112,9 +100,7 @@ impl EsRum {
         // Flatten
         let mut n_edges = 0usize;
         let graph: HashMap<_,_> = graph.into_iter().map(|(w, sg)| {
-            let arr = sg.into_iter()
-                .map(|(l, (w, n))| (l, (w + self.smoothing, n + self.smoothing * 2)))
-                .collect::<Vec<_>>();
+            let arr = sg.into_iter().collect::<Vec<_>>();
             n_edges += arr.len();
             (w, arr)
         }).collect();
@@ -149,50 +135,18 @@ impl EsRum {
             .map(|_| (0f32, policy.clone()))
             .collect();
 
-        //let decay_rate = ((self.alpha / 100.).ln() / (self.passes as f32)).exp();
+        let decay_rate = ((self.alpha / 100.).ln() / (self.passes as f32)).exp();
         let mut last_loss = self.score_all(policy.as_slice(), &graph);
-        let mut sigma = self.alpha;
+        let mut sigma_group = self.alpha;
+        let mut sigma_indiv = self.alpha;
 
         let mut new_policy = policy.clone();
         for it in 0..self.passes {
-            let normal = Normal::new(0f32, sigma).unwrap();
-
-            new_policy.par_iter_mut().for_each(|arr| {
-                *arr= [0., 0.];
-            });
+            let normal = Normal::new(0f32, sigma_group).unwrap();
             
-            // For each gradient, compute its score
-            gradients.par_iter_mut().enumerate().for_each(|(idx, (fitness, grad))| {
-                
-                // Add noise to the gradient
-                let seed = self.seed + (idx + it * n_gradients) as u64;
-                let mut rng = XorShiftRng::seed_from_u64(seed);
-                grad.iter_mut().zip(policy.iter()).enumerate().for_each(|(idx, (arr, p_arr))| {
-                    let mut n_mu    = p_arr[0] + normal.sample(&mut rng);
-                    let mut n_sigma = p_arr[1] + normal.sample(&mut rng);
-                    *arr = [n_mu, n_sigma];
-                });
+            // Fine tune individuals
+            self.tune_indivs(policy.as_slice(), &graph, new_policy.as_mut_slice(), sigma_indiv, it);
 
-                // Score the gradient
-                *fitness = self.score_all(grad.as_slice(), &graph);
-                pb.inc(1);
-            });
-            
-            // Fitness sort them in ascending order since we are minimizing the objective
-            gradients.sort_by_key(|(f, _g)| FloatOrd(*f));
-
-            // Combine into new policy
-            new_policy.par_iter_mut().enumerate().for_each(|(p_idx, arr)| {
-                let p_arr = policy[p_idx];
-                let mut n_mu = p_arr[0];
-                let mut n_sigma = p_arr[1];
-                gradients.iter().take(n_children).zip(weights.iter()).for_each(|((_, g), wi)| {
-                    n_mu    += wi * (g[p_idx][0] - p_arr[0]);
-                    n_sigma += wi * (g[p_idx][1] - p_arr[1]);
-                });
-                *arr = [n_mu, n_sigma];
-            });
-            
             // Compare old policy to new policy.
             let new_score = self.score_all(new_policy.as_slice(), &graph);
 
@@ -200,21 +154,175 @@ impl EsRum {
                 std::mem::swap(&mut policy, &mut new_policy);
                 last_loss = new_score;
             } else {
-                sigma = (sigma / 2.).max(self.alpha / 100.);
+                sigma_indiv *= decay_rate;
+            }
+ 
+            if last_loss != new_score {
+                // For each gradient, compute its score
+                gradients.par_iter_mut().enumerate().for_each(|(idx, (fitness, grad))| {
+                    
+                    // Add noise to the gradient
+                    let seed = self.seed + (idx + it * n_gradients) as u64;
+                    let mut rng = XorShiftRng::seed_from_u64(seed);
+                    grad.iter_mut().zip(policy.iter()).enumerate().for_each(|(idx, (arr, p_arr))| {
+                        let mut n_mu    = p_arr[0] + normal.sample(&mut rng);
+                        let mut n_sigma = p_arr[1] + normal.sample(&mut rng);
+                        *arr = [n_mu, n_sigma];
+                    });
+
+                    // Score the gradient
+                    *fitness = self.score_all(grad.as_slice(), &graph);
+                    pb.inc(1);
+                });
+                
+                // Fitness sort them in ascending order since we are minimizing the objective
+                gradients.sort_by_key(|(f, _g)| FloatOrd(*f));
+
+                // Combine into new policy
+                new_policy.par_iter_mut().enumerate().for_each(|(p_idx, arr)| {
+                    let p_arr = policy[p_idx];
+                    let mut n_mu = p_arr[0];
+                    let mut n_sigma = p_arr[1];
+                    gradients.iter().take(n_children).zip(weights.iter()).for_each(|((_, g), wi)| {
+                        n_mu    += wi * (g[p_idx][0] - p_arr[0]);
+                        n_sigma += wi * (g[p_idx][1] - p_arr[1]);
+                    });
+                    *arr = [n_mu, n_sigma];
+                });
+                
+                // Compare old policy to new policy.
+                let new_score = self.score_all(new_policy.as_slice(), &graph);
+
+                if new_score < last_loss {
+                    std::mem::swap(&mut policy, &mut new_policy);
+                    last_loss = new_score;
+                } else {
+                    sigma_group *= decay_rate;
+                }
+            } else {
+                pb.inc(gradients.len() as u64);
             }
 
             msg.clear();
-            write!(msg, "Pass: {}, Sigma: {:.3}, Best Fitness: {:.5}, Last Fitness: {:.5}", it + 1, sigma, last_loss, new_score)
+            write!(msg, "Pass: {}, Sigma Ind: {:.3}, Sigma Group: {:.3}, Best: {:.5}, Last: {:.5}", it + 1, sigma_indiv, sigma_group, last_loss, new_score)
                 .expect("Oh my, shouldn't have failed!");
             pb.set_message(&msg);
         }
         pb.finish();
 
-        vocab.into_iter().map(|(k, idx)| {
+        let mut params: HashMap<_,_> = vocab.into_iter().map(|(k, idx)| {
             let [mut a, mut b] = policy[idx];
             self.distribution.bound(&mut a, &mut b);
             (k, [a, b])
-        }).collect()
+        }).collect();
+
+        // Normalize them
+        let [mut min_mu, mut max_sigma] = params.values().next().unwrap().clone();
+        params.values().for_each(|[mu, sigma]| {
+            min_mu = min_mu.min(*mu);
+            max_sigma = max_sigma.max(*sigma);
+        });
+
+        params.values_mut().for_each(|[mu, sigma]| {
+            *mu = (*mu - min_mu) / max_sigma;
+            *sigma /= max_sigma;
+        });
+
+        params
+    }
+
+    fn make_weights(weights: &mut [f32]) {
+        // Compute the decay weights for each child
+        weights.iter_mut().enumerate().for_each(|(idx, wi)| {
+            *wi = 1. / ((idx + 2) as f32).ln();
+        });
+        let s = weights.iter().sum::<f32>();
+        weights.iter_mut().for_each(|wi| { *wi /= s});
+    }
+
+    fn tune_indivs(&self,
+        policy: &[[f32;2]], 
+        graph: &HashMap<usize, Vec<(usize, (usize, usize))>>, 
+        out: &mut [[f32; 2]],
+        sigma: f32,
+        it: usize
+    ) {
+        let mut weights = [0f32, 0f32, 0f32];
+        EsRum::make_weights(&mut weights);
+        let normal = Normal::new(0f32, sigma).unwrap();
+
+        /*
+        out.par_iter_mut().zip(policy.par_iter()).for_each(|(out_arr, in_arr)| {
+            *out_arr = *in_arr;
+        });
+
+        let mut grads = vec![(0f32, [0f32, 0f32]); 20];
+        policy.iter().enumerate().for_each(|(c_idx, arr)| {
+			let seed = self.seed + (c_idx + (it + 1)) as u64;
+            let mut new_policy = out[c_idx].clone();
+            
+            // Create search gradients and compute fitness scores for each
+			let comps = &graph[&c_idx].as_slice();
+			grads.par_iter_mut().enumerate().for_each(|(g_idx, (fit, g))| {
+				let mut rng = XorShiftRng::seed_from_u64(seed + g_idx as u64);
+				g.iter_mut().zip(new_policy.iter()).for_each(|(vi, pi)| { 
+					*vi = normal.sample(&mut rng) + *pi; 
+				});
+				*fit = self.score(g as &[f32], comps, out);
+			}); 
+
+			// Fitness sort them in ascending order
+			grads.sort_by_key(|(f, _g)| FloatOrd(*f));
+
+			// Combine into new policy
+			new_policy.par_iter_mut().enumerate().for_each(|(p_idx, pi)| {
+				*pi += grads.iter().take(3).zip(weights.iter()).map(|((_, g), wi)| {
+					wi * (g[p_idx] - *pi)
+				}).sum::<f32>();
+			}); 
+
+			// Re-bound distribution
+			let old_score = self.score(arr as &[f32], comps, out);
+			let new_score = self.score(&new_policy as &[f32], comps, out);
+
+			if new_score < old_score {
+			    out[c_idx] = new_policy;
+			}
+        });
+        */
+
+		policy.par_iter().zip(out.par_iter_mut()).enumerate().for_each(|(c_idx, (arr, new_policy))| {
+			let mut grads = vec![(0f32, [0f32, 0f32]); 20];
+			let seed = self.seed + (c_idx + (it + 1)) as u64;
+				 
+			// Create search gradients and compute fitness scores for each
+			let comps = &graph[&c_idx].as_slice();
+			grads.par_iter_mut().enumerate().for_each(|(g_idx, (fit, g))| {
+				let mut rng = XorShiftRng::seed_from_u64(seed + g_idx as u64);
+				g.iter_mut().zip(new_policy.iter()).for_each(|(vi, pi)| { 
+					*vi = normal.sample(&mut rng) + *pi; 
+				});
+				*fit = self.score(g as &[f32], comps, policy);
+			}); 
+
+			// Fitness sort them in ascending order
+			grads.sort_by_key(|(f, _g)| FloatOrd(*f));
+
+			// Combine into new policy
+			new_policy.par_iter_mut().enumerate().for_each(|(p_idx, pi)| {
+				*pi += grads.iter().take(3).zip(weights.iter()).map(|((_, g), wi)| {
+					wi * (g[p_idx] - *pi)
+				}).sum::<f32>();
+			}); 
+
+			// Re-bound distribution
+			let old_score = self.score(arr as &[f32], comps, policy);
+			let new_score = self.score(new_policy as &[f32], comps, policy);
+
+			if new_score > old_score {
+			    *new_policy = arr.clone()
+			}
+		});
     }
 
     fn create_initial_policy(&self, graph: &HashMap<usize, Vec<(usize, (usize, usize))>>) -> Vec<[f32; 2]> {
