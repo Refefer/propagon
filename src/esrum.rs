@@ -56,6 +56,9 @@ pub struct EsRum {
     
     // Regularization for distributions
     pub gamma: f32,
+    
+    // Regularization for distributions
+    pub min_obs: usize,
 
     // Random Seed
     pub seed: u64
@@ -210,11 +213,15 @@ impl EsRum {
         }
         pb.finish();
 
-        let mut params: HashMap<_,_> = vocab.into_iter().map(|(k, idx)| {
-            let [mut a, mut b] = policy[idx];
-            self.distribution.bound(&mut a, &mut b);
-            (k, [a, b])
-        }).collect();
+        let mut params: HashMap<_,_> = vocab.into_iter()
+            .filter(|(k, idx)| {
+                graph[idx].iter().map(|(_, (_, n))| n).sum::<usize>() >= self.min_obs
+            })
+            .map(|(k, idx)| {
+                let [mut a, mut b] = policy[idx];
+                self.distribution.bound(&mut a, &mut b);
+                (k, [a, b])
+            }).collect();
 
         // Normalize them
         let [mut min_mu, mut max_sigma] = params.values().next().unwrap().clone();
@@ -250,46 +257,6 @@ impl EsRum {
         let mut weights = [0f32, 0f32, 0f32];
         EsRum::make_weights(&mut weights);
         let normal = Normal::new(0f32, sigma).unwrap();
-
-        /*
-        out.par_iter_mut().zip(policy.par_iter()).for_each(|(out_arr, in_arr)| {
-            *out_arr = *in_arr;
-        });
-
-        let mut grads = vec![(0f32, [0f32, 0f32]); 20];
-        policy.iter().enumerate().for_each(|(c_idx, arr)| {
-			let seed = self.seed + (c_idx + (it + 1)) as u64;
-            let mut new_policy = out[c_idx].clone();
-            
-            // Create search gradients and compute fitness scores for each
-			let comps = &graph[&c_idx].as_slice();
-			grads.par_iter_mut().enumerate().for_each(|(g_idx, (fit, g))| {
-				let mut rng = XorShiftRng::seed_from_u64(seed + g_idx as u64);
-				g.iter_mut().zip(new_policy.iter()).for_each(|(vi, pi)| { 
-					*vi = normal.sample(&mut rng) + *pi; 
-				});
-				*fit = self.score(g as &[f32], comps, out);
-			}); 
-
-			// Fitness sort them in ascending order
-			grads.sort_by_key(|(f, _g)| FloatOrd(*f));
-
-			// Combine into new policy
-			new_policy.par_iter_mut().enumerate().for_each(|(p_idx, pi)| {
-				*pi += grads.iter().take(3).zip(weights.iter()).map(|((_, g), wi)| {
-					wi * (g[p_idx] - *pi)
-				}).sum::<f32>();
-			}); 
-
-			// Re-bound distribution
-			let old_score = self.score(arr as &[f32], comps, out);
-			let new_score = self.score(&new_policy as &[f32], comps, out);
-
-			if new_score < old_score {
-			    out[c_idx] = new_policy;
-			}
-        });
-        */
 
 		policy.par_iter().zip(out.par_iter_mut()).enumerate().for_each(|(c_idx, (arr, new_policy))| {
 			let mut grads = vec![(0f32, [0f32, 0f32]); 20];
@@ -350,19 +317,6 @@ impl EsRum {
         });
 
         policy
-    }
-
-    fn n_kemeny_loss(&self, o_wins: usize, o_n: usize, s_rate: f32) -> f32 {
-        // Add inversion loss
-        let o_rate = o_wins as f32 / o_n as f32;
-
-        if s_rate > 0.5 && o_rate > 0.5 {
-            0f32
-        } else if s_rate < 0.5 && o_rate < 0.5 {
-            0f32
-        } else {
-            1f32
-        }
     }
 
     fn score_all(&self, policy: &[[f32; 2]], graph: &HashMap<usize, Vec<(usize, (usize, usize))>>) -> f32 {

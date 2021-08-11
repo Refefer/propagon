@@ -183,10 +183,11 @@ fn btm_lr(args: &&clap::ArgMatches<'_>, games: Vec<Games>) {
 }
 
 fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
-    let passes = value_t!(args, "passes", usize).unwrap_or(100);
-    let alpha  = value_t!(args, "alpha", f32).unwrap_or(1f32);
-    let gamma  = value_t!(args, "gamma", f32).unwrap_or(1e-3f32);
-    let seed   = value_t!(args, "seed", u64).unwrap_or(2019);
+    let passes  = value_t!(args, "passes", usize).unwrap_or(100);
+    let alpha   = value_t!(args, "alpha", f32).unwrap_or(1f32);
+    let gamma   = value_t!(args, "gamma", f32).unwrap_or(1e-3f32);
+    let min_obs = value_t!(args, "min-observations", usize).unwrap_or(1);
+    let seed    = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let distribution = if args.is_present("fixed") {
         esrum::Distribution::FixedNormal
@@ -199,6 +200,7 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
         passes,
         alpha,
         gamma,
+        min_obs,
         seed
     };
 
@@ -1071,6 +1073,10 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("gamma")
                  .takes_value(true)
                  .help("Regularization on the distribution scores.  Default is 1e-5"))
+            .arg(Arg::with_name("min-observations")
+                 .long("min-obs")
+                 .takes_value(true)
+                 .help("Only emits scores observed more than K times.  Default is 1"))
             .arg(Arg::with_name("fixed")
                  .long("fixed")
                  .help("If set, fixes the variance for each distribution to 1, only learning mu."))
