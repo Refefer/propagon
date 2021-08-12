@@ -21,6 +21,7 @@ mod he;
 mod cc;
 mod cluster_strat;
 mod esrum;
+mod kemeny;
 
 mod utils;
 
@@ -207,6 +208,18 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
     // Load priors
     let rums = esrum.fit(games.into_iter());
     emit_scores(rums.into_iter().map(|(k, v)| (k, format!("{:.6} {:.6}", v[0], v[1]))));
+}
+
+fn kemeny(args: &&clap::ArgMatches<'_>, games: Games) {
+    let passes  = value_t!(args, "passes", usize).unwrap_or(1);
+    let kemeny = kemeny::Kemeny {
+        passes: passes
+    };
+
+    // Load priors
+    let ranked = kemeny.fit(games.into_iter());
+    let n_items = ranked.len();
+    emit_scores(ranked.into_iter().enumerate().map(|(idx, item)| (item, n_items - idx)));
 }
 
 fn page_rank(args: &&clap::ArgMatches<'_>, games: Games) {
@@ -1085,6 +1098,14 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .takes_value(true)
                  .help("Random seed to use.")))
 
+        .subcommand(SubCommand::with_name("kemeny")
+            .arg(Arg::with_name("passes")
+                 .long("passes")
+                 .takes_value(true)
+                 .help("Number of passes.  Default is 1."))
+
+            .about("Optimizes a Kemeny ranking for the provided pairs"))
+
         .subcommand(SubCommand::with_name("extract-components")
             .about("Extracts fully connected components from a graph and writes them to separate files")
             .arg(Arg::with_name("min-graph-size")
@@ -1145,6 +1166,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("es-rum") {
                 let all_games = games.into_iter().flatten().collect();
                 es_rum(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("kemeny") {
+                let all_games = games.into_iter().flatten().collect();
+                kemeny(sub_args, all_games);
             } else if let Some(ref sub_args) = args.subcommand_matches("page-rank") {
                 let all_games = games.into_iter().flatten().collect();
                 page_rank(sub_args, all_games);
