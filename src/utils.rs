@@ -105,68 +105,6 @@ where K: Hash + Eq,
     }
 }
 
-#[cfg(test)]
-mod test_utils {
-    use super::*;
-    use crate::vp::Embedding;
-
-    #[test]
-    fn test_update_prior() {
-        let matches: HashMap<usize, f32> = vec![
-            (1, 1.0),
-            (2, 0.8),
-            (3, 0.3),
-        ].into_iter().collect();
-
-        let ctx = 0;
-
-        let prior: HashMap<usize, _> = vec![
-            (0, Embedding(vec![(3, 1.), (2, 0.8), (1, 0.3)]))
-        ].into_iter().collect();
-
-        let mut t1 = matches.clone();
-        update_prior(&mut t1, &ctx, &prior, 0.5, false);
-
-        let expected = vec![(1, 0.65), (2, 0.8), (3, 0.65)].into_iter().collect();
-
-        assert_eq!(t1, expected);
-
-        let mut t2 = matches.clone();
-        update_prior(&mut t2, &ctx, &prior, 0.9, false);
-
-        let expected = vec![(1, 1. * 0.9 + 0.3 * (1. - 0.9)), 
-                            (2, 0.8), 
-                            (3, 0.3*0.9 + 1. * (1. - 0.9))].into_iter().collect();
-
-        assert_eq!(t2, expected);
-
-    }
-
-    #[test]
-    fn test_l2_norm_hm() {
-
-        let mut matches: HashMap<usize, f32> = vec![
-            (1, 1.0),
-            (2, 0.8),
-            (3, 0.3),
-        ].into_iter().collect();
-
-        let denom = (1f32.powi(2) + (0.8f32).powi(2) + (0.3f32).powi(2)).powf(0.5);
-        let expected: HashMap<_,_> = vec![(1, 1.  / denom), 
-                            (2, 0.8 / denom), 
-                            (3, 0.3 / denom)].into_iter().collect();
-
-        l2_norm_hm(&mut matches);
-
-        for (k, v) in matches {
-            let v2 = expected[&k];
-            println!("{},{}", v, v2);
-            assert!((v - v2).abs() < 1e-5);
-        }
-    }
-
-}
-
 pub fn unweighted_walk_distance<'a, K: Hash + Eq>(
     edges: &'a HashMap<K, Vec<(K,f32)>>,
     start_node: &'a K
@@ -281,5 +219,63 @@ mod test_utils {
         assert_eq!(distances[&5], 2.);
 
     }
+
+    use crate::vp::Embedding;
+
+    #[test]
+    fn test_update_prior() {
+        let matches: HashMap<usize, f32> = vec![
+            (1, 1.0),
+            (2, 0.8),
+            (3, 0.3),
+        ].into_iter().collect();
+
+        let ctx = 0;
+
+        let prior: HashMap<usize, _> = vec![
+            (0, Embedding(vec![(3, 1.), (2, 0.8), (1, 0.3)]))
+        ].into_iter().collect();
+
+        let mut t1 = matches.clone();
+        update_prior(&mut t1, &ctx, &prior, 0.5, false);
+
+        let expected = vec![(1, 0.65), (2, 0.8), (3, 0.65)].into_iter().collect();
+
+        assert_eq!(t1, expected);
+
+        let mut t2 = matches.clone();
+        update_prior(&mut t2, &ctx, &prior, 0.9, false);
+
+        let expected = vec![(1, 1. * 0.9 + 0.3 * (1. - 0.9)), 
+                            (2, 0.8), 
+                            (3, 0.3*0.9 + 1. * (1. - 0.9))].into_iter().collect();
+
+        assert_eq!(t2, expected);
+
+    }
+
+    #[test]
+    fn test_l2_norm_hm() {
+
+        let mut matches: HashMap<usize, f32> = vec![
+            (1, 1.0),
+            (2, 0.8),
+            (3, 0.3),
+        ].into_iter().collect();
+
+        let denom = (1f32.powi(2) + (0.8f32).powi(2) + (0.3f32).powi(2)).powf(0.5);
+        let expected: HashMap<_,_> = vec![(1, 1.  / denom), 
+                            (2, 0.8 / denom), 
+                            (3, 0.3 / denom)].into_iter().collect();
+
+        l2_norm_hm(&mut matches);
+
+        for (k, v) in matches {
+            let v2 = expected[&k];
+            println!("{},{}", v, v2);
+            assert!((v - v2).abs() < 1e-5);
+        }
+    }
+
 
 }

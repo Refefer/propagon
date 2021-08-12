@@ -304,7 +304,10 @@ mod test_de {
             f: (0.1, 1.),
             cr: 0.9,
             m: 0.1,
-            exp: 3.
+            exp: 3.,
+            polish_on_stale: 0,
+            restart_on_stale: 0,
+            range: 1.
         };
 
         let fit_fn = MatyasEnv(-10., 10.);
