@@ -211,9 +211,19 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn kemeny(args: &&clap::ArgMatches<'_>, games: Games) {
-    let passes  = value_t!(args, "passes", usize).unwrap_or(1);
+    let passes  = value_t!(args, "passes", usize);
+    let min_obs = value_t!(args, "min-obs", usize).unwrap_or(1);
+    let algo    = value_t!(args, "algo", String).unwrap_or("insertion".into());
+
+    let (algo, passes) = match algo.as_ref() {
+        "insertion" => (kemeny::Algorithm::Insertion, passes.unwrap_or(1)),
+        _           => (kemeny::Algorithm::DiffEvo, passes.unwrap_or(50000)),
+    };
+
     let kemeny = kemeny::Kemeny {
-        passes: passes
+        passes: passes,
+        algo: algo,
+        min_obs: min_obs
     };
 
     // Load priors
@@ -1099,12 +1109,22 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .help("Random seed to use.")))
 
         .subcommand(SubCommand::with_name("kemeny")
+            .about("Optimizes a Kemeny ranking for the provided pairs")
             .arg(Arg::with_name("passes")
                  .long("passes")
                  .takes_value(true)
-                 .help("Number of passes.  Default is 1."))
-
-            .about("Optimizes a Kemeny ranking for the provided pairs"))
+                 .help("Number of passes, dependent on algorithm.  If 'insertion' is used, 
+                        it is the number of refinements we run (roughly O(K*N^2)) - default is 1.  
+                        If 'de' is used, passes is the number of function calls to run.  Default is 50,000."))
+            .arg(Arg::with_name("min-obs")
+                 .long("min-obs")
+                 .takes_value(true)
+                 .help("Only omits alternatives with at least K appearances.  Default is 1"))
+            .arg(Arg::with_name("algo")
+                 .long("algo")
+                 .takes_value(true)
+                 .possible_values(&["insertion", "de"])
+                 .help("Algorithm to optimize with.  Default is 'insertion'.")))
 
         .subcommand(SubCommand::with_name("extract-components")
             .about("Extracts fully connected components from a graph and writes them to separate files")

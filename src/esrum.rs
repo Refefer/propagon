@@ -223,7 +223,8 @@ impl EsRum {
                 (k, [a, b])
             }).collect();
 
-        // Normalize them
+        // Normalize the distributions since scale parameters are free to
+        // adjust without changes to the utility models
         let [mut min_mu, mut max_sigma] = params.values().next().unwrap().clone();
         params.values().for_each(|[mu, sigma]| {
             min_mu = min_mu.min(*mu);
