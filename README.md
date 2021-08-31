@@ -36,6 +36,10 @@ Uses evolutionary strategies to estimate the Random Utility Model for each alter
 
 Outputs distribution parameters for each node, unordered.
 
+#### Kemeny
+
+Computs the kemeny rank for the provided pairs, minimizing disagreements.  This is also the MLE for true preferences.
+
 #### Rate
 
 Computes rankings based on win/loss record, ignoring relative strength of the opponent.  This should only ever be used as a baseline since the above methods will almost certainly work better in nearly all cases.
