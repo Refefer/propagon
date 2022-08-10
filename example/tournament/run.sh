@@ -12,8 +12,11 @@ propagon baseball.2018.btm-mm hydrate --vocab baseball.2018.vocab > scores.btm-m
 propagon baseball.2018.edges btm-lr > baseball.2018.btm-lr
 propagon baseball.2018.btm-lr hydrate --vocab baseball.2018.vocab > scores.btm-lr
 
-propagon baseball.2018.edges rate > baseball.2018.rate
+propagon baseball.2018.edges rate --confidence-interval 0.9 > baseball.2018.rate
 propagon baseball.2018.rate hydrate --vocab baseball.2018.vocab > scores.rate
 
 propagon baseball.2018.edges es-rum > baseball.2018.es-rum
 propagon baseball.2018.es-rum hydrate --vocab baseball.2018.vocab > scores.es-rum
+
+propagon baseball.2018.edges kemeny --passes 5 > baseball.2018.kemeny
+propagon baseball.2018.kemeny hydrate --vocab baseball.2018.vocab > scores.kemeny
