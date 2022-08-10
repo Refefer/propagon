@@ -84,44 +84,19 @@ fn emit_scores<K: Display, V: Display>(it: impl Iterator<Item=(K,V)>) {
 
 // computes the Action rates
 fn rate(args: &&clap::ArgMatches<'_>, games: Games) {
-    let ci = value_t!(args, "confidence-interval", f32).unwrap_or(0.95);
+    let rci = value_t!(args, "confidence-interval", f32).unwrap_or(0.95);
 
-    // Compute rate stats
-    let (mut winners, losers) = utils::tally_winners_losers(&games);
-    
-    // Just return the rate
-    if ci == 0.5 {
-        let it = losers.into_iter().map(|(team, (_, l_score))| {
-            let e = winners.entry(team).or_insert((0, 0.));
-            (team, e.1 / (e.1 + l_score))
-        });
-        emit_scores(it)
-    } else {
-        // Get z
-        let z: f32 = if ci == 0.95 {
-            1.96
-        } else {
-            1.645
-        };
+    let ci = match rci {
+        0.95 => rate::ConfidenceInterval::P95,
+        0.90 => rate::ConfidenceInterval::P90,
+        _    => rate::ConfidenceInterval::P50,
+    };
 
-        let z_sqr = z * z;
-        
-        // Get all keys
-        let mut all_teams: HashSet<_> = winners.keys().collect();
-        all_teams.extend(losers.keys());
-        let mut scores = Vec::new();
-        for team in all_teams.into_iter() {
-            let x = winners.get(team).unwrap_or(&(0, 0.)).1;
-            let n = x + losers.get(team).unwrap_or(&(0, 0.)).1;
-            let n_t = n as f32 + z_sqr;
-            let p_t = (x as f32 + z_sqr / 2.) / n_t;
-            let range = z * (p_t / n_t * (1. - p_t)).powf(0.5);
-            scores.push((team, p_t - range));
-        }
-        scores.sort_by(|a, b| (b.1).partial_cmp(&a.1).expect("Shouldn't blow up!"));
-        emit_scores(scores.into_iter());
-    }
-           
+    let rate = rate::Rate::new(ci);
+
+    let scores = rate.compute(&games);
+
+    emit_scores(scores.into_iter());
 }
 
 // glicko score
