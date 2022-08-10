@@ -296,7 +296,7 @@ mod test_kemeny {
 
     #[test]
     fn test_conflict() {
-        let kemeny = Kemeny { passes: 1, 
+        let kemeny = Kemeny { passes: 10, 
             min_obs: 1, 
             algo: Algorithm::Insertion};
 
