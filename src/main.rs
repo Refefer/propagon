@@ -22,6 +22,7 @@ mod cc;
 mod cluster_strat;
 mod esrum;
 mod kemeny;
+mod rate;
 
 mod utils;
 
@@ -67,20 +68,6 @@ fn filter_edges(game_sets: Vec<Games>, min_count: usize) -> Vec<Games> {
     new_games
 }
 
-fn tally_winners_losers(games: &Games) -> (HashMap<u32,(usize,f32)>, HashMap<u32,(usize,f32)>) {
-    let mut w = HashMap::new();
-    let mut l = HashMap::new();
-    for (winner, loser, s) in games.iter() {
-        let e = w.entry(*winner).or_insert((0, 0.));
-        e.0 += 1;
-        e.1 += s;
-        let e = l.entry(*loser).or_insert((0, 0.));
-        e.0 += 1;
-        e.1 += s;
-    }
-    (w, l)
-}
-
 fn emit_scores<K: Display, V: Display>(it: impl Iterator<Item=(K,V)>) {
     use std::io::{BufWriter,stdout,Write};
     let stdout = stdout();
@@ -100,7 +87,7 @@ fn rate(args: &&clap::ArgMatches<'_>, games: Games) {
     let ci = value_t!(args, "confidence-interval", f32).unwrap_or(0.95);
 
     // Compute rate stats
-    let (mut winners, losers) = tally_winners_losers(&games);
+    let (mut winners, losers) = utils::tally_winners_losers(&games);
     
     // Just return the rate
     if ci == 0.5 {

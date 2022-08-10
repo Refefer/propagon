@@ -280,7 +280,10 @@ mod test_kemeny {
 
     #[test]
     fn test_simple() {
-        let kemeny = Kemeny { passes: 1};
+        let kemeny = Kemeny { passes: 1, 
+            min_obs: 1, 
+            algo: Algorithm::Insertion};
+
         let it = vec![
             (1u32, 0u32, 1f32),
             (2u32, 1u32, 1f32),
@@ -293,7 +296,10 @@ mod test_kemeny {
 
     #[test]
     fn test_conflict() {
-        let kemeny = Kemeny { passes: 1};
+        let kemeny = Kemeny { passes: 1, 
+            min_obs: 1, 
+            algo: Algorithm::Insertion};
+
         let it = vec![
             (1u32, 0u32, 1f32),
             (0u32, 1u32, 2f32),

@@ -1,5 +1,7 @@
 extern crate random;
-use super::{Games,Match,emit_scores,filter_edges,tally_winners_losers};
+use super::{Games,Match,emit_scores,filter_edges};
+
+use crate::utils::tally_winners_losers;
 
 use random::Source;
 

@@ -174,6 +174,21 @@ pub fn top_k_nodes<'a, 'b, K: Hash + Eq + Ord>(
     bh.into_iter().map(|Reverse(BestDegree(_, k))| k).collect()
 }
 
+// Computes the win/loss rates for each pair of matches.
+pub fn tally_winners_losers(games: &Vec<(u32, u32, f32)>) -> (HashMap<u32,(usize,f32)>, HashMap<u32,(usize,f32)>) {
+    let mut w = HashMap::new();
+    let mut l = HashMap::new();
+    for (winner, loser, s) in games.iter() {
+        let e = w.entry(*winner).or_insert((0, 0.));
+        e.0 += 1;
+        e.1 += s;
+        let e = l.entry(*loser).or_insert((0, 0.));
+        e.0 += 1;
+        e.1 += s;
+    }
+    (w, l)
+}
+
 #[cfg(test)]
 mod test_utils {
     use super::*;
