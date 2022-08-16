@@ -82,6 +82,21 @@ fn emit_scores<K: Display, V: Display>(it: impl Iterator<Item=(K,V)>) {
     }
 }
 
+fn emit_dense_embs<K: Display, V: Display>(it: impl Iterator<Item=(K, Vec<V>)>) {
+    emit_scores(it.map(|(k, v)| {
+        let mut s = String::new();
+        s.push('[');
+        for (i, vi) in v.into_iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            write!(&mut s, "{}", vi).expect("Should never fail");
+        }
+        s.push(']');
+        (k, s)
+    }));
+}
+
 // computes the Action rates
 fn rate(args: &&clap::ArgMatches<'_>, games: Games) {
     let rci = value_t!(args, "confidence-interval", f32).unwrap_or(0.95);
@@ -320,40 +335,70 @@ fn vec_walk(args: &&clap::ArgMatches<'_>, games: Games) {
     emit_scores(fast_json(it, idx_to_vocab));
 }
 
-
 fn lpa(args: &&clap::ArgMatches<'_>, games: Games) {
     let iterations = if let Some(n_iter) = value_t!(args, "iterations", usize).ok() {
         if n_iter == 0 {
-            None
+            0
         } else {
-            Some(n_iter)
+            n_iter
         }
     } else {
-        Some(10)
+        10
     };
     let chunks = value_t!(args, "chunks", usize).unwrap_or(10);
     let seed   = value_t!(args, "seed", u64).unwrap_or(2019);
+    let n_dims = value_t!(args, "dims", u64).ok();
 
-    let lpa = lpa::LPA {
-        n_iters: iterations,
-        chunks: chunks,
-        seed: seed 
-    };
+    
+    let graph = lpa::LPA::prepare_data(games.into_iter());
 
-    let clusters = lpa.fit(games.into_iter());
-    // Count cluster sizes, sort by them, and emit in most to least popular
-    let mut counts = HashMap::new();
-    let mut t_vec = Vec::with_capacity(clusters.len());
-    for (k, c) in clusters.into_iter() {
-        *counts.entry(c).or_insert(0) += 1;
-        t_vec.push((k, c));
+    if let Some(dims) = n_dims {
+        
+        let mut embs: HashMap<_,_> = graph.keys().map(|k| (k, vec![0usize; dims as usize])).collect();
+        
+        let mut iters = 1f32;
+        let delta = iterations as f32 / dims as f32;
+        // Collect the embeddings per pass.
+        for pass in 0..dims as usize{
+            iters += delta;
+            let lpa = lpa::LPA {
+                n_iters: iters.round() as usize,
+                chunks: chunks,
+                seed: seed + pass as u64
+            };
+
+            eprintln!("Pass {}", pass);
+            let clusters = lpa.fit(&graph);
+            clusters.into_iter().for_each(|(k, cluster_id)| {
+                if let Some(e) = embs.get_mut(&k) {
+                    e[pass] = cluster_id;
+                }
+            });
+        }
+        emit_dense_embs(embs.into_iter());
+
+    } else {
+        let lpa = lpa::LPA {
+            n_iters: iterations,
+            chunks: chunks,
+            seed: seed
+        };
+
+        let clusters = lpa.fit(&graph);
+        // Count cluster sizes, sort by them, and emit in most to least popular
+        let mut counts = HashMap::new();
+        let mut t_vec = Vec::with_capacity(clusters.len());
+        for (k, c) in clusters.into_iter() {
+            *counts.entry(c).or_insert(0) += 1;
+            t_vec.push((k, c));
+        }
+
+        eprintln!("Total Clusters: {}", counts.len());
+
+        t_vec.sort_by_key(|(k, c)| (counts[c], *c, *k));
+        let it = t_vec.into_iter().rev();
+        emit_scores(it);
     }
-
-    eprintln!("Total Clusters: {}", counts.len());
-
-    t_vec.sort_by_key(|(k, c)| (counts[c], *c, *k));
-    let it = t_vec.into_iter().rev();
-    emit_scores(it);
 }
 
 fn label_rank(args: &&clap::ArgMatches<'_>, games: Games) {
@@ -462,18 +507,7 @@ fn euc_emb(args: &&clap::ArgMatches<'_>, games: Games) {
     };
 
     let embeddings = emb.fit(games.into_iter());
-    emit_scores(embeddings.into_iter().map(|(k, v)| {
-        let mut s = String::new();
-        s.push('[');
-        for (i, vi) in v.into_iter().enumerate() {
-            if i > 0 {
-                s.push(',');
-            }
-            write!(&mut s, "{}", vi).expect("Should never fail");
-        }
-        s.push(']');
-        (k, s)
-    }));
+    emit_dense_embs(embeddings.into_iter());
 }
 
 fn mc_cluster(args: &&clap::ArgMatches<'_>, games: Games) {
@@ -818,6 +852,10 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("seed")
                  .takes_value(true)
                  .help("Random seed to use."))
+            .arg(Arg::with_name("dims")
+                 .long("dims")
+                 .takes_value(true)
+                 .help("If provided, runs the algorithm DIMS times and constructs a hamming embedding with the clusters."))
             .arg(Arg::with_name("chunks")
                  .long("chunks")
                  .takes_value(true)

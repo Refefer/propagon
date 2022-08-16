@@ -12,18 +12,15 @@ use rand::prelude::*;
 use rayon::prelude::*;
 
 pub struct LPA {
-    pub n_iters: Option<usize>,
+    pub n_iters: usize,
     pub chunks: usize,
     pub seed: u64
 }
 
 impl LPA {
-
-    pub fn fit<K: Hash + Eq + Clone + Send + Sync + Ord>(
-        &self, 
+    pub fn prepare_data<K: Hash + Eq + Clone + Ord>(
         graph: impl Iterator<Item=(K,K,f32)>
-    ) -> HashMap<K, usize> {
-
+    ) -> HashMap<K, Vec<K>> {
         // Create graph
         let mut edges = HashMap::new();
         for (f_node, t_node, _weight) in graph.into_iter() {
@@ -32,23 +29,32 @@ impl LPA {
             let e = edges.entry(t_node).or_insert_with(|| vec![]);
             e.push(f_node.clone());
         }
+        edges
 
-        // Setup initial embeddings
+    }
+
+    pub fn fit<K: Hash + Eq + Clone + Send + Sync + Ord>(
+        &self, 
+        edges: &HashMap<K, Vec<K>>
+    ) -> HashMap<K, usize> {
+
+        // We randomly interate over keys
         let mut keys: Vec<_> = edges.keys().map(|k| k.clone()).collect();
         keys.sort();
 
+        // Assign initial IDs to group
         let mut clusters: HashMap<_,_> = keys.iter().enumerate()
             .map(|(i, k)| (k.clone(), i))
             .collect();
 
-        // We randomly sort our keys each pass in the same style as label embeddings
+        // We randomly sort our keys each pass in the same style as label embeddings.
         let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed);
         let mut n_iter = 0;
         let mut rngs: Vec<_> = (0..self.chunks)
             .map(|i| rand::rngs::StdRng::seed_from_u64(self.seed + 1 + i as u64))
             .collect();
 
-        let total_work = keys.len() * self.n_iters.unwrap_or(std::usize::MAX);
+        let total_work = keys.len() * self.n_iters;
         let pb = ProgressBar::new(total_work as u64);
         pb.set_style(ProgressStyle::default_bar()
             .template("[{msg}] {wide_bar} ({per_sec}) {pos:>7}/{len:7} {eta_precise}"));
@@ -113,10 +119,10 @@ impl LPA {
 
             let ratio = 100. * updated as f64 / keys.len() as f64;
             msg.clear();
-            write!(msg, "Iter {}/{}, Updated Nodes {}/{} ({:.2}%)", n_iter, self.n_iters.unwrap_or(0), updated, keys.len(), ratio)
+            write!(msg, "Iter {}/{}, Updated Nodes {}/{} ({:.2}%)", n_iter, self.n_iters, updated, keys.len(), ratio)
                 .expect("Failed to update message!");
             pb.set_message(&msg);
-            if updated == 0 || self.n_iters == Some(n_iter) {
+            if updated == 0 || self.n_iters <= n_iter {
                 break
             }
         }
