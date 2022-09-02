@@ -23,6 +23,7 @@ mod cluster_strat;
 mod esrum;
 mod kemeny;
 mod rate;
+mod lsr;
 
 mod utils;
 
@@ -618,6 +619,20 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
     }));
 }
 
+fn lsr(args: &&clap::ArgMatches<'_>, games: Games) {
+    let steps = value_t!(args, "steps", usize).unwrap_or(100_000);
+    let seed  = value_t!(args, "seed", u64).unwrap_or(2020);
+
+    let lsr = lsr::LSR {
+        stationary_steps: steps,
+        seed: seed
+    };
+    
+    let values = lsr.fit(games);
+
+    emit_scores(values.into_iter());
+}
+
 fn components(args: &&clap::ArgMatches<'_>, path: &str, games: Games) {
     let min_size = value_t!(args, "min-graph-size", usize).unwrap_or(1);
     cc::extract_components(path, min_size, games.into_iter());
@@ -1126,12 +1141,23 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .possible_values(&["insertion", "de"])
                  .help("Algorithm to optimize with.  Default is 'insertion'.")))
 
+        .subcommand(SubCommand::with_name("lsr")
+            .about("Computes Luce Spectral Ranking on pairwise data.")
+            .arg(Arg::with_name("steps")
+                 .long("min-size")
+                 .takes_value(true)
+                 .help("Number of random steps to use to compute stationary distribution."))
+            .arg(Arg::with_name("seed")
+                 .long("seed")
+                 .takes_value(true)
+                 .help("Random seed to use.")))
+
         .subcommand(SubCommand::with_name("extract-components")
-            .about("Extracts fully connected components from a graph and writes them to separate files")
+            .about("extracts fully connected components from a graph and writes them to separate files")
             .arg(Arg::with_name("min-graph-size")
                  .long("min-size")
                  .takes_value(true)
-                 .help("Minimum graph size to emit.  Default is 1")))
+                 .help("minimum graph size to emit.  default is 1")))
  
         .get_matches()
 }
@@ -1219,6 +1245,9 @@ fn main() {
             } else if let Some(ref sub_args) = args.subcommand_matches("hash-embedding") {
                 let all_games = games.into_iter().flatten().collect();
                 hash_embedding(sub_args, all_games);
+            } else if let Some(ref sub_args) = args.subcommand_matches("lsr") {
+                let all_games = games.into_iter().flatten().collect();
+                lsr(sub_args, all_games);
             } else if let Some(ref sub_args) = args.subcommand_matches("extract-components") {
                 let all_games = games.into_iter().flatten().collect();
                 components(sub_args, &path[0], all_games);
