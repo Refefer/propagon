@@ -24,6 +24,10 @@ Computes BTM uses logistic regression.  While not as fast as the minorization me
 
 Outputs a ranking score per node where higher is better.
 
+#### Luce Spectral Ranking
+
+Estimates the parameters for a Placket Luce model using Luce Spectral Ranking.  Fast and scalable, provides better estimates than BTM and ES-RUM models typically.  A good starting point for rank estimation.
+
 #### Glicko2
 
 Implements the glicko2 ranking system for pairs of teams.  Generally provides good rankings.  This is rooted in Bayesian methodology, making it more robust to fewer games than the BTM models.
