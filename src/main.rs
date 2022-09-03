@@ -620,7 +620,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn lsr(args: &&clap::ArgMatches<'_>, games: Games) {
-    let steps = value_t!(args, "steps", usize).unwrap_or(100_000);
+    let steps = value_t!(args, "steps", usize).unwrap_or(1_000_000);
     let seed  = value_t!(args, "seed", u64).unwrap_or(2020);
 
     let lsr = lsr::LSR {
@@ -1144,7 +1144,7 @@ fn parse<'a>() -> ArgMatches<'a> {
         .subcommand(SubCommand::with_name("lsr")
             .about("Computes Luce Spectral Ranking on pairwise data.")
             .arg(Arg::with_name("steps")
-                 .long("min-size")
+                 .long("steps")
                  .takes_value(true)
                  .help("Number of random steps to use to compute stationary distribution."))
             .arg(Arg::with_name("seed")

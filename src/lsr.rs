@@ -1,18 +1,22 @@
 extern crate hashbrown;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::thread;
 
 use float_ord::FloatOrd;
 use hashbrown::{HashMap,HashSet};
 use rand::prelude::*;
-use rand_distr::{Distribution,Uniform,Normal};
+use rand_distr::{Distribution,Uniform};
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
 use super::Games;
 
 type AdjList = Vec<(usize, f32)>;
+
+
+#[derive(Debug)]
 struct NormedAdjList {
     degree: f32,
     adj_list: AdjList
@@ -61,24 +65,53 @@ impl LSR {
             NormedAdjList { degree, adj_list }
         }).collect();
 
+        // Threads, naturally
+        let sparse_chain = Arc::new(sparse_chain);
+
         // Compute stationary distribution via 
-        let mut pi: Vec<_> = (0..sparse_chain.len()).map(|_|AtomicUsize::new(0)).collect();
+        let pi: Arc<Vec<_>> = Arc::new((0..sparse_chain.len()).map(|_|AtomicUsize::new(1)).collect());
         let n_threads = thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(1);
 
         let work_per_thread = self.stationary_steps / n_threads;
 
-        let mut rng = XorShiftRng::seed_from_u64(self.seed - 1);
-        let cur_node = rng.sample(Uniform::new(0usize, sparse_chain.len()));
-        for _ in 0..self.stationary_steps {
-            pi[cur_node].fetch_add(1, Ordering::Relaxed);
-            let p: f32 = rng.gen();
-            let cur_node = sparse_chain[cur_node].adj_list
-                .binary_search_by_key(&FloatOrd(p), |(_idx, weight)| FloatOrd(*weight))
-                .unwrap_or_else(|idx| idx);
+        let handles: Vec<_> = (0..n_threads).map(|i| {
+            let seed = self.seed + i as u64;
+            let pi = pi.clone();
+            let sparse_chain = sparse_chain.clone();
+            let work_per_thread = work_per_thread.clone();
+            thread::spawn(move || {
+                let mut rng = XorShiftRng::seed_from_u64(seed);
+                let dist = Uniform::new(0usize, sparse_chain.len());
+                let mut cur_node = rng.sample(dist);
+                for n in 0..work_per_thread {
+                    pi[cur_node].fetch_add(1, Ordering::Relaxed);
+                    // If we end at a node without a loss, uniformly random
+                    // transition
+                    let adj_list = &sparse_chain[cur_node].adj_list;
+                    if adj_list.is_empty() || n % 1_000 == 0 {
+                        cur_node = rng.sample(dist);
+                    } else {
+                        let p: f32 = rng.gen();
+                        let new_idx = adj_list
+                            .binary_search_by_key(&FloatOrd(p), |(_idx, weight)| FloatOrd(*weight))
+                            .unwrap_or_else(|idx| idx);
+                        cur_node = adj_list[new_idx].0;
+                    }
+                }
+            })
+        }).collect();
+        
+        // Wait until all threads are finished
+        handles.into_iter()
+            .for_each(|h| {
+                h.join().expect("Worker thread errored out!");
+            });
 
-        }
+        let pi = Arc::try_unwrap(pi).expect("Not all worker threads dead!");
+        let sparse_chain = Arc::try_unwrap(sparse_chain).expect("Not all worker threads dead!");
+
         // Discount degree impact
         let mut pi: Vec<f32> = pi.into_iter().enumerate()
             .map(|(i, x)| (x.into_inner() as f32 / sparse_chain[i].degree.powf(0.5)).ln() )
@@ -92,16 +125,8 @@ impl LSR {
         vocab.into_iter()
             .map(|(v, idx)| (v, pi[idx]))
             .collect()
-        /*
-        let handles = 0..n_threads.map(|i| {
-            thread::spawn(|| {
                 
-            })
-        }).collect();
-        */
 
-        // Wait until all threads are finished
-        //handles.into_iter().for_each(|h| h.join());
     }
 }
 
