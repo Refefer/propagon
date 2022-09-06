@@ -620,7 +620,7 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn lsr(args: &&clap::ArgMatches<'_>, games: Games) {
-    let steps = value_t!(args, "steps", usize).unwrap_or(1_000_000);
+    let steps = value_t!(args, "steps", usize).unwrap_or(1_000);
     let seed  = value_t!(args, "seed", u64).unwrap_or(2020);
 
     let lsr = lsr::LSR {
@@ -1146,7 +1146,8 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("steps")
                  .long("steps")
                  .takes_value(true)
-                 .help("Number of random steps to use to compute stationary distribution."))
+                 .help("Number of random steps starting at each alternative to estimate stationary distribution.
+                        Default is 10_000."))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)

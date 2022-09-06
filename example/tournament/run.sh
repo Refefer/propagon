@@ -16,10 +16,10 @@ propagon baseball.2018.edges rate --confidence-interval 0.9 > baseball.2018.rate
 propagon baseball.2018.rate hydrate --vocab baseball.2018.vocab > scores.rate
 
 propagon baseball.2018.edges es-rum --passes 100 > baseball.2018.es-rum
-propagon baseball.2018.es-rum hydrate --vocab baseball.2018.vocab > scores.es-rum
+propagon baseball.2018.es-rum hydrate --vocab baseball.2018.vocab | sort -t$'\t' -k2,2nr > scores.es-rum
 
 propagon baseball.2018.edges kemeny --passes 5 > baseball.2018.kemeny
 propagon baseball.2018.kemeny hydrate --vocab baseball.2018.vocab > scores.kemeny
 
 propagon baseball.2018.edges lsr > baseball.2018.lsr
-propagon baseball.2018.lsr hydrate --vocab baseball.2018.vocab > scores.lsr
+propagon baseball.2018.lsr hydrate --vocab baseball.2018.vocab | sort -t$'\t' -k2,2nr > scores.lsr

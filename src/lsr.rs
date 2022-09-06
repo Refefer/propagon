@@ -14,7 +14,9 @@ use rayon::prelude::*;
 use super::Games;
 
 type AdjList = Vec<(usize, f32)>;
-
+type MarkovChain = Vec<NormedAdjList>;
+type Vocab = HashMap<u32, usize>;
+type Weights = Vec<f32>;
 
 #[derive(Debug)]
 struct NormedAdjList {
@@ -29,9 +31,10 @@ pub struct LSR {
 
 impl LSR {
 
-    pub fn fit(&self, games: Games) -> Vec<(u32, f32)> {
+    fn construct_markov_chain(games: Games) -> (Vocab, MarkovChain) {
         
-        // Build sparse markov chain
+        // Build sparse markov chain.  We use hashmaps to start to make accumulations
+        // easier but ultimately convert it into an adjacency list format.
         let mut sparse_chain: Vec<HashMap<usize, f32>> = Vec::new();
         let mut vocab = HashMap::new();
         let mut n_vocab = 0usize;
@@ -48,6 +51,7 @@ impl LSR {
                 n_vocab - 1
             }).clone();
 
+            // This isn't the iterative version, so we assume a uniform prior on 'pi'
             *sparse_chain[loser_idx].entry(winner_idx).or_insert(0.) += amt / 2f32;
         }
 
@@ -55,62 +59,44 @@ impl LSR {
         // sampling faster (using bisection) and preserve the original degree weight to ensure
         // we can debias popularity.
         let sparse_chain: Vec<NormedAdjList> = sparse_chain.into_par_iter().map(|v| {
-            let mut adj_list: Vec<_> = v.into_iter().collect();
-            let mut degree = adj_list.iter().map(|(_k, v)| *v).sum::<f32>();
+            // We L1 norm each node to ensure we have a proper transition matrix
+            let mut degree = v.iter().map(|(_k, v)| *v).sum::<f32>();
             let mut c = 0.;
-            adj_list.iter_mut().for_each(|(k, v)| {
-                c += *v;
-                *v = c / degree;
-            });
+            let adj_list = v.into_iter().map(|(k, v)| {
+                c += v;
+                (k, c / degree)
+            }).collect();
             NormedAdjList { degree, adj_list }
         }).collect();
 
-        // Threads, naturally
-        let sparse_chain = Arc::new(sparse_chain);
+        (vocab, sparse_chain)
+
+    }
+
+    fn compute_stationary_distribution(&self, sparse_chain: MarkovChain) -> Weights {
 
         // Compute stationary distribution via 
-        let pi: Arc<Vec<_>> = Arc::new((0..sparse_chain.len()).map(|_|AtomicUsize::new(1)).collect());
-        let n_threads = thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1);
+        let pi: Vec<_> = (0..sparse_chain.len()).map(|_| AtomicUsize::new(0)).collect();
 
-        let work_per_thread = self.stationary_steps / n_threads;
-
-        let handles: Vec<_> = (0..n_threads).map(|i| {
-            let seed = self.seed + i as u64;
-            let pi = pi.clone();
-            let sparse_chain = sparse_chain.clone();
-            let work_per_thread = work_per_thread.clone();
-            thread::spawn(move || {
-                let mut rng = XorShiftRng::seed_from_u64(seed);
-                let dist = Uniform::new(0usize, sparse_chain.len());
-                let mut cur_node = rng.sample(dist);
-                for n in 0..work_per_thread {
-                    pi[cur_node].fetch_add(1, Ordering::Relaxed);
-                    // If we end at a node without a loss, uniformly random
-                    // transition
-                    let adj_list = &sparse_chain[cur_node].adj_list;
-                    if adj_list.is_empty() || n % 1_000 == 0 {
-                        cur_node = rng.sample(dist);
-                    } else {
-                        let p: f32 = rng.gen();
-                        let new_idx = adj_list
-                            .binary_search_by_key(&FloatOrd(p), |(_idx, weight)| FloatOrd(*weight))
-                            .unwrap_or_else(|idx| idx);
-                        cur_node = adj_list[new_idx].0;
-                    }
+        let dist = Uniform::new(0usize, sparse_chain.len());
+        (0..sparse_chain.len()).into_par_iter().for_each(|mut cur_node| {
+            let mut rng = XorShiftRng::seed_from_u64(self.seed + cur_node as u64);
+            for n in 0..self.stationary_steps {
+                pi[cur_node].fetch_add(1, Ordering::Relaxed);
+                let adj_list = &sparse_chain[cur_node].adj_list;
+                // Need to teleport to a random node, uniformly, when reaching a state without 
+                // transitions out (aka undefeated)
+                if adj_list.is_empty() {
+                    cur_node = rng.sample(dist);
+                } else {
+                    let p: f32 = rng.gen();
+                    let new_idx = adj_list
+                        .binary_search_by_key(&FloatOrd(p), |(_idx, weight)| FloatOrd(*weight))
+                        .unwrap_or_else(|idx| idx);
+                    cur_node = adj_list[new_idx].0;
                 }
-            })
-        }).collect();
-        
-        // Wait until all threads are finished
-        handles.into_iter()
-            .for_each(|h| {
-                h.join().expect("Worker thread errored out!");
-            });
-
-        let pi = Arc::try_unwrap(pi).expect("Not all worker threads dead!");
-        let sparse_chain = Arc::try_unwrap(sparse_chain).expect("Not all worker threads dead!");
+            }
+        });
 
         // Discount degree impact
         let mut pi: Vec<f32> = pi.into_iter().enumerate()
@@ -119,7 +105,18 @@ impl LSR {
 
         // Log norm results
         let avg = pi.iter().cloned().sum::<f32>() / pi.len() as f32;
-        pi.iter_mut().for_each(|v| *v -= avg);
+        pi.iter_mut().for_each(|v| *v -= avg); 
+        pi
+
+
+    }
+
+    pub fn fit(&self, games: Games) -> Vec<(u32, f32)> {
+        
+        // Create the comparison graph
+        let (vocab, sparse_chain) = LSR::construct_markov_chain(games);
+        
+        let pi = self.compute_stationary_distribution(sparse_chain);
 
         // Reconstruct from vocab
         vocab.into_iter()
@@ -131,91 +128,29 @@ impl LSR {
 }
 
 #[cfg(test)]
-mod test_page_rank {
+mod test_lsr {
     use super::*;
 
     #[test]
-    fn test_example() {
+    fn test_creating_tournament_graph() {
         let matches = vec![
             (1, 2, 1.),
-            (3, 2, 1.),
-            (1, 3, 1.),
-            (1, 4, 1.),
-            (2, 4, 1.),
-            (3, 4, 1.),
+            (2, 3, 2.),
+            (3, 1, 1.)
         ];
 
-        let pr = PageRank::new(0.85, 1, Sink::None);
-        let results = pr.compute(matches);
-        assert_eq!(results[0].0, 1);
-        assert!(results[0].1 - 0.427083 < 1e-4);
-
-        assert_eq!(results[1].0, 3);
-        assert!(results[1].1 - 0.214583 < 1e-4);
-
-        assert_eq!(results[2].0, 2);
-        assert!(results[2].1 - 0.108333 < 1e-4);
-
-        assert_eq!(results[3].0, 4);
-        assert!(results[3].1 - 0.0375 < 1e-4);
-    }
-
-    #[test]
-    fn test_reverse() {
-        let matches = vec![
-            (1, 2, 1.),
-            (3, 2, 1.),
-            (1, 3, 1.),
-            (1, 4, 1.),
-            (2, 4, 1.),
-            (3, 4, 1.),
+        let (vocab, mc) = LSR::construct_markov_chain(matches);
+        let assumed_mc = vec![
+            NormedAdjList {degree: 0.5, adj_list: vec![(2, 1.0)]},
+            NormedAdjList {degree: 0.5, adj_list: vec![(0, 1.0)]},
+            NormedAdjList {degree: 1., adj_list: vec![(1, 1.0)]},
         ];
-
-        let pr = PageRank::new(0.85, 10, Sink::Reverse);
-        let results = pr.compute(matches);
-
-        assert_eq!(results[0].0, 1);
-        assert!(results[0].1 - 0.39064 < 1e-4);
-
-        assert_eq!(results[1].0, 3);
-        assert!(results[1].1 - 0.27099 < 1e-4);
-
-        assert_eq!(results[2].0, 2);
-        assert!(results[2].1 - 0.190172 < 1e-4);
-
-        assert_eq!(results[3].0, 4);
-        assert!(results[3].1 - 0.14818 < 1e-4);
-
-        assert!((results.into_iter().map(|(_, v)| v).sum::<f32>() -  1f32).abs() < 1e-5);
-    }
-
-    #[test]
-    fn test_all_links() {
-        let matches = vec![
-            (1, 2, 1.),
-            (3, 2, 1.),
-            (1, 3, 1.),
-            (1, 4, 1.),
-            (2, 4, 1.),
-            (3, 4, 1.),
-        ];
-
-        let pr = PageRank::new(0.85, 10, Sink::All);
-        let results = pr.compute(matches);
-
-        assert_eq!(results[0].0, 1);
-        assert!(results[0].1 - 0.39064 < 1e-4);
-
-        assert_eq!(results[1].0, 3);
-        assert!(results[1].1 - 0.27099 < 1e-4);
-
-        assert_eq!(results[2].0, 2);
-        assert!(results[2].1 - 0.190172 < 1e-4);
-
-        assert_eq!(results[3].0, 4);
-        assert!(results[3].1 - 0.14818 < 1e-4);
-
-        assert!((results.into_iter().map(|(_, v)| v).sum::<f32>() - 1f32).abs() < 1e-5);
+        
+        // Deeply frustrating that rust doesn't implement f32 Eq or Ord
+        for (a_nadj, r_nadj) in assumed_mc.into_iter().zip(mc.into_iter()) {
+            assert_eq!(a_nadj.degree, r_nadj.degree);
+            assert_eq!(a_nadj.adj_list, r_nadj.adj_list);
+        }
     }
 
 }
