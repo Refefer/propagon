@@ -60,7 +60,7 @@ impl LSR {
         // we can debias popularity.
         let sparse_chain: Vec<NormedAdjList> = sparse_chain.into_par_iter().map(|v| {
             // We L1 norm each node to ensure we have a proper transition matrix
-            let mut degree = v.iter().map(|(_k, v)| *v).sum::<f32>();
+            let degree = v.iter().map(|(_k, v)| *v).sum::<f32>();
             let mut c = 0.;
             let adj_list = v.into_iter().map(|(k, v)| {
                 c += v;

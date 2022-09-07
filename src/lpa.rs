@@ -66,6 +66,8 @@ impl LPA {
         loop {
             let mut updated = 0;
             keys.shuffle(&mut rng);
+            // Loop over items in parallel.  We rely on randomization to (mostly) ensure
+            // that we're not updating adjacent nodes at the same time.
             for key_subset in keys.as_slice().chunks(self.chunks) {
                 let it = key_subset.par_iter().zip(rngs.par_iter_mut());
                 let new_clusters: Vec<_> = it.map(|(key, mut rng)| {
@@ -77,31 +79,32 @@ impl LPA {
                         *e += 1;
                     }
 
-                    // Get max label
+                    // Get max label count as new label.  If we have ties, we'll need to tiebreak
                     let mut best_cluster = 0;
                     let mut best_count = 0;
                     let mut ties = false;
+                    let mut ties = Vec::new();
                     for (cluster, count) in counts.iter() {
                         if *count > best_count {
                             best_cluster = *cluster;
                             best_count = *count;
-                            ties = false;
+                            ties.clear();
+                            ties.push(*cluster)
                         } else if *count == best_count {
-                            ties = true
+                            ties.push(*cluster)
                         } 
                     }
 
                     pb.inc(1);
-                    // Get the best cluster.  if ties, select cluster at random
-                    if ties {
-                        let mut clusters: Vec<_> = counts.keys().collect();
+                    // We tie break by randomly choosing and item
+                    if ties.len() > 1 {
                         // Makes LPA deterministic
-                        clusters.sort();
-                        **clusters.as_slice()
+                        ties.sort();
+                        *ties.as_slice()
                             .choose(&mut rng)
                             .expect("If a node has no edges, code bug")
                     } else {
-                        best_cluster
+                        ties[0]
                     }
                 }).collect();
 

@@ -112,8 +112,16 @@ impl EsRum {
 
         let mut rng = XorShiftRng::seed_from_u64(self.seed);
         
+        // Create an initial set of parameters for each distribution based
+        // around the independent win/loss ratio of each alternative.
         let mut policy = self.create_initial_policy(&graph);
-        let n_gradients = (n_vocab as f32).powf(0.7).max(10.) as usize;
+
+        // Gradients determine the number perturbations we allow for each
+        // tuning of an alternative
+        let n_gradients = (n_vocab as f32).powf(0.7).max(100.) as usize;
+
+        // Children is the number of gradients we pick for merging into the
+        // new policy.
         let n_children = (n_gradients as f32 / 10.).max(3.) as usize;
         
         // Compute the decay weights for each child
@@ -127,7 +135,6 @@ impl EsRum {
             weights
         };
 
-
         let pb = self.create_pb((self.passes * n_gradients) as u64);
 
         let mut msg = format!("Pass: 0, Alpha:{}, Fitness: inf", self.alpha);
@@ -138,6 +145,8 @@ impl EsRum {
             .map(|_| (0f32, policy.clone()))
             .collect();
 
+        // We decay the learning rate every time the optimizer is unable to improve
+        // on the existing policy
         let decay_rate = ((self.alpha / 100.).ln() / (self.passes as f32)).exp();
         let mut last_loss = self.score_all(policy.as_slice(), &graph);
         let mut sigma_group = self.alpha;
@@ -202,6 +211,7 @@ impl EsRum {
                 } else {
                     sigma_group *= decay_rate;
                 }
+
             } else {
                 pb.inc(gradients.len() as u64);
             }
@@ -248,6 +258,7 @@ impl EsRum {
         weights.iter_mut().for_each(|wi| { *wi /= s});
     }
 
+    /// We go over each alternative and attempt to fine tune its mu and sigma.
     fn tune_indivs(&self,
         policy: &[[f32;2]], 
         graph: &HashMap<usize, Vec<(usize, (usize, usize))>>, 
@@ -257,9 +268,11 @@ impl EsRum {
     ) {
         let mut weights = [0f32, 0f32, 0f32];
         EsRum::make_weights(&mut weights);
+        // Sigma controls the variance of the noise injected into the gradients
         let normal = Normal::new(0f32, sigma).unwrap();
 
 		policy.par_iter().zip(out.par_iter_mut()).enumerate().for_each(|(c_idx, (arr, new_policy))| {
+            // We hard code the gradients to 20 apparently.  It's not clear why this was chosen
 			let mut grads = vec![(0f32, [0f32, 0f32]); 20];
 			let seed = self.seed + (c_idx + (it + 1)) as u64;
 				 
@@ -287,12 +300,16 @@ impl EsRum {
 			let old_score = self.score(arr as &[f32], comps, policy);
 			let new_score = self.score(new_policy as &[f32], comps, policy);
 
+            // If the new score is worse than the old one, don't change it
 			if new_score > old_score {
 			    *new_policy = arr.clone()
 			}
 		});
     }
 
+    /// Creates the initial sert of distributions for the RUM.
+    /// It first starts by ordering each alternative by its win/loss ratio
+    /// across all matches
     fn create_initial_policy(&self, graph: &HashMap<usize, Vec<(usize, (usize, usize))>>) -> Vec<[f32; 2]> {
         // To create the initial policy, we first order each alternative by
         // their average win/loss rates in all comparisons.
@@ -306,12 +323,15 @@ impl EsRum {
             *v_idx = idx;
         });
 
+        // Order rates asending
         rates.sort_by_key(|(idx, rate)| FloatOrd(*rate));
         
         // Create initial policy
         let mut policy = vec![[0f32, 0f32]; graph.len()];
         let normal = SNormal::new(0., 1.0).unwrap();
         rates.into_iter().enumerate().for_each(|(idx, (v_idx, _))| {
+            // mu for each policy is bounded to within the cdf of the unit norm.  This
+            // is mostly for convenience.
             policy[v_idx] = [
                 normal.inverse_cdf((idx + 1) as f64 / (policy.len() + 2) as f64) as f32,
                 1e-5];
@@ -330,6 +350,8 @@ impl EsRum {
     fn score(&self, dist: &[f32], graph: &[(usize, (usize, usize))], dists: &[[f32; 2]]) -> f32 {
         let mut s_mu    = dist[0];
         let mut s_sigma = dist[1];
+        
+        // Ensure we have valid distributions
         self.distribution.bound(&mut s_mu, &mut s_sigma);
         let score = graph.par_iter().map(|(o_idx, (wins, n))| {
             let [mut e_mu, mut e_sigma] = dists[*o_idx];
@@ -342,7 +364,7 @@ impl EsRum {
             let fitness = *n as f32 * (s_rate - *wins as f32 / *n as f32).abs();
 
             // penalize the distance from 0
-            fitness //+ self.n_kemeny_loss(*wins, *n, s_rate)
+            fitness
         }).sum::<f32>() / graph.len() as f32;
 
         // Minimize mu, maximize sigma?
