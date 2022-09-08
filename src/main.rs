@@ -166,6 +166,7 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
     let alpha   = value_t!(args, "alpha", f32).unwrap_or(1f32);
     let gamma   = value_t!(args, "gamma", f32).unwrap_or(1e-3f32);
     let min_obs = value_t!(args, "min-observations", usize).unwrap_or(1);
+    let prior   = value_t!(args, "prior", usize).unwrap_or(0);
     let seed    = value_t!(args, "seed", u64).unwrap_or(2019);
 
     let distribution = if args.is_present("fixed") {
@@ -180,6 +181,7 @@ fn es_rum(args: &&clap::ArgMatches<'_>, games: Games) {
         alpha,
         gamma,
         min_obs,
+        prior,
         seed
     };
 
@@ -1111,6 +1113,10 @@ fn parse<'a>() -> ArgMatches<'a> {
                  .long("gamma")
                  .takes_value(true)
                  .help("Regularization on the distribution scores.  Default is 1e-5"))
+            .arg(Arg::with_name("prior")
+                 .long("prior")
+                 .takes_value(true)
+                 .help("Adds a uniform prior to each match.  Default is no prior."))
             .arg(Arg::with_name("min-observations")
                  .long("min-obs")
                  .takes_value(true)

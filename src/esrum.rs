@@ -27,9 +27,6 @@ pub enum Distribution {
 }
 
 impl Distribution {
-    fn sigmoid(x: f32) -> f32 {
-        1. / (1. + (-x).exp())
-    }
 
     fn bound(&self, a: &mut f32, b: &mut f32) {
         match self {
@@ -59,6 +56,9 @@ pub struct EsRum {
     
     // Regularization for distributions
     pub min_obs: usize,
+    
+    // Adds smoothing to the scores.
+    pub prior: usize,
 
     // Random Seed
     pub seed: u64
@@ -84,7 +84,7 @@ impl EsRum {
             // Add bi-directional
             {
                 let w = graph.entry(w_idx.clone()).or_insert_with(|| HashMap::new());
-                let s = w.entry(l_idx.clone()).or_insert((0, 0));
+                let s = w.entry(l_idx.clone()).or_insert((self.prior, 2 * self.prior));
 
                 s.0 += margin;
                 s.1 += margin;
@@ -93,7 +93,7 @@ impl EsRum {
             // Add loser relationship
             {
                 let l = graph.entry(l_idx).or_insert_with(|| HashMap::new());
-                let s = l.entry(w_idx).or_insert((0, 0));
+                let s = l.entry(w_idx).or_insert((self.prior, 2 * self.prior));
 
                 s.1 += margin;
             }
