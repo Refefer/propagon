@@ -2,13 +2,11 @@ extern crate rayon;
 extern crate hashbrown;
 
 use std::hash::Hash;
-use std::cmp::Ordering;
 use std::fmt::Write;
 
 use crate::de::{DifferentialEvolution,Fitness};
 
 use float_ord::FloatOrd;
-use rayon::prelude::*;
 use hashbrown::HashMap;
 use indicatif::{ProgressBar,ProgressStyle};
 
@@ -137,7 +135,7 @@ impl Kemeny {
         let mut policy: Vec<_> = Vec::with_capacity(n_vocab);
         // O(N^2) Insertion Sort-ish approach
         let mut last_score = 0;
-        for pass in 0..self.passes {
+        for _pass in 0..self.passes {
             policy.clear();
             let mut cur_score = 0;
             for idx in old_policy.iter().cloned() {
@@ -222,7 +220,7 @@ impl Kemeny {
         let mut msg = String::new();
 
         let mut rem = self.passes;
-        let (fit, results) = de.fit(&fit_fn, self.passes, 2020, None, |best_fit, fns_remaining| {
+        let (_fit, results) = de.fit(&fit_fn, self.passes, 2020, None, |best_fit, fns_remaining| {
             msg.clear();
             write!(msg, "Kem: {}/{}", best_fit, total_pairs).expect("Should work");
             pb.set_message(&msg);
@@ -234,7 +232,7 @@ impl Kemeny {
 
         let min_obs = self.min_obs;
         let mut results: Vec<_> = results.into_iter().enumerate()
-            .filter(move |(idx, w)| {
+            .filter(move |(idx, _w)| {
                 graph[*idx].iter().map(|(_, (_, n))| n).sum::<usize>() >= min_obs
             }).collect();
 

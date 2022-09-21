@@ -2,14 +2,12 @@ extern crate hashbrown;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use core::sync::atomic::Ordering::Relaxed;
-use std::sync::Arc;
-use std::thread;
 
 use atomic_float::AtomicF64;
 use float_ord::FloatOrd;
-use hashbrown::{HashMap,HashSet};
+use hashbrown::HashMap;
 use rand::prelude::*;
-use rand_distr::{Distribution,Uniform};
+use rand_distr::Uniform;
 use rand_xorshift::XorShiftRng;
 use rayon::prelude::*;
 
@@ -104,13 +102,13 @@ impl LSR {
         // Compute stationary distribution via 
         let ni = 1. / (sparse_chain.len() as f64);
         let mut pi: Vec<_> = vec![ni; sparse_chain.len()];
-        let mut pi_prime: Vec<_> = (0..sparse_chain.len()).map(|_| AtomicF64::new(0.)).collect();
+        let pi_prime: Vec<_> = (0..sparse_chain.len()).map(|_| AtomicF64::new(0.)).collect();
         
         for pass in 0..self.steps {
             LSR::atomic_matmul(&pi, &pi_prime, sparse_chain);
 
             // L1 Norm and copy over to pi
-            let mut denom = AtomicF64::new(0.);
+            let denom = AtomicF64::new(0.);
             pi.par_iter_mut().zip(pi_prime.par_iter()).for_each(|(pi_i, pi_prime_i)| {
                 let f = pi_prime_i.load(Relaxed) + EPS;
                 denom.fetch_add(f, Relaxed);
@@ -146,7 +144,7 @@ impl LSR {
         let dist = Uniform::new(0usize, sparse_chain.len());
         (0..sparse_chain.len()).into_par_iter().for_each(|mut cur_node| {
             let mut rng = XorShiftRng::seed_from_u64(self.seed + cur_node as u64);
-            for n in 0..self.steps {
+            for _step_i in 0..self.steps {
                 pi[cur_node].fetch_add(1, Ordering::Relaxed);
                 let adj_list = &sparse_chain[cur_node].adj_list;
                 // Need to teleport to a random node, uniformly, when reaching a state without 
@@ -165,8 +163,8 @@ impl LSR {
 
         // L1 normalize the atomics into f32s
         let mut s = 0.;
-        let mut pi: Vec<f64> = pi.into_iter().enumerate()
-            .map(|(i, x)| {
+        let mut pi: Vec<f64> = pi.into_iter()
+            .map(|x| {
                 let f = x.into_inner() as f64;
                 s += f;
                 f

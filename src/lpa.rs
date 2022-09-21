@@ -80,13 +80,10 @@ impl LPA {
                     }
 
                     // Get max label count as new label.  If we have ties, we'll need to tiebreak
-                    let mut best_cluster = 0;
                     let mut best_count = 0;
-                    let mut ties = false;
                     let mut ties = Vec::new();
                     for (cluster, count) in counts.iter() {
                         if *count > best_count {
-                            best_cluster = *cluster;
                             best_count = *count;
                             ties.clear();
                             ties.push(*cluster)

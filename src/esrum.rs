@@ -5,16 +5,13 @@ extern crate statrs;
 
 use std::hash::Hash;
 use std::fmt::Write;
-use std::cell::RefCell;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize,Ordering};
 
 use indicatif::{ProgressBar,ProgressStyle};
 use rayon::prelude::*;
 use hashbrown::HashMap;
 use rand::prelude::*;
 use rand_xorshift::XorShiftRng;
-use rand_distr::{Distribution as Dist,Gamma,Normal,Beta};
+use rand_distr::{Distribution as Dist,Normal};
 use float_ord::FloatOrd;
 
 use statrs::distribution::{Normal as SNormal};
@@ -28,7 +25,7 @@ pub enum Distribution {
 
 impl Distribution {
 
-    fn bound(&self, a: &mut f32, b: &mut f32) {
+    fn bound(&self, _a: &mut f32, b: &mut f32) {
         match self {
             Distribution::Gaussian => {
                 *b = b.max(1e-5);
@@ -110,8 +107,6 @@ impl EsRum {
 
         eprintln!("Total comparisons: {}", n_edges);
 
-        let mut rng = XorShiftRng::seed_from_u64(self.seed);
-        
         // Create an initial set of parameters for each distribution based
         // around the independent win/loss ratio of each alternative.
         let mut policy = self.create_initial_policy(&graph);
@@ -176,9 +171,9 @@ impl EsRum {
                     // Add noise to the gradient
                     let seed = self.seed + (idx + it * n_gradients) as u64;
                     let mut rng = XorShiftRng::seed_from_u64(seed);
-                    grad.iter_mut().zip(policy.iter()).enumerate().for_each(|(idx, (arr, p_arr))| {
-                        let mut n_mu    = p_arr[0] + normal.sample(&mut rng);
-                        let mut n_sigma = p_arr[1] + normal.sample(&mut rng);
+                    grad.iter_mut().zip(policy.iter()).for_each(|(arr, p_arr)| {
+                        let n_mu    = p_arr[0] + normal.sample(&mut rng);
+                        let n_sigma = p_arr[1] + normal.sample(&mut rng);
                         *arr = [n_mu, n_sigma];
                     });
 
@@ -224,7 +219,8 @@ impl EsRum {
         pb.finish();
 
         let mut params: HashMap<_,_> = vocab.into_iter()
-            .filter(|(k, idx)| {
+            // Confirm that the adjacency graph has at least min_obs comparisons
+            .filter(|(_k, idx)| {
                 graph[idx].iter().map(|(_, (_, n))| n).sum::<usize>() >= self.min_obs
             })
             .map(|(k, idx)| {
@@ -324,7 +320,7 @@ impl EsRum {
         });
 
         // Order rates asending
-        rates.sort_by_key(|(idx, rate)| FloatOrd(*rate));
+        rates.sort_by_key(|(_idx, rate)| FloatOrd(*rate));
         
         // Create initial policy
         let mut policy = vec![[0f32, 0f32]; graph.len()];

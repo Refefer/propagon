@@ -5,7 +5,7 @@ extern crate float_ord;
 use float_ord::FloatOrd;
 
 use rand::prelude::*;
-use rand::distributions::{Normal,Uniform};
+use rand_distr::{Distribution,Normal,Uniform};
 use rayon::prelude::*;
 
 pub trait Fitness: Send + Sync {
@@ -116,7 +116,7 @@ impl DifferentialEvolution {
         // Initial function counts
         let mut fns = self.lambda;
 
-        let norm_dist = Normal::new(0., 1.);
+        let norm_dist = Normal::new(0., 1.).expect("Should never error out");
 
         // Tracks time since last update of the best candidate.  We use this to
         // determine polishing.

@@ -73,9 +73,8 @@ impl BtmLr {
         let weights: f32 = games.par_iter().map(|(_,_,w)| w).sum();
         let mut grads = vec![(0u32, 0f32); games.len() * 2];
         let pb = self.create_pb(self.passes as u64);
-        let mut msg = "Pass: 0".into();
         for it in 0..self.passes {
-            msg = format!("Pass: {}/{}", it+1, self.passes);
+            let msg = format!("Pass: {}/{}", it+1, self.passes);
             pb.set_message(&msg);
 
             if self.thrifty {

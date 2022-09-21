@@ -34,7 +34,7 @@ extern crate hashbrown;
 use clap::{Arg, App, ArgMatches, SubCommand};
 
 use std::fmt::{Write,Display};
-use hashbrown::{HashMap,HashSet};
+use hashbrown::HashMap; 
 
 type Match = (u32, u32, f32);
 type Games = Vec<Match>;
@@ -100,11 +100,11 @@ fn emit_dense_embs<K: Display, V: Display>(it: impl Iterator<Item=(K, Vec<V>)>) 
 
 // computes the Action rates
 fn rate(args: &&clap::ArgMatches<'_>, games: Games) {
-    let rci = value_t!(args, "confidence-interval", f32).unwrap_or(0.95);
+    let rci = args.value_of("confidence-interval").unwrap_or("0.95");
 
     let ci = match rci {
-        0.95 => rate::ConfidenceInterval::P95,
-        0.90 => rate::ConfidenceInterval::P90,
+        "0.95" => rate::ConfidenceInterval::P95,
+        "0.90" => rate::ConfidenceInterval::P90,
         _    => rate::ConfidenceInterval::P50,
     };
 

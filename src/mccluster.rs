@@ -22,12 +22,6 @@ pub enum Sampler {
     RandomWalk
 }
 
-pub enum Similarity {
-    Cosine,
-    Jaccard,
-    Overlap
-}
-
 pub struct MCCluster {
     pub max_steps: usize,
     pub restarts: f32,

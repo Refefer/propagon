@@ -183,22 +183,6 @@ impl HashEmbeddings {
         }
     }
 
-    fn exp_search<'a>(&self, haystack: &'a [(usize, f32)], needle: f32) -> &'a usize {
-        let n_edges = haystack.len();
-        let mut i = 1;
-        while i < n_edges && haystack[i].1 < needle {
-            i *= 2;
-        }
-        // binary search
-        let start = i / 2;
-        let end = (i + 1).min(n_edges);
-        let idx = haystack[start..end]
-            .binary_search_by(|(_, w)| FloatOrd(*w).cmp(&FloatOrd(needle)))
-            .unwrap_or_else(|idx| idx) + start;
-
-        &haystack[idx.min(n_edges - 1)].0
-    }
-
     fn generate_embeddings(&self, edges: &Vec<Vec<(usize, f32)>>) -> Vec<f32> {
 
         // Progress bar time

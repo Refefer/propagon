@@ -198,6 +198,7 @@ impl SimStrategy {
                 let high_score = *scores.iter()
                     .max_by_key(|s| FloatOrd(**s))
                     .unwrap();
+
                 Percentile::P995.score(mu, sigma).min(high_score)
 
             } else {
@@ -288,7 +289,7 @@ impl AttractorStrategy {
     ) -> Vec<Vec<K>> {
 
        // Take the top K most influential nodes from each node.
-       let it: Vec<_> = adj_graph.par_iter().map(|(k, vs)| {
+       let it: Vec<_> = adj_graph.par_iter().map(|(k, _vs)| {
             let mut vs: Vec<_> = embeddings[k].iter().collect();
             
             // Take the top K most influential nodes
@@ -320,13 +321,13 @@ impl AttractorStrategy {
 
 enum Percentile {
     P995,
-    P99,
-    P95,
-    P90,
-    P10,
-    P05,
+    //P99,
+    //P95,
+    //P90,
+    //P10,
+    //P05,
     P01,
-    P005
+    //P005
 }
 
 impl Percentile {
@@ -334,13 +335,13 @@ impl Percentile {
         use Percentile::*;
         let zvalue = match self {
             P995 => 2.807,
-            P99  => 2.576,
-            P95  => 1.960,
-            P90  => 1.645,
-            P10  => -1.645,
-            P05  => -1.960,
+            //P99  => 2.576,
+            //P95  => 1.960,
+            //P90  => 1.645,
+            //P10  => -1.645,
+            //P05  => -1.960,
             P01  => -2.576,
-            P005 => -2.807
+            //P005 => -2.807
         };
         mu + zvalue * sigma
     }

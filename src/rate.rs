@@ -1,4 +1,4 @@
-use hashbrown::{HashMap,HashSet};
+use hashbrown::HashSet;
 use super::Games;
 use crate::utils::tally_winners_losers;
 
@@ -22,7 +22,7 @@ impl Rate {
     pub fn compute(&self, games: &Games) -> Vec<(u32, f32)> {
         
         // Compute rate stats
-        let (mut winners, losers) = tally_winners_losers(games);
+        let (winners, losers) = tally_winners_losers(games);
         
         // Get all tgeams.
         let mut all_teams: HashSet<_> = winners.keys().collect();
@@ -44,8 +44,6 @@ impl Rate {
                 1.645
             };
 
-            let z_sqr = z * z;
-            
             let mut scores = Vec::new();
             for team in all_teams.into_iter() {
                 let w = winners.get(team).unwrap_or(&(0, 0.)).1;
@@ -65,7 +63,7 @@ impl Rate {
 // better than the equivalent normal distribution approximation.
 fn wilson_confidence_interval(wins: f32, losses: f32, z: f32) -> f32 {
     let n = wins + losses;
-    let z2 = z.powf(2.);
+    let z2 = z * z;
     let nz2 = n + z2;
     let p_approx = (wins + z2 / 2.) / nz2 + (z / nz2) * (wins * losses / n + z2 / 4.).sqrt();
     p_approx
