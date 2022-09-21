@@ -17,6 +17,7 @@ indicatif = "0.15.0"
 float-ord = "0.2.0"
 ahash = "0.6.1"
 statrs = " 0.15.0"
+atomic_float = "0.1.0"
 
 [dependencies.hashbrown]
 version = "0.9.1"

@@ -622,11 +622,26 @@ fn hash_embedding(args: &&clap::ArgMatches<'_>, games: Games) {
 }
 
 fn lsr(args: &&clap::ArgMatches<'_>, games: Games) {
-    let steps = value_t!(args, "steps", usize).unwrap_or(1_000);
     let seed  = value_t!(args, "seed", u64).unwrap_or(2020);
 
+    let (estimator, steps) = match args.value_of("estimator").unwrap_or("power") {
+        "power" => {
+            let e = lsr::Estimator::PowerMethod;
+            let steps = value_t!(args, "steps", usize).unwrap_or(10);
+            (e, steps)
+        },
+        // Monte Carlo
+        _       => {
+            let e = lsr::Estimator::MonteCarlo;
+            let steps = value_t!(args, "steps", usize).unwrap_or(1_000);
+            (e, steps)
+        }
+    };
+
+
     let lsr = lsr::LSR {
-        stationary_steps: steps,
+        steps: steps,
+        estimator: estimator,
         seed: seed
     };
     
@@ -1152,8 +1167,13 @@ fn parse<'a>() -> ArgMatches<'a> {
             .arg(Arg::with_name("steps")
                  .long("steps")
                  .takes_value(true)
-                 .help("Number of random steps starting at each alternative to estimate stationary distribution.
-                        Default is 10_000."))
+                 .help("When the estimator is 'power', specifies the number of passes.  When monte-carlo,
+                        it specifies the number of random walks from each node."))
+            .arg(Arg::with_name("algo")
+                 .long("algo")
+                 .takes_value(true)
+                 .possible_values(&["power", "monte-carlo"])
+                 .help("Algorithm to optimize with.  Default is 'insertion'."))
             .arg(Arg::with_name("seed")
                  .long("seed")
                  .takes_value(true)

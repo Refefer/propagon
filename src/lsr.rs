@@ -1,9 +1,11 @@
 extern crate hashbrown;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 use std::thread;
 
+use atomic_float::AtomicF64;
 use float_ord::FloatOrd;
 use hashbrown::{HashMap,HashSet};
 use rand::prelude::*;
@@ -13,19 +15,28 @@ use rayon::prelude::*;
 
 use super::Games;
 
+static EPS: f64 = 1e-8;
+
 type AdjList = Vec<(usize, f32)>;
 type MarkovChain = Vec<NormedAdjList>;
 type Vocab = HashMap<u32, usize>;
-type Weights = Vec<f32>;
+type Weights = Vec<f64>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct NormedAdjList {
     degree: f32,
     adj_list: AdjList
 }
 
+#[derive(Debug, Clone)]
+pub enum Estimator {
+    MonteCarlo,
+    PowerMethod
+}
+
 pub struct LSR {
-    pub stationary_steps: usize,
+    pub steps: usize,
+    pub estimator: Estimator,
     pub seed: u64
 }
 
@@ -73,15 +84,69 @@ impl LSR {
 
     }
 
-    fn compute_stationary_distribution(&self, sparse_chain: MarkovChain) -> Weights {
+    fn atomic_matmul(b: &[f64], b_prime: &[AtomicF64], sparse_chain: &MarkovChain) {
+        // Zero out destination
+        b_prime.par_iter().for_each(|f| f.store(0., Relaxed));
+
+        sparse_chain.par_iter().enumerate().for_each(|(i, adj_list)| {
+            let mut cur = 0.;
+            adj_list.adj_list.iter().for_each(|(idx, v)| {
+                let f = *v - cur;
+                cur = *v;
+                let w = b[i] * f as f64;
+                b_prime[*idx].fetch_add(w, Relaxed);
+            });
+        });
+    }
+
+    fn power_method_est(&self, sparse_chain: &MarkovChain) -> (f64, Weights) {
+
+        // Compute stationary distribution via 
+        let ni = 1. / (sparse_chain.len() as f64);
+        let mut pi: Vec<_> = vec![ni; sparse_chain.len()];
+        let mut pi_prime: Vec<_> = (0..sparse_chain.len()).map(|_| AtomicF64::new(0.)).collect();
+        
+        for pass in 0..self.steps {
+            LSR::atomic_matmul(&pi, &pi_prime, sparse_chain);
+
+            // L1 Norm and copy over to pi
+            let mut denom = AtomicF64::new(0.);
+            pi.par_iter_mut().zip(pi_prime.par_iter()).for_each(|(pi_i, pi_prime_i)| {
+                let f = pi_prime_i.load(Relaxed) + EPS;
+                denom.fetch_add(f, Relaxed);
+                *pi_i = f;
+            });
+
+            let denom = denom.load(Relaxed);
+            pi.par_iter_mut().for_each(|v| *v /= denom);
+
+            let err = LSR::compute_error(&pi, sparse_chain);
+            eprintln!("Pass: {}, Error: {:.3e}", pass, err);
+        }
+        
+        let err = LSR::compute_error(pi.as_slice(), sparse_chain);
+
+        // Discount degree impact
+        pi.iter_mut().enumerate()
+            .for_each(|(i, x)| *x = (*x / sparse_chain[i].degree.powf(0.5) as f64).ln() );
+
+        // Log norm results
+        let avg = pi.iter().cloned().sum::<f64>() / pi.len() as f64;
+        pi.iter_mut().for_each(|v| *v -= avg); 
+        (err, pi)
+    }
+
+    fn monte_carlo_est(&self, sparse_chain: &MarkovChain) -> (f64, Weights) {
 
         // Compute stationary distribution via 
         let pi: Vec<_> = (0..sparse_chain.len()).map(|_| AtomicUsize::new(0)).collect();
 
+        // We randomly sample walks from each node to estimate the likelihood
+        // of transitioning to a node (the hit rate).  
         let dist = Uniform::new(0usize, sparse_chain.len());
         (0..sparse_chain.len()).into_par_iter().for_each(|mut cur_node| {
             let mut rng = XorShiftRng::seed_from_u64(self.seed + cur_node as u64);
-            for n in 0..self.stationary_steps {
+            for n in 0..self.steps {
                 pi[cur_node].fetch_add(1, Ordering::Relaxed);
                 let adj_list = &sparse_chain[cur_node].adj_list;
                 // Need to teleport to a random node, uniformly, when reaching a state without 
@@ -98,31 +163,63 @@ impl LSR {
             }
         });
 
-        // Discount degree impact
-        let mut pi: Vec<f32> = pi.into_iter().enumerate()
-            .map(|(i, x)| (x.into_inner() as f32 / sparse_chain[i].degree.powf(0.5)).ln() )
+        // L1 normalize the atomics into f32s
+        let mut s = 0.;
+        let mut pi: Vec<f64> = pi.into_iter().enumerate()
+            .map(|(i, x)| {
+                let f = x.into_inner() as f64;
+                s += f;
+                f
+            })
             .collect();
 
+        pi.par_iter_mut().for_each(|v| *v /= s);
+
+        let err = LSR::compute_error(pi.as_slice(), sparse_chain);
+
+        // Discount degree impact
+        pi.iter_mut().enumerate()
+            .for_each(|(i, x)| *x = (*x / sparse_chain[i].degree.powf(0.5) as f64).ln() );
+
         // Log norm results
-        let avg = pi.iter().cloned().sum::<f32>() / pi.len() as f32;
+        let avg = pi.iter().cloned().sum::<f64>() / pi.len() as f64;
         pi.iter_mut().for_each(|v| *v -= avg); 
-        pi
-
-
+        (err, pi)
     }
 
-    pub fn fit(&self, games: Games) -> Vec<(u32, f32)> {
+    fn compute_error(pi: &[f64], sparse_chain: &MarkovChain) -> f64 {
+        let mut pi_est = vec![0f64; pi.len()];
+        sparse_chain.iter().enumerate().for_each(|(i, adj_list)| {
+            let mut cur = 0.;
+            adj_list.adj_list.iter().for_each(|(idx, v)| {
+                let f = *v - cur;
+                cur = *v;
+                pi_est[*idx] += pi[i] * f as f64;
+            });
+        });
+
+        pi.iter().zip(pi_est.iter())
+            .map(|(pi_1, pi_2)| (*pi_1 - *pi_2).powf(2.))
+            .sum::<f64>()
+            .sqrt()
+    }
+
+    pub fn fit(&self, games: Games) -> Vec<(u32, f64)> {
         
         // Create the comparison graph
         let (vocab, sparse_chain) = LSR::construct_markov_chain(games);
         
-        let pi = self.compute_stationary_distribution(sparse_chain);
+        let (err, pi) = match self.estimator {
+            Estimator::PowerMethod => self.power_method_est(&sparse_chain),
+            Estimator::MonteCarlo  => self.monte_carlo_est(&sparse_chain),
+        };
+
+        eprintln!("Error: {:.3e}", err);
 
         // Reconstruct from vocab
         vocab.into_iter()
             .map(|(v, idx)| (v, pi[idx]))
             .collect()
-                
 
     }
 }
@@ -152,5 +249,34 @@ mod test_lsr {
             assert_eq!(a_nadj.adj_list, r_nadj.adj_list);
         }
     }
+
+    #[test]
+    fn test_error() {
+        let matches = vec![
+            (1, 2, 1.),
+            (1, 3, 10.),
+            (2, 3, 3.),
+            (2, 1, 1.),
+            (3, 1, 1.),
+            (3, 2, 2.),
+            (4, 1, 1.),
+            (4, 3, 2.),
+            (2, 4, 2.),
+        ];
+
+        let (vocab, mc) = LSR::construct_markov_chain(matches);
+
+        let lsr = LSR {
+            steps: 1_000_000,
+            estimator: Estimator::MonteCarlo,
+            seed: 20202
+        };
+
+        let (act_err, pi) = lsr.power_method_est(&mc);
+        println!("err: {}", act_err);
+        assert!(act_err < 1e-3);
+        panic!()
+    }
+
 
 }
