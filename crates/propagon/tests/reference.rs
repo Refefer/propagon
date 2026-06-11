@@ -753,3 +753,50 @@ fn weng_lin_matches_openskill_vectors() -> TestResult {
 
     Ok(())
 }
+
+/// HITS on the worked example of Langville & Meyer, "A Survey of
+/// Eigenvector Methods for Web Information Retrieval", SIAM Review 47(1)
+/// 2005, §3.3 (the same paper as the PageRank vector above): nodes
+/// {1,2,3,5,6,10}, edges 1→3, 1→6, 2→1, 3→6, 6→3, 6→5, 10→6. Published
+/// 1-norm-normalized vectors: authority (0, 0, .3660, .1340, .5, 0),
+/// hub (.3660, 0, .2113, 0, .2113, .2113).
+#[test]
+fn hits_matches_langville_meyer_example() -> TestResult {
+    use propagon::algos::Hits;
+
+    let mut g = GraphDataset::new();
+    for (s, d) in [
+        ("1", "3"),
+        ("1", "6"),
+        ("2", "1"),
+        ("3", "6"),
+        ("6", "3"),
+        ("6", "5"),
+        ("10", "6"),
+    ] {
+        g.push(s, d, 1.0);
+    }
+
+    let model = Hits::default().fit(&g)?;
+    let authority: std::collections::HashMap<&str, f64> = model.authority_scores().collect();
+    let hub: std::collections::HashMap<&str, f64> = model.hub_scores().collect();
+
+    for (node, a, h) in [
+        ("1", 0.0, 0.3660),
+        ("2", 0.0, 0.0),
+        ("3", 0.3660, 0.2113),
+        ("5", 0.1340, 0.0),
+        ("6", 0.5, 0.2113),
+        ("10", 0.0, 0.2113),
+    ] {
+        let got_a = authority.get(node).ok_or("node scored")?;
+        let got_h = hub.get(node).ok_or("node scored")?;
+        assert!(
+            (got_a - a).abs() < 5e-4,
+            "{node} authority {got_a:.4} vs {a}"
+        );
+        assert!((got_h - h).abs() < 5e-4, "{node} hub {got_h:.4} vs {h}");
+    }
+
+    Ok(())
+}

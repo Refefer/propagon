@@ -5,8 +5,8 @@
 use std::io::Write;
 
 use propagon::algos::{
-    BayesBtModel, BiRankModel, BtmMmModel, CrowdBtModel, Glicko2Model, PlackettLuceModel,
-    SectionKind, WengLinModel,
+    BayesBtModel, BiRankModel, BtmMmModel, CrowdBtModel, Glicko2Model, HitsModel,
+    PlackettLuceModel, SectionKind, WengLinModel,
 };
 use propagon::{RankModel, Result};
 
@@ -82,6 +82,21 @@ pub fn bayes_bt(out: &mut impl Write, model: &BayesBtModel) -> Result<()> {
         writeln!(out, "{name}: {mean:.6} {lo:.6} {hi:.6}")?;
     }
     Ok(())
+}
+
+/// HITS: authority scores, blank line, hub scores, each sorted descending.
+pub fn hits(out: &mut impl Write, model: &HitsModel) -> Result<()> {
+    let emit_side = |out: &mut dyn Write, rows: Vec<(&str, f64)>| -> Result<()> {
+        let mut rows = rows;
+        rows.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+        for (name, score) in rows {
+            writeln!(out, "{name}: {score}")?;
+        }
+        Ok(())
+    };
+    emit_side(out, model.authority_scores().collect())?;
+    writeln!(out)?;
+    emit_side(out, model.hub_scores().collect())
 }
 
 /// Weng-Lin: `mu sigma ordinal` per player at 4 decimals (ordinal =

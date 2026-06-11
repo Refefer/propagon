@@ -25,10 +25,10 @@ use std::sync::Mutex;
 use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use propagon::algos::{
     Bandit, BanditModel, BanditPolicy, BayesianBradleyTerry, BiRank, Borda, BradleyTerryLR,
-    BradleyTerryMM, Colley, Confidence, Copeland, CrowdBt, Elo, EsRum, Estimator, GammaPolicy,
-    Glicko2, HodgeFlow, HodgeRank, Keener, Kemeny, KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4,
-    PageRank, PlackettLuce, RankCentrality, RumDistribution, Sink, WengLin, WengLinVariant,
-    WinRate, extract_components,
+    BradleyTerryMM, Colley, Confidence, Copeland, CrowdBt, Degree, Direction, Elo, EsRum,
+    Estimator, GammaPolicy, Glicko2, Hits, HodgeFlow, HodgeRank, KCore, Katz, Keener, Kemeny,
+    KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4, PageRank, PlackettLuce, RankCentrality,
+    RumDistribution, Sink, WengLin, WengLinVariant, WinRate, extract_components,
 };
 use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
 
@@ -479,6 +479,36 @@ fn graph_cmd() -> Command {
                 .arg(opt::<f64>("alpha", "dst-side propagation weight"))
                 .arg(opt::<f64>("beta", "src-side propagation weight"))
                 .arg(opt::<u64>("seed", "Initialization seed")),
+        ))
+        .subcommand(with_path(
+            Command::new("hits")
+                .about("HITS hubs and authorities (two scores per node)")
+                .arg(opt::<usize>("iterations", "Power-iteration budget"))
+                .arg(opt::<f64>("tolerance", "Early-exit threshold")),
+        ))
+        .subcommand(with_path(
+            Command::new("katz-centrality")
+                .visible_alias("katz")
+                .about("Katz centrality: all walks, geometrically discounted")
+                .arg(opt::<f64>("alpha", "Walk discount (< 1/lambda_max)"))
+                .arg(opt::<usize>("iterations", "Iteration budget"))
+                .arg(opt::<f64>("tolerance", "Early-exit threshold")),
+        ))
+        .subcommand(with_path(
+            Command::new("degree")
+                .about("Weighted degree/strength baseline")
+                .arg(
+                    Arg::new("direction")
+                        .long("direction")
+                        .value_parser(["in", "out", "total"])
+                        .default_value("in")
+                        .help("Which incident edges count"),
+                ),
+        ))
+        .subcommand(with_path(
+            Command::new("k-core")
+                .visible_alias("kcore")
+                .about("k-core decomposition: coreness per node (undirected)"),
         ))
         .subcommand(with_path(
             Command::new("components")
@@ -1069,6 +1099,50 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
                 "jsonl" => emit::jsonl(&mut out, &model),
                 _ => emit::birank(&mut out, &model),
             }
+        }
+        "hits" => {
+            ctx.reject_load_state(algo)?;
+            let mut ht = Hits::default();
+            set(sm, "iterations", &mut ht.iterations);
+            set(sm, "tolerance", &mut ht.tolerance);
+
+            let graph = io::read_graph(ctx.path, false)?;
+            let model = ht.fit_opts(&graph, &ctx.opts())?;
+            ctx.save(&model)?;
+            let mut out = std::io::stdout().lock();
+
+            match ctx.format.as_str() {
+                "jsonl" => emit::jsonl(&mut out, &model),
+                _ => emit::hits(&mut out, &model),
+            }
+        }
+        "katz-centrality" => {
+            ctx.reject_load_state(algo)?;
+            let mut kz = Katz::default();
+            set(sm, "alpha", &mut kz.alpha);
+            set(sm, "iterations", &mut kz.iterations);
+            set(sm, "tolerance", &mut kz.tolerance);
+
+            let model = kz.fit_opts(&io::read_graph(ctx.path, false)?, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "degree" => {
+            ctx.reject_load_state(algo)?;
+            let direction = match choice(sm, "direction", "in") {
+                "out" => Direction::Out,
+                "total" => Direction::Total,
+                _ => Direction::In,
+            };
+
+            let model =
+                Degree { direction }.fit_opts(&io::read_graph(ctx.path, false)?, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "k-core" => {
+            ctx.reject_load_state(algo)?;
+            let model =
+                KCore::default().fit_opts(&io::read_graph(ctx.path, false)?, &ctx.opts())?;
+            ctx.emit(&model)
         }
         "components" => {
             ctx.reject_load_state(algo)?;
