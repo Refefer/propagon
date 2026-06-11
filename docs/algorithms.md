@@ -154,7 +154,7 @@ The classical core. One latent strength per entity, a fixed link function, a lik
 - **Cons** — no ties, margins, or dynamics out of the box; undefined on disconnected data; misspecified under cyclic or multidimensional skill; scores are relative only.
 - **Use cases** — sports league tables from head-to-head results; LLM arena leaderboards (§12); paired-preference analysis of A/B alternatives; crowdsourced comparison aggregation; reward modeling (§10.6).
 - **Relationships** — logistic special case of Thurstone's framework; pairwise marginal of Plackett-Luce; the model Elo tracks online; target model of Rank Centrality/LSR.
-- **Propagon status** — **implemented**: `src/mm.rs` (`btm-mm`, Hunter's MM with connectivity mitigations) and `src/lr.rs` (`btm-lr`, logistic SGD with decay and a memory-thrifty mode).
+- **Propagon status** — **implemented**: `bradley-terry-model --estimator mm` (Hunter's MM with connectivity mitigations) and `--estimator sgd` (logistic SGD with decay and a memory-thrifty mode).
 - **References** — [Zermelo 1929; Bradley & Terry 1952; Ford 1957; Hunter 2004; Hamilton, Tawn & Firth 2023; Fang et al. 2026].
 
 ### 1.2 Bradley-Terry Extensions: Ties, Order Effects, Groups
@@ -204,7 +204,7 @@ The classical core. One latent strength per entity, a fixed link function, a lik
 - **Cons** — IIA; winner-focused (the cascade emphasizes top positions; bottom-of-ranking noise is modeled poorly); same connectivity caveats.
 - **Use cases** — race/tournament results with full finishing orders; multiway A/B/n tests; recommender slates; ballot data; LLM evals where annotators rank $k$ responses.
 - **Relationships** — restriction to pairs = BT; special case of RUM with Gumbel noise (§1.5); Mallows (§1.7) is the other major ranking distribution, with distance- rather than strength-based structure.
-- **Propagon status** — **partially implemented**: `src/lsr.rs` fits PL from pairwise data; multiway/ranking input parsing and the exact I-LSR refinement are candidates.
+- **Propagon status** — **implemented**: `luce-spectral-ranking` fits PL from pairwise data and `rankings plackett-luce` (Hunter's MM) fits full/partial rankings exactly; the I-LSR refinement remains a candidate.
 - **References** — [Luce 1959; Plackett 1975; Hunter 2004; Maystre & Grossglauser 2015].
 
 ### 1.5 Random Utility Models & Conditional Logit (1974)
@@ -217,7 +217,7 @@ The classical core. One latent strength per entity, a fixed link function, a lik
 - **Pros / Cons** — connects ranking directly to seventy years of econometrics (welfare analysis, elasticities, demand prediction); covariates are first-class. Cost: distributional commitments, and the flexible variants (mixed logit) are expensive and weakly identified on small data.
 - **Use cases** — purchase/choice logs; transport mode choice; assortment optimization; any "users chose X from slate S" dataset — the purest "revealed preference" setting in the economic sense (sidebar, §14).
 - **ES-RUM (propagon).** `src/esrum.rs` fits a Gaussian RUM — each entity gets $(\mu_i, \sigma_i)$, win probability from the Gaussian difference — using **evolution strategies** (gradient-free, perturbation-based updates with regularization). Distinctive: per-entity *variance* is estimated, so an entity can be "good but erratic." Caveat documented in the module: the model is identified only up to location/scale, so outputs are meaningful **relatively**, not absolutely.
-- **Propagon status** — **implemented** (`es-rum`) for the Gaussian-RUM special case; covariate-bearing conditional logit is a candidate.
+- **Propagon status** — **implemented** (`tournament random-utility-model`) for the Gaussian-RUM special case; covariate-bearing conditional logit is a candidate.
 - **References** — [McFadden 1974; Train 2009; Tsukida & Gupta 2011].
 
 ### 1.6 Stern's Gamma / Poisson-Race Family (1990) — compact
@@ -260,7 +260,7 @@ One family, one through-line: **skill changes over time, and/or data arrives as 
 - **Margin-of-victory variants** — scale $K$ or the score by a function of point differential; in association football, MOV-augmented Elo measurably improves match forecasts [Hvattum & Arntzen 2010]. Watch for blowout pathologies (teams running up scores).
 - **Use cases** — live leaderboards with continuous play; matchmaking where simplicity and latency dominate; any setting with genuine skill drift.
 - **Relationships** — SGD on BT (§1.1); Glicko adds variance; WHR replaces filtering with full-history smoothing.
-- **Propagon status** — **candidate** (deliberately trivial to add; the offline equivalents `btm-mm`/`btm-lr` are implemented).
+- **Propagon status** — **implemented** (`tournament elo`); the offline equivalents live under `bradley-terry-model`.
 - **References** — [Elo 1978; Aldous 2017; Hvattum & Arntzen 2010].
 
 ### 2.2 Glicko (1999)
@@ -288,7 +288,7 @@ One family, one through-line: **skill changes over time, and/or data arrives as 
 - **Cons** — rating-period bookkeeping; meta-parameters ($\tau$, defaults) need care; still pairwise-only, no teams or margins; per-period approximation degrades with very sparse periods.
 - **Use cases** — ongoing competitions with intermittent participation; any leaderboard where "how sure are we?" must be displayed.
 - **Relationships** — state-space elaboration of Glicko; the filtering counterpart of WHR's smoothing.
-- **Propagon status** — **implemented**: `src/g2.rs` (`glicko2`), with batch periods and `--tau`.
+- **Propagon status** — **implemented** (`tournament glicko2`), with batch periods and `--tau`.
 - **References** — [Glickman 2001; Glickman 2022].
 
 ### 2.4 TrueSkill (2007), TrueSkill Through Time (2008), TrueSkill 2 (2018)
@@ -304,7 +304,7 @@ One family, one through-line: **skill changes over time, and/or data arrives as 
 - **Cons** — implementation complexity (EP, moment matching, truncated Gaussians); historical patent encumbrance pushed open implementations to Weng-Lin (§2.5); additive team skill is a strong assumption; probit machinery is opaque compared to Elo.
 - **Use cases** — online game matchmaking; team esports; any multiplayer ladder.
 - **Relationships** — Bayesian online Thurstone (§1.3); Weng-Lin approximates it cheaply; TTT is the smoothing variant, like WHR is for BT.
-- **Propagon status** — candidate (high value, highest implementation cost in this family).
+- **Propagon status** — superseded for propagon's purposes by the implemented Weng-Lin updates (§2.5), which deliver the multi-team capability in closed form.
 - **References** — [Herbrich, Minka & Graepel 2007; Dangauthier et al. 2008; Minka, Cleven & Zaykov 2018].
 
 ### 2.5 Weng-Lin Updates / OpenSkill (2011)
@@ -316,7 +316,7 @@ One family, one through-line: **skill changes over time, and/or data arrives as 
 - **Estimation & complexity** — strictly closed-form, faster than TrueSkill's EP, trivially parallel across matches.
 - **Pros / Cons** — ~TrueSkill accuracy at a fraction of the implementation burden, with no patent baggage — the basis of the OpenSkill libraries [Joshy 2024]; slightly cruder approximation, fewer production refinements than TS2.
 - **Use cases** — same as TrueSkill; the default open-source choice for multiplayer rating.
-- **Propagon status** — **candidate — recommended**: best capability-to-effort ratio for adding team/multiplayer support.
+- **Propagon status** — **implemented** (`matchups weng-lin`): BT-full and TM-full variants, ties, multi-player teams, verified against the openskill test vectors.
 - **References** — [Weng & Lin 2011; Joshy 2024].
 
 ### 2.6 Whole-History Rating (2008)
@@ -356,7 +356,7 @@ Replace iterative likelihood optimization with **one linear-algebra primitive**:
 - **Cons** — needs connectivity *and* spectral-gap quality (a barbell-shaped comparison graph degrades it before it breaks the MLE); win-fraction aggregation discards sequence information; scores lack the likelihood's standard errors.
 - **Use cases** — large-scale crowdsourced comparisons; bootstrapping a leaderboard before fitting full BT; ranking with millions of items where MM/Newton are awkward.
 - **Relationships** — spectral estimator of BT (§1.1); a personalized-PageRank-flavored cousin of §4.4; generalized by LSR to choice sets.
-- **Propagon status** — **candidate — recommended** (small delta on top of `lsr.rs`'s existing Markov-chain machinery).
+- **Propagon status** — **implemented** (`tournament rank-centrality`).
 - **References** — [Negahban, Oh & Shah 2017].
 
 ### 3.2 Luce Spectral Ranking — LSR / I-LSR (2015)
@@ -371,7 +371,7 @@ Replace iterative likelihood optimization with **one linear-algebra primitive**:
 - **Cons** — PL assumptions inherited (IIA, transitivity, connectivity); MC estimator introduces seed variance (fine for ranking, noisier for scores).
 - **Use cases** — same as PL (§1.4) at scale: search-result preferences, race results, large k-way crowdsourcing.
 - **Relationships** — restriction to pairs ≈ Rank Centrality; the spectral route to §1.4's model.
-- **Propagon status** — **implemented**: `src/lsr.rs` (`lsr`, power-method and MC estimators); I-LSR refinement and native multiway input are candidates.
+- **Propagon status** — **implemented** (`luce-spectral-ranking`, power-method and MC estimators); ranking input is served by `rankings plackett-luce`, and the I-LSR refinement remains a candidate.
 - **References** — [Maystre & Grossglauser 2015].
 
 ### 3.3 Keener's Method (1993)
@@ -386,7 +386,7 @@ Replace iterative likelihood optimization with **one linear-algebra primitive**:
 - **Cons** — the smoothing and skew choices are heuristic knobs, not likelihood-derived; sensitive to scheduling imbalance; no probabilistic semantics.
 - **Use cases** — sports league ranking with scores (its NFL/college-football home turf); any margin-bearing tournament.
 - **Relationships** — the bridge between least-squares ratings (§5) and PageRank-style eigenvector methods (§4.2–4.4); same fixed-point shape as eigenvector centrality on a judiciously built matrix.
-- **Propagon status** — candidate (a natural `keener` subcommand; power iteration already exists in-house).
+- **Propagon status** — **implemented** (`tournament keener`: smoothing, optional skew, optional per-game normalization).
 - **References** — [Keener 1993].
 
 ### 3.4 Random-Walker Rankings (2007) — compact
@@ -418,7 +418,7 @@ Replace iterative likelihood optimization with **one linear-algebra primitive**:
 - **Cons** — $L_2$ on transformed preferences rather than a generative model: no calibrated win probabilities; choice of edge statistic $Y$ matters; harmonic component is hard to explain to stakeholders.
 - **Use cases** — crowdsourced quality assessment (its original home: video QoE); detecting whether an LLM-arena dataset is even consistently rankable; sports with margins; any "rank + audit the rankability" need.
 - **Relationships** — Massey's method (§5.1) is exactly this least-squares problem with point differentials as $Y$; SVD/low-rank cousins in §9 model the cycles instead of measuring them.
-- **Propagon status** — **candidate — recommended** (a sparse Laplacian solve; high differentiating value: nobody's CLI ships an "inconsistency audit").
+- **Propagon status** — **implemented** (`tournament hodge-rank`): three flow statistics plus the global inconsistency (cyclic-share) diagnostic.
 - **References** — [Jiang, Lim, Yao & Ye 2011; Hirani, Kalyanaraman & Watts 2011].
 
 ---
@@ -429,7 +429,7 @@ Here the preference signal is **structural**: a hyperlink, citation, follow, ret
 
 ### 4.1 Degree & Strength — compact baseline
 
-**Class: Non-parametric (counting) × Static. Locality: local.** In-degree (or weighted in-strength) is the centrality every other method is implicitly regularizing: citations counts, follower counts, raw win counts. $O(\text{edges})$ total, trivially interpretable, shockingly competitive on many tasks — and the exact graph analogue of win-rate ranking (§7.1), with the same flaw: it values *quantity* of endorsements, ignoring *who* endorses. Always compute it as the baseline before anything fancier. *Propagon: trivial candidate (one-liner over the edge list).* [Freeman 1979 for the classical framing].
+**Class: Non-parametric (counting) × Static. Locality: local.** In-degree (or weighted in-strength) is the centrality every other method is implicitly regularizing: citations counts, follower counts, raw win counts. $O(\text{edges})$ total, trivially interpretable, shockingly competitive on many tasks — and the exact graph analogue of win-rate ranking (§7.1), with the same flaw: it values *quantity* of endorsements, ignoring *who* endorses. Always compute it as the baseline before anything fancier. *Propagon: implemented (`graph degree`, in/out/total).* [Freeman 1979 for the classical framing].
 
 ### 4.2 Eigenvector Centrality (1972)
 
@@ -441,7 +441,7 @@ Here the preference signal is **structural**: a hyperlink, citation, follow, ret
 - **Pros / Cons** — the purest "recursive endorsement" formalism; parameter-free. But on directed graphs it pathologically zeroes out nodes outside the dominant strongly-connected component's upstream (a node with no in-links *contributes* nothing and scores nothing — acyclic graphs collapse entirely). Katz and PageRank exist precisely to fix this.
 - **Use cases** — undirected/strongly-connected networks: co-authorship, correlation graphs, friendship networks.
 - **Relationships** — Keener (§3.3) is this on a match-score matrix; Katz (§4.3) = damped fix; PageRank (§4.4) = stochastic-normalized fix.
-- **Propagon status** — candidate (power iteration exists in `pr.rs`).
+- **Propagon status** — covered by the implemented Katz centrality (its α → 1/λ_max limit); no separate command.
 - **References** — [Bonacich 1972; Bonacich 1987].
 
 ### 4.3 Katz Centrality (1953)
@@ -454,7 +454,7 @@ Here the preference signal is **structural**: a hyperlink, citation, follow, ret
 - **Pros / Cons** — works where eigenvector centrality degenerates (DAGs, weakly connected digraphs); $\alpha$ interpolates between degree ($\alpha \to 0$) and eigenvector ($\alpha \to 1/\lambda_{\max}$). But $\alpha$ must be chosen, and high-degree hubs still dominate without out-degree normalization — which is precisely PageRank's edit.
 - **Use cases** — citation and influence networks; status in sociometric data (its origin); feature for link prediction.
 - **Relationships** — degree ⊂ Katz ⊂ eigenvector (limits); PageRank = Katz with column-stochastic normalization + teleportation.
-- **Propagon status** — candidate.
+- **Propagon status** — **implemented** (`graph katz-centrality`; diverging α aborts with a typed error).
 - **References** — [Katz 1953].
 
 ### 4.4 PageRank & Personalized PageRank (1998)
@@ -472,7 +472,7 @@ Here the preference signal is **structural**: a hyperlink, citation, follow, ret
 - **Cons** — topic drift toward dense old communities; $d$ matters; scores are graph-global (adding nodes shifts everyone); famously gameable at web scale (→ TrustRank, §4.8); no uncertainty.
 - **Use cases** — web/citation/social importance; "rank items by interaction graph" in recsys (via PPR); also directly usable on *match graphs* (loser→winner edges), where it behaves as a margin-blind cousin of Rank Centrality (§3.1).
 - **Relationships** — normalized-and-teleported Katz; the template for TrustRank, BiRank, LeaderRank; Rank Centrality is its statistically-grounded sibling for comparison data.
-- **Propagon status** — **implemented**: `src/pr.rs` (`page-rank`, with damping and three sink policies).
+- **Propagon status** — **implemented** (`graph page-rank`, with damping and four sink policies including the textbook `uniform`).
 - **References** — [Brin & Page 1998; Langville & Meyer 2006].
 
 ### 4.5 HITS — Hubs & Authorities (1999)
@@ -485,7 +485,7 @@ Here the preference signal is **structural**: a hyperlink, citation, follow, ret
 - **Pros / Cons** — the hub/authority split is genuinely informative on curation-shaped graphs (link directories, review aggregators, retweet networks: curators vs. sources). But: query-dependent in its original design; vulnerable to tightly-knit communities capturing the principal eigenvector (the TKC effect — SALSA's motivation); two scores complicate downstream use.
 - **Use cases** — separating curators from content; citation networks (review papers vs. primary results); bipartite-ish endorsement structures.
 - **Relationships** — SALSA = its random-walk normalization; CoHITS/BiRank carry the alternating idea to explicitly bipartite graphs.
-- **Propagon status** — candidate.
+- **Propagon status** — **implemented** (`graph hits`; emits authorities and hubs as two sections).
 - **References** — [Kleinberg 1999].
 
 ### 4.6 SALSA (2001) — compact
@@ -503,7 +503,7 @@ Here the preference signal is **structural**: a hyperlink, citation, follow, ret
 - **Cons** — scores are popularity-flavored importance, not preference strengths (no matchup semantics); $\alpha, \beta$ tuning; cold-start nodes need priors.
 - **Use cases** — ranking items *and* users from purchase/click/rating logs; venue↔author co-ranking in bibliometrics; query↔document co-ranking.
 - **Relationships** — bipartite descendant of HITS/SALSA with PageRank-style smoothing; complements §10.2's click models, which de-bias the same logs at the event level rather than the graph level.
-- **Propagon status** — **implemented**: `src/birank.rs` (`birank`).
+- **Propagon status** — **implemented** (`graph birank`).
 - **References** — [He, Gao, Kan & Wang 2017; Deng, Lyu & King 2009].
 
 ### 4.8 TrustRank (2004) — compact
@@ -528,7 +528,7 @@ Here the preference signal is **structural**: a hyperlink, citation, follow, ret
 
 ### 4.11 k-Core Decomposition & Influential Spreaders (1983/2010) — compact
 
-**Class: Non-parametric (combinatorial) × Static.** Iteratively strip nodes of degree < $k$; a node's **coreness** is the deepest shell it survives to [Seidman 1983]. Coreness — not degree or betweenness — best predicts spreading power in epidemic-style processes on real networks [Kitsak et al. 2010]: being embedded in a dense core beats having many fragile spokes. $O(\text{edges})$ total via bucket sort. Coarse (many ties) but ultra-cheap and robust; good as a *filter* (rank within the top cores by something finer). *Propagon: candidate utility (pairs naturally with the existing `extract-components`).* [Seidman 1983; Kitsak et al. 2010].
+**Class: Non-parametric (combinatorial) × Static.** Iteratively strip nodes of degree < $k$; a node's **coreness** is the deepest shell it survives to [Seidman 1983]. Coreness — not degree or betweenness — best predicts spreading power in epidemic-style processes on real networks [Kitsak et al. 2010]: being embedded in a dense core beats having many fragile spokes. $O(\text{edges})$ total via bucket sort. Coarse (many ties) but ultra-cheap and robust; good as a *filter* (rank within the top cores by something finer). *Propagon: implemented (`graph k-core`).* [Seidman 1983; Kitsak et al. 2010].
 
 ---
 
@@ -548,7 +548,7 @@ Ratings as the solution of one linear system built from season results. Less sta
 - **Cons** — Gaussian-margin assumption rewards blowouts unless margins are capped/transformed; win/loss only data degrades it to near-uselessness (use Colley); no probabilistic outputs without further assumptions.
 - **Use cases** — any margin-bearing round-robin-ish competition; quick strength-of-schedule-adjusted league tables; baseline for fancier models.
 - **Relationships** — special case of least-squares ranking on graphs (§3.6) with $Y$ = mean margin; Colley is its win-rate-only sibling; Elo-with-MOV is its online cousin.
-- **Propagon status** — **candidate — recommended** (one sparse solve; pairs perfectly with the existing `.edges` weighted format).
+- **Propagon status** — **implemented** (`tournament massey`; the weight column is the margin).
 - **References** — [Massey 1997; Langville & Meyer 2012].
 
 ### 5.2 Colley Matrix Method (2002)
@@ -561,7 +561,7 @@ Ratings as the solution of one linear system built from season results. Less sta
 - **Pros / Cons** — fully deterministic and audit-friendly (it served in the BCS college-football formula); immune to blowout-chasing; the smoothing handles undefeated teams gracefully — but it throws away margin signal on purpose, has no probabilistic semantics, and underperforms BT/Massey on predictive tasks.
 - **Use cases** — rankings that must be *defensible* and manipulation-resistant more than predictive (official standings, seeding).
 - **Relationships** — Laplace-smoothed counting (§7.1) upgraded with schedule structure; the win-only counterpart of Massey.
-- **Propagon status** — candidate (same solver as Massey; ship them together).
+- **Propagon status** — **implemented** (`tournament colley`).
 - **References** — [Colley 2002; Langville & Meyer 2012].
 
 ### 5.3 Offense-Defense Ratings (2009) — compact
@@ -584,12 +584,12 @@ Inputs here are **multiple rankings** (or a preference matrix distilled from the
 - **Pros / Cons** — instant, transparent, and (from pairwise data, under uniform sampling) provably near-optimal for rank recovery over huge model classes [Shah & Wainwright 2018]. But: positional scores depend on slate composition (clone/irrelevant-alternative sensitivity); a Condorcet winner can lose Borda; with non-uniform comparison schedules it inherits schedule bias with no correction (BT's whole advantage).
 - **Use cases** — first-cut consensus from heterogeneous rankers; metasearch; ensembling model output rankings; the always-on baseline.
 - **Relationships** — = win-rate ranking on pairwise data (§7.1); the positional member of the social-choice canon vs. Copeland/Kemeny's pairwise-majority members.
-- **Propagon status** — trivial candidate.
+- **Propagon status** — **implemented** (`tournament borda-count` for pairwise data; `rankings borda-count` for positional ballots).
 - **References** — [de Borda 1781; Shah & Wainwright 2018].
 
 ### 6.2 Copeland Method — compact
 
-**Class: Non-parametric (pairwise majority) × Static.** Score = (pairwise majorities won) − (lost), over all opponents; sort. Condorcet-consistent (a Condorcet winner — beats everyone head-to-head — always tops the list), cheap ($O(n^2)$ majorities), and the natural "wins against the field" statistic. Coarse near the middle of the table (many tied Copeland scores) and needs most pairs observed. The dueling-bandit literature adopts it as a target when no Condorcet winner exists (§8.2). *Propagon: trivial candidate alongside Borda.* [Copeland 1951; Saari & Merlin 1996].
+**Class: Non-parametric (pairwise majority) × Static.** Score = (pairwise majorities won) − (lost), over all opponents; sort. Condorcet-consistent (a Condorcet winner — beats everyone head-to-head — always tops the list), cheap ($O(n^2)$ majorities), and the natural "wins against the field" statistic. Coarse near the middle of the table (many tied Copeland scores) and needs most pairs observed. The dueling-bandit literature adopts it as a target when no Condorcet winner exists (§8.2). *Propagon: implemented (`tournament copeland`).* [Copeland 1951; Saari & Merlin 1996].
 
 ### 6.3 Kemeny-Young Optimal Consensus (1959)
 
@@ -606,7 +606,7 @@ Inputs here are **multiple rankings** (or a preference matrix distilled from the
 - **Cons** — NP-hard; heuristics give no certificate of optimality (propagon reports the achieved objective only); no strengths/probabilities; needs reasonably complete preference matrices to be meaningful.
 - **Use cases** — aggregating judge panels; combining heterogeneous benchmark leaderboards into one (§12.6); metasearch; biology (gene-list integration).
 - **Relationships** — MLE of Mallows (§1.7); Borda and footrule (§6.5) are its polynomial-time approximation anchors; Slater's rule is the single-matrix analogue.
-- **Propagon status** — **implemented** (heuristically): `src/kemeny.rs` + `src/de.rs`.
+- **Propagon status** — **implemented** (heuristically): `tournament kemeny` (insertion or differential evolution); `rankings kemeny` aggregates ballots via their implied pairs.
 - **References** — [Kemeny 1959; Young & Levenglick 1978; Young 1988; Bartholdi, Tovey & Trick 1989; Dwork et al. 2001; Ailon, Charikar & Newman 2008; Kenyon-Mathieu & Schudy 2007].
 
 ### 6.4 Markov-Chain Rank Aggregation — MC1–MC4 (2001)
@@ -619,7 +619,7 @@ Inputs here are **multiple rankings** (or a preference matrix distilled from the
 - **Pros / Cons** — graceful with partial, overlapping, differently-sized input lists — exactly where Kemeny and Borda are awkward; spam-resistant in the metasearch setting; but heuristic (no MLE/axiomatic standing), and stationary scores have no preference-strength semantics.
 - **Use cases** — metasearch; merging top-$k$ lists from many recommenders/benchmarks; any partial-list aggregation.
 - **Relationships** — PageRank's machinery (§4.4) applied to ballots; Rank Centrality (§3.1) is the same idea with statistical guarantees for *comparison* data.
-- **Propagon status** — candidate (shares all machinery with `pr.rs`/`lsr.rs`).
+- **Propagon status** — **implemented** (`rankings markov-chain`, with PageRank-style teleport for ergodicity).
 - **References** — [Dwork, Kumar, Naor & Sivakumar 2001].
 
 ### 6.5 Footrule / Spearman Aggregation — compact
@@ -656,7 +656,7 @@ The "assume almost nothing" toolkit: count, smooth, bound. These methods trade a
 - **Cons** — schedule-blind: in any setting with non-uniform matchmaking it is *biased*, not just noisy (farming weak opponents works). Use it as the baseline that schedule-aware methods must beat.
 - **Use cases** — review/upvote sorting; balanced round-robins; smoke-testing data pipelines before real rankers.
 - **Relationships** — degree centrality's tournament twin (§4.1); Borda counting (§6.1/§7.2) is the schedule-aware repair; Colley (§5.2) the structural one.
-- **Propagon status** — **implemented**: `src/rate.rs` (`rate`, P50/P90/P95 bounds).
+- **Propagon status** — **implemented** (`tournament win-rate`, P50/P90/P95 bounds).
 - **References** — [Wilson 1927; Agresti & Coull 1998].
 
 ### 7.2 Counting (Borda) Estimators — Simple, Robust, Optimal (2018)
@@ -711,7 +711,7 @@ Everything so far ranks a *given* dataset. This family chooses **which observati
 - **Cons** — arms are unrelated unless you go contextual (no strength-sharing through a comparison graph — beating a strong opponent teaches BT a lot, converting a user teaches a bandit only about that arm); rankings of rarely-pulled arms stay uncertain *by design* (the policy starves losers of data — fine for decisions, awkward for full leaderboards); logged-data reuse needs care (the logging policy biases naive estimates — §10.2/§13.5's IPS machinery applies).
 - **Use cases** — adaptive A/B/n tests; headline/creative/ad selection; recommender exploration slots; dose-finding; any "rank variants by payoff while serving traffic" loop; offline ranking of arms from logged (arm, reward) events.
 - **Relationships** — the *active* version of Wilson-score win-rate ranking (§7.1: same per-entity tallies, plus a policy); dueling bandits (§8.2) are the preference-feedback sibling; V(s) estimation (§13) is the delayed-reward generalization — and mcrl-rs's per-state return samples are exactly (arm, reward)-shaped, so its output feeds bandit state directly.
-- **Propagon status** — **candidate — recommended** (PRD FR-8): greedy/ε-greedy, UCB1, and Thompson Sampling (Beta + Gaussian) over a shared (arm, reward) dataset with a `select()` policy API in v2.0; KL-UCB, EXP3, sliding-window UCB, LinUCB in v2.x.
+- **Propagon status** — **implemented** (`bandit` group): greedy, ε-greedy, UCB1, KL-UCB, Thompson Sampling (Beta + Gaussian), and EXP3 over a shared (arm, reward) dataset with a `select()` policy API; sliding-window UCB and LinUCB remain v2.x candidates.
 - **References** — [Thompson 1933; Lai & Robbins 1985; Auer, Cesa-Bianchi & Fischer 2002; Auer et al. 2002 (EXP3); Garivier & Cappé 2011; Garivier & Moulines 2011; Chapelle & Li 2011; Agrawal & Goyal 2012; Even-Dar, Mannor & Mansour 2006; Li et al. 2010; Russo et al. 2018; Lattimore & Szepesvári 2020].
 
 ### 8.2 Dueling Bandits (2009–2012)
@@ -860,7 +860,7 @@ Less a family than a **lens applicable to every family**: replace point estimate
 - **Cons** — MCMC bookkeeping (convergence, mixing); slower than MM/spectral point estimates; prior choice visible in sparse regimes.
 - **Use cases** — small-to-medium leaderboards where uncertainty drives decisions; sparse tournaments; official rankings needing credible intervals.
 - **Relationships** — Bayesian counterpart of §1.1/§1.4; Glicko-2 (§2.3) is its filtering approximation; bootstrap (§11.4) its frequentist sibling.
-- **Propagon status** — **candidate — recommended** (pairs with `mm.rs`; Gibbs is simple and Rayon-friendly across chains).
+- **Propagon status** — **implemented** (`tournament bayesian-bradley-terry`): the latent-variable Gibbs sampler with posterior means and credible intervals on normalized strengths.
 - **References** — [Caron & Doucet 2012].
 
 ### 11.2 Crowd-BT — Annotator-Aware Ranking (2013)
@@ -872,7 +872,7 @@ Less a family than a **lens applicable to every family**: replace point estimate
 - **Pros / Cons** — substantial quality gains over vanilla BT whenever annotator quality varies (always); spammer/adversary detection for free. Identifiability needs annotator overlap on common pairs; mediocre-annotator regimes ($\eta \approx 0.5$) carry little signal; reliability assumed item-independent.
 - **Use cases** — paid crowdsourcing pipelines; arena leaderboards with heterogeneous voters (§12); peer grading; any multi-judge comparison collection.
 - **Relationships** — BT + the item-response-theory idea (rater models); complements aggregate-level style control (§12.2): one models *who voted*, the other *what confounded the vote*.
-- **Propagon status** — **candidate — recommended** (input format extends `.edges` with an annotator column; high practical value).
+- **Propagon status** — **implemented** (`crowd bradley-terry`): batch EM with the virtual-node regularizer; reports per-annotator reliability alongside the ranking.
 - **References** — [Chen et al. 2013].
 
 ### 11.3 Gaussian-Process Preference Learning (2005) — compact

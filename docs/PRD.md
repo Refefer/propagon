@@ -79,7 +79,7 @@ Use cases follow a fixed template so requirements trace cleanly. **This section 
 
 - **Actor**: game backend rating players for fair matchmaking.
 - **Data shape**: continuous stream of match results (teams later).
-- **Algorithms**: Glicko-2 now; Weng-Lin/OpenSkill for teams (v2.x).
+- **Algorithms**: Glicko-2; Weng-Lin/OpenSkill for teams (`matchups weng-lin`).
 - **Surface / platform**: Rust crate embedded in the service; mobile clients later read state via FFI.
 - **Scale**: 10⁵–10⁷ players.
 - **Incremental needs**: **core** — per-rating-period updates against persistent state; conservative estimates (μ − kσ) for matching.
@@ -90,7 +90,7 @@ Use cases follow a fixed template so requirements trace cleanly. **This section 
 
 - **Actor**: researcher collecting "which is better, A or B?" judgments from crowdworkers.
 - **Data shape**: (annotator, winner, loser) triples; uneven annotator quality.
-- **Algorithms**: BT baseline; Crowd-BT (v2.x); Kemeny consensus for small panels.
+- **Algorithms**: BT baseline; Crowd-BT (`crowd bradley-terry`); Kemeny consensus for small panels.
 - **Surface / platform**: Python.
 - **Scale**: 10²–10⁵ items, 10³–10⁶ judgments.
 - **Incremental needs**: warm-start refits between collection rounds; active-pair suggestions later.
@@ -288,7 +288,7 @@ Standard multi-armed bandits ([algorithms.md §8.1](algorithms.md#81-standard-mu
 - **FR-8.2** Policy surface beyond ranking: `select() -> Id` and `select_k(n) -> Vec<Id>` implement the exploration rule (UCB argmax, posterior sampling, ε-greedy). Stochastic policies (TS, ε-greedy) are deterministic given the `seed` param and current state.
 - **FR-8.3** Dual mode: **offline** — rank arms from logged (arm, reward) events; **online** — the model lives in the application loop: `update(batch)` → `select_k(n)` → serve → repeat, with state persisted per FR-4 between rounds.
 - **FR-8.4** Available on all three surfaces; the WASM build makes in-browser adaptive assignment possible with no backend.
-- **FR-8.5** v2.0 algorithms: greedy/ε-greedy, UCB1, Thompson Sampling (Beta-Bernoulli + Gaussian). v2.x: KL-UCB, EXP3, sliding-window/discounted UCB, LinUCB (linear contextual only — deeper contextual modeling stays out of scope per N2).
+- **FR-8.5** Implemented policies: greedy/ε-greedy, UCB1, KL-UCB, Thompson Sampling (Beta-Bernoulli + Gaussian), EXP3 (offline replay, documented as approximate). Remaining v2.x: sliding-window/discounted UCB, LinUCB (linear contextual only — deeper contextual modeling stays out of scope per N2).
 
 *Acceptance*: UCB1 `select()` matches a hand-computed argmax on a fixture; seeded Thompson Sampling reproduces identical selection sequences; save → load → `select()` is indistinguishable from an uninterrupted run; merging two state files equals processing the concatenated logs.
 
@@ -395,7 +395,8 @@ const ratings = model.ratings();                     // Float64Array
 ## 7. Algorithm Rollout
 
 - **v2.0 (port + trivial adds)**: BT-MM, BT-LR, Glicko-2, LSR, ES-RUM, Kemeny, Wilson rate, PageRank, BiRank, components — plus Elo, Borda, Copeland, Rank Centrality, and the core bandits (greedy/ε-greedy, UCB1, Thompson Sampling Beta + Gaussian over `RewardsDataset`, FR-8) — all near-free on the new core.
-- **v2.x (per [algorithms.md §16](algorithms.md#16-propagon-coverage-map) recommended candidates)**: BT extensions (ties/home/covariates), HodgeRank rankability audit, Massey + Colley, Bayesian BT, Crowd-BT, Weng-Lin/OpenSkill (teams), library-wide `--bootstrap N`, I-LSR + native multiway input, KL-UCB / EXP3 / sliding-window UCB / LinUCB.
+- **Shipped post-v2.0** (the "v2.x recommended" batch, now in tree): Massey, Colley, Keener, HodgeRank (with the inconsistency audit), Plackett-Luce MM on rankings (`rankings` group), MC4, Bayesian BT (Gibbs + credible intervals), Crowd-BT (`crowd` group, `AnnotatedPairsDataset`), Weng-Lin/OpenSkill (`matchups` group, `MatchupsDataset`), HITS, Katz, degree, k-core, KL-UCB, EXP3.
+- **Next up (phased)**: WHR, Offense-Defense (Sinkhorn), BT extensions (ties/home/covariates), library-wide `--bootstrap N`, I-LSR refinement, sliding-window/discounted UCB, LinUCB, mElo, Blade-Chest.
 - Lower priority / out of scope: see §16's remaining lists.
 
 ## 8. Non-Functional Requirements

@@ -14,11 +14,13 @@ propagon/
 │  ├─ propagon/                # the library — no I/O coupling, wasm-clean
 │  │  ├─ src/
 │  │  │  ├─ dataset/           # PairwiseDataset, RankingsDataset, GraphDataset,
-│  │  │  │                     #   RewardsDataset, JSONL dataset io
+│  │  │  │                     #   RewardsDataset, MatchupsDataset,
+│  │  │  │                     #   AnnotatedPairsDataset, JSONL dataset io
 │  │  │  ├─ algos/             # one module per algorithm (+ bandits, DE optimizer)
 │  │  │  ├─ interner.rs        # string id ↔ dense u32
 │  │  │  ├─ traits.rs          # Ranker, OnlineRanker, RankModel, FitOptions
 │  │  │  ├─ state.rs           # header-line JSONL model persistence
+│  │  │  ├─ solver.rs          # sparse CG (Massey, Colley, HodgeRank)
 │  │  │  ├─ parallel.rs        # rayon shim (sequential under --no-default-features)
 │  │  │  ├─ progress.rs        # Progress trait (core never prints)
 │  │  │  └─ mathx.rs           # normal CDF/quantile approximations
@@ -26,29 +28,34 @@ propagon/
 │  └─ propagon-cli/            # bin "propagon": clap wiring, file parsing, emitters
 │     └─ tests/golden.rs + golden/   # captured v1 outputs + harness
 ├─ docs/                       # algorithms survey, PRD
-├─ examples/tournament/         # bundled 2018 MLB data + run.sh demo
+├─ examples/                   # six worked demos (one per input shape)
 └─ scripts/capture_golden.sh   # provenance of the golden files (v1 binary, run once)
 ```
 
 ## Core contracts
 
 **Datasets are shared and immutable during fitting.** Algorithms never define
-private input formats. The four shapes: `PairwiseDataset` (winner/loser/weight
-+ optional rating periods), `RankingsDataset` (CSR-packed ballots),
-`GraphDataset` (directed weighted edges), `RewardsDataset` (arm/reward events).
-Each owns an `Interner`; the invariant that every stored id came from the
-owning interner is established at `push`/`push_ids` and relied on everywhere
-(that is what makes `Interner::resolve` total).
+private input formats. The six shapes: `PairwiseDataset` (winner/loser/weight
++ optional rating periods), `RankingsDataset` (CSR-packed ballots, with
+`to_pairwise()` rank-breaking), `GraphDataset` (directed weighted edges),
+`RewardsDataset` (arm/reward events), `MatchupsDataset` (multi-team ranked
+matches, two-level CSR), `AnnotatedPairsDataset` (annotator-tagged votes,
+two interners). Each owns its `Interner`(s); the invariant that every stored
+id came from the owning interner is established at `push`/`push_ids` and
+relied on everywhere (that is what makes `Interner::resolve` total).
 
 **Two fitting tiers** (PRD FR-5):
 
 - `Ranker::fit(&data) -> Model` + `fit_warm(&data, &init)` — batch, with
-  warm-starting for the iterative methods (BT-MM, BT-SGD, LSR). Contract:
-  `fit_warm` never converges to a worse objective than `fit`.
+  warm-starting for the iterative methods (BT-MM, BT-SGD, LSR,
+  Plackett-Luce). Contract: `fit_warm` never converges to a worse objective
+  than `fit`.
 - `OnlineRanker::init() -> Model` + `update(&mut model, &batch)` — true
-  incremental state (Glicko-2, Elo, win-rate, bandits). Contract: `update`
-  never replays history, and split updates equal one continuous run
-  (tested in `tests/state.rs` and the CLI golden flow).
+  incremental state (Glicko-2, Elo, Weng-Lin, win-rate, bandits). Contract:
+  `update` never replays history, and split updates equal one continuous run
+  (tested in `tests/state.rs` and the CLI golden flow). One documented
+  exception: EXP3's replay is order-dependent, so its `merge` approximates
+  the concatenated log.
 
 **Models are owned and self-contained** — they carry their own names, never
 borrow the dataset. `RankModel` provides `scores()`, `sorted_scores()`
@@ -112,9 +119,9 @@ Practical patterns in use:
    if stochastic, byte-identical save/load/save round trip.
 5. If a published worked example exists, add it to `tests/reference.rs`
    **with the source cited** — never hard-code numbers you cannot point to.
-6. Wire the CLI: a leaf under the right group (`tournament`/`graph`/
-   `bandit`) using the `set`/`choice` pattern; spell names out for laymen
-   with a short `visible_alias`.
+6. Wire the CLI: a leaf under the right group (`tournament`/`rankings`/
+   `crowd`/`matchups`/`graph`/`bandit`) using the `set`/`choice` pattern;
+   spell names out for laymen with a short `visible_alias`.
 7. Run the full gate (below).
 
 ## Testing
@@ -130,12 +137,14 @@ Four layers, by what they catch:
 
 - **Unit tests** (in-module): algorithm behavior, edge cases, round trips.
 - **`tests/reference.rs`** — third-party-published vectors: Agresti's 1987
-  Bradley-Terry baseball coefficients, Newcombe's Wilson intervals,
-  Langville & Meyer's PageRank example, the Tennessee Borda/Condorcet
-  election, canonical Elo expectations, Beta-posterior arithmetic, and a
-  brute-force Kemeny oracle (all 720 orderings; the insertion heuristic is
-  held to ≥95% of the exhaustive optimum — Kemeny is NP-hard, exactness is
-  not promised).
+  Bradley-Terry baseball coefficients (also pinning Plackett-Luce reduced
+  to pairs and the Bayesian-BT posterior), the *Who's #1?* Massey/Colley/
+  Keener worked example, the openskill Weng-Lin vectors (BT-full at 1e-9,
+  TM-full at 1e-6), Langville & Meyer's PageRank **and** HITS examples,
+  Newcombe's Wilson intervals, the Tennessee Borda/Condorcet election,
+  canonical Elo expectations, Beta-posterior arithmetic, and brute-force
+  oracles (Kemeny over all 720 orderings at ≥95% of optimum; MC4 against a
+  dense stationary solve; Katz against a dense linear solve).
 - **`tests/parity.rs` + CLI `tests/golden.rs`** — numeric regression against
   outputs captured from the last v1 build (`scripts/capture_golden.sh`
   documents exactly how). Tier T = per-entity tolerance; tier S = rank
