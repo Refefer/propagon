@@ -118,6 +118,18 @@ Use cases follow a fixed template so requirements trace cleanly. **This section 
 
 > TODO(owner): expand; define the edge-export format contract between the two tools.
 
+### UC-7: Adaptive experimentation (bandit-driven A/B/n)
+
+- **Actor**: growth/experimentation team allocating traffic among variants while the test runs.
+- **Data shape**: (variant, reward) events — clicks, conversions, revenue; batched or streaming.
+- **Algorithms**: Thompson Sampling, UCB1, ε-greedy ([algorithms.md §8.1](algorithms.md#81-standard-multi-armed-bandits-ε-greedy-ucb-thompson-sampling)); best-arm identification to conclude the experiment.
+- **Surface / platform**: Python in an assignment service; WASM for fully in-browser assignment with no backend.
+- **Scale**: 2–10³ arms, 10⁴–10⁸ events.
+- **Incremental needs**: **core** — `update(batch)` merges sufficient statistics; `select_k(n)` drives the next allocation; state saved between rounds (FR-8).
+- **Flow**: load `state.jsonl` → `update(last_hour_events)` → `select_k` for the next traffic split → save; ranking of arms with CIs published continuously.
+
+> TODO(owner): expand.
+
 > TODO(owner): add further use cases here (mobile-first scenarios, browser-only scenarios, etc.).
 
 ## 4. Functional Requirements
@@ -131,6 +143,7 @@ Three columnar dataset types cover every algorithm in scope; algorithms never de
 | `PairwiseDataset` | `winners: Vec<Id>`, `losers: Vec<Id>`, `weights: Vec<f32>`; optional period boundaries (replaces v1's blank-line batches); optional tie flags | BT-MM, BT-LR, Elo, Glicko-2, LSR, Rank Centrality, ES-RUM, Wilson rate, Massey/Colley, HodgeRank, Copeland |
 | `RankingsDataset` | CSR-style ragged lists: `items: Vec<Id>`, `offsets: Vec<u64>` | Plackett-Luce / I-LSR, Kemeny, Borda, Mallows |
 | `GraphDataset` | `src/dst: Vec<Id>`, `weight: Vec<f32>`; bipartite mode (two ID spaces) | PageRank, BiRank, HITS, Katz, components |
+| `RewardsDataset` | `arms: Vec<Id>`, `rewards: Vec<f32>`; optional period boundaries | Bandits (UCB, Thompson Sampling, ε-greedy — FR-8); ingestible from mcrl-rs (entity, return) exports |
 
 Requirements:
 
@@ -220,6 +233,7 @@ Per-algorithm support matrix (v2.0 set):
 | PageRank / BiRank | ❌ | ✅ | warm-start power iteration |
 | ES-RUM | ❌ | ✅ | resume ES from saved (μ, σ) |
 | Wilson rate | ✅ (count merge) | — | trivially mergeable tallies |
+| Bandits (UCB / TS / ε-greedy) | ✅ (sufficient-statistic merge) | — | counts+sums (UCB) or posterior params (TS) merge exactly; the easiest row in this table |
 | Kemeny | ❌ | ◐ | re-run heuristic seeded with previous order |
 
 - **FR-5.1** `update` never reads historical comparisons — state + new batch only.
@@ -243,6 +257,18 @@ Per-algorithm support matrix (v2.0 set):
 - **FR-7.2** The CLI accepts string-ID edge files natively (interner); `dehydrate`/`hydrate` remain for one release as deprecated aliases, then are removed.
 - **FR-7.3** A **golden-output test suite** over `example/tournament` is frozen *before* the port begins; the clap-4 CLI must reproduce v1 outputs (modulo documented seed-handling changes).
 - **FR-7.4** New cross-cutting flags: `--threads N`, `--save-state PATH`, `--load-state PATH`, `--format jsonl|tsv` (tsv = v1-style score output, the default for compatibility).
+
+### FR-8 — Bandit policies (rank arms *and* pick the next one)
+
+Standard multi-armed bandits ([algorithms.md §8.1](algorithms.md#81-standard-multi-armed-bandits-ε-greedy-ucb-thompson-sampling)) are both rankers and decision policies; the library exposes both faces.
+
+- **FR-8.1** Bandit models implement `OnlineRanker` (FR-5) over `RewardsDataset`: `update` is an exact sufficient-statistic merge (counts/sums for UCB and ε-greedy; Beta or Gaussian posterior parameters for Thompson Sampling); `scores()` ranks arms by the policy's estimate (posterior mean / UCB index), with uncertainty fields per arm.
+- **FR-8.2** Policy surface beyond ranking: `select() -> Id` and `select_k(n) -> Vec<Id>` implement the exploration rule (UCB argmax, posterior sampling, ε-greedy). Stochastic policies (TS, ε-greedy) are deterministic given the `seed` param and current state.
+- **FR-8.3** Dual mode: **offline** — rank arms from logged (arm, reward) events; **online** — the model lives in the application loop: `update(batch)` → `select_k(n)` → serve → repeat, with state persisted per FR-4 between rounds.
+- **FR-8.4** Available on all three surfaces; the WASM build makes in-browser adaptive assignment possible with no backend.
+- **FR-8.5** v2.0 algorithms: greedy/ε-greedy, UCB1, Thompson Sampling (Beta-Bernoulli + Gaussian). v2.x: KL-UCB, EXP3, sliding-window/discounted UCB, LinUCB (linear contextual only — deeper contextual modeling stays out of scope per N2).
+
+*Acceptance*: UCB1 `select()` matches a hand-computed argmax on a fixture; seeded Thompson Sampling reproduces identical selection sequences; save → load → `select()` is indistinguishable from an uninterrupted run; merging two state files equals processing the concatenated logs.
 
 ## 5. Architecture
 
@@ -346,8 +372,8 @@ const ratings = model.ratings();                     // Float64Array
 
 ## 7. Algorithm Rollout
 
-- **v2.0 (port + trivial adds)**: BT-MM, BT-LR, Glicko-2, LSR, ES-RUM, Kemeny, Wilson rate, PageRank, BiRank, components — plus Elo, Borda, Copeland, Rank Centrality (near-free on the new core).
-- **v2.x (per [algorithms.md §16](algorithms.md#16-propagon-coverage-map) recommended candidates)**: BT extensions (ties/home/covariates), HodgeRank rankability audit, Massey + Colley, Bayesian BT, Crowd-BT, Weng-Lin/OpenSkill (teams), library-wide `--bootstrap N`, I-LSR + native multiway input.
+- **v2.0 (port + trivial adds)**: BT-MM, BT-LR, Glicko-2, LSR, ES-RUM, Kemeny, Wilson rate, PageRank, BiRank, components — plus Elo, Borda, Copeland, Rank Centrality, and the core bandits (greedy/ε-greedy, UCB1, Thompson Sampling Beta + Gaussian over `RewardsDataset`, FR-8) — all near-free on the new core.
+- **v2.x (per [algorithms.md §16](algorithms.md#16-propagon-coverage-map) recommended candidates)**: BT extensions (ties/home/covariates), HodgeRank rankability audit, Massey + Colley, Bayesian BT, Crowd-BT, Weng-Lin/OpenSkill (teams), library-wide `--bootstrap N`, I-LSR + native multiway input, KL-UCB / EXP3 / sliding-window UCB / LinUCB.
 - Lower priority / out of scope: see §16's remaining lists.
 
 ## 8. Non-Functional Requirements
@@ -399,3 +425,4 @@ const ratings = model.ratings();                     // Float64Array
 | Serializable results & datasets, human-readable, no binary | FR-4, N4 |
 | Updateable state (Glicko-2 continue), resume without reprocessing | FR-5 |
 | Desktop / Android / iOS / browsers | §6, FR-6.3, M5 |
+| Standard bandits (UCB, TS, greedy, …) | FR-1 (`RewardsDataset`), FR-5, FR-8, UC-7; survey §8.1 |

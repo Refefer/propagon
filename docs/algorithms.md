@@ -17,7 +17,7 @@ Citations appear inline as `[Author Year]` and resolve in [§17 References](#17-
 - [§5 Least-Squares & Linear-Algebra Sports Ratings](#5-least-squares--linear-algebra-sports-ratings)
 - [§6 Rank Aggregation & Social Choice](#6-rank-aggregation--social-choice)
 - [§7 Non-Parametric & Robust Estimators](#7-non-parametric--robust-estimators)
-- [§8 Active Ranking & Dueling Bandits](#8-active-ranking--dueling-bandits)
+- [§8 Bandits & Active Ranking](#8-bandits--active-ranking)
 - [§9 Intransitivity & Multidimensional Skill](#9-intransitivity--multidimensional-skill)
 - [§10 Feature-Based, Contextual & Learning-to-Rank](#10-feature-based-contextual--learning-to-rank)
 - [§11 Bayesian & Uncertainty-Aware Inference](#11-bayesian--uncertainty-aware-inference)
@@ -87,7 +87,7 @@ A coarse map of the landscape (each method is detailed in its section):
 | | **Parametric** | **Semi-parametric / Spectral / Algebraic** | **Non-parametric / Counting** |
 |---|---|---|---|
 | **Static** | Bradley-Terry, Thurstone, Plackett-Luce, RUM, Mallows (§1); Blade-Chest, mElo (§9); BT-with-covariates, RLHF reward models (§10, §12) | Rank Centrality, LSR, Keener, SerialRank, HodgeRank (§3); Massey, Colley (§5); PageRank, Katz, HITS & centrality family (§4); α-Rank (§9) | Borda/Copeland counting, SST models, noisy sorting, Wilson-score win rates (§6, §7); Kemeny & social choice (§6) |
-| **Online / Dynamic** | Elo, Glicko-2, TrueSkill, Weng-Lin, WHR, dynamic BT (§2) | — | Dueling bandits, active ranking (§8) |
+| **Online / Dynamic** | Elo, Glicko-2, TrueSkill, Weng-Lin, WHR, dynamic BT (§2); Thompson Sampling (§8.1) | — | UCB & ε-greedy bandits, dueling bandits, active ranking (§8) |
 | **Trajectory-valued** | TD with function approximation (§13) | — | Monte Carlo V(s) + bootstrap/permutation inference (§13) |
 
 ### 0.2 Data & Identifiability Primer
@@ -589,7 +589,7 @@ Inputs here are **multiple rankings** (or a preference matrix distilled from the
 
 ### 6.2 Copeland Method — compact
 
-**Class: Non-parametric (pairwise majority) × Static.** Score = (pairwise majorities won) − (lost), over all opponents; sort. Condorcet-consistent (a Condorcet winner — beats everyone head-to-head — always tops the list), cheap ($O(n^2)$ majorities), and the natural "wins against the field" statistic. Coarse near the middle of the table (many tied Copeland scores) and needs most pairs observed. The dueling-bandit literature adopts it as a target when no Condorcet winner exists (§8.1). *Propagon: trivial candidate alongside Borda.* [Copeland 1951; Saari & Merlin 1996].
+**Class: Non-parametric (pairwise majority) × Static.** Score = (pairwise majorities won) − (lost), over all opponents; sort. Condorcet-consistent (a Condorcet winner — beats everyone head-to-head — always tops the list), cheap ($O(n^2)$ majorities), and the natural "wins against the field" statistic. Coarse near the middle of the table (many tied Copeland scores) and needs most pairs observed. The dueling-bandit literature adopts it as a target when no Condorcet winner exists (§8.2). *Propagon: trivial candidate alongside Borda.* [Copeland 1951; Saari & Merlin 1996].
 
 ### 6.3 Kemeny-Young Optimal Consensus (1959)
 
@@ -681,11 +681,40 @@ The "assume almost nothing" toolkit: count, smooth, bound. These methods trade a
 
 ---
 
-## 8. Active Ranking & Dueling Bandits
+## 8. Bandits & Active Ranking
 
-Everything so far ranks a *given* dataset. This family chooses **which comparison to ask for next** — the right framing when comparisons cost money (crowdworkers), latency (live traffic), or user goodwill. Two cultures: bandit-style regret minimization (you pay for bad comparisons as you go) and pure-exploration/budget settings (you pay per query, then must answer).
+Everything so far ranks a *given* dataset. This family chooses **which observation to ask for next** — the right framing when data costs money (crowdworkers), latency (live traffic), or user goodwill. Two axes organize it:
 
-### 8.1 Dueling Bandits (2009–2012)
+- **Feedback model**: *scalar rewards* per arm (standard multi-armed bandits, §8.1 — "variant B converted") vs. *relative preferences* between pairs (dueling bandits, §8.2 — "B beat A").
+- **Objective**: *regret minimization* (you pay for every bad choice as you go — live traffic) vs. *pure exploration / budget* (you pay per query, then must deliver an answer — best-arm identification, fixed crowdsourcing budgets).
+
+### 8.1 Standard Multi-Armed Bandits: ε-greedy, UCB, Thompson Sampling
+
+- **TL;DR** — Rank $K$ arms by expected reward *while choosing which arm to try next*: maintain per-arm estimates with uncertainty, and let the uncertainty drive exploration.
+- **Inputs / Output** — a stream of (arm, reward) observations — which the policy itself helps generate → per-arm estimates (mean + CI, or full posterior) and a **selection rule**; sorting the estimates is the ranking.
+- **Class** — Non-parametric counting (greedy/ε-greedy/UCB) or Bayesian (Thompson Sampling) × Online (active).
+- **Model & assumptions** — stochastic setting: i.i.d. rewards per arm with unknown means $\mu_i$; performance is **regret**, the cumulative shortfall versus always playing the best arm. The Lai-Robbins lower bound says $\Omega(\log T)$ regret is unavoidable, with a gap-dependent constant [Lai & Robbins 1985]; the algorithms below match it up to constants.
+- **The family** (one state-keeping idea, many exploration rules):
+  - **Greedy + optimistic initialization** — always play the best-looking arm, seeded with inflated initial estimates so everything gets tried; simple, surprisingly strong with good priors, no guarantees once optimism is spent [Sutton & Barto 2018].
+  - **ε-greedy** — exploit with probability $1-\varepsilon$, explore uniformly with $\varepsilon$; the workhorse baseline; constant $\varepsilon$ gives linear regret, decaying schedules fix it [Auer, Cesa-Bianchi & Fischer 2002].
+  - **Softmax/Boltzmann & gradient bandit** — explore proportionally to estimated value via a temperature; the gradient-bandit variant does preference SGD — and is, pleasingly, a tiny RLHF [Sutton & Barto 2018].
+  - **Explore-then-commit** — uniform exploration phase, then commit; optimal only when the horizon is known and forgiving; mostly a teaching device and an A/B-test formalization.
+  - **UCB1** — play $\arg\max_i \big(\hat\mu_i + \sqrt{2 \ln t / n_i}\big)$: optimism in the face of uncertainty, $O(\log T)$ regret with no parameters to tune [Auer, Cesa-Bianchi & Fischer 2002]. **KL-UCB** sharpens the confidence bound via KL divergence and exactly matches the Lai-Robbins constant for Bernoulli rewards [Garivier & Cappé 2011].
+  - **Thompson Sampling** — keep a posterior per arm (Beta for Bernoulli, Gaussian for continuous), *sample* one draw from each, play the argmax [Thompson 1933 — the oldest algorithm in this entire survey]. Dominant empirical performance [Chapelle & Li 2011], optimal regret guarantees [Agrawal & Goyal 2012], and a definitive tutorial [Russo et al. 2018]. Naturally batched, delayed-feedback-tolerant, and the easiest to extend.
+  - **Best-arm identification** — the pure-exploration variant: successive elimination / racing algorithms return an $\varepsilon$-optimal arm with confidence $1-\delta$ using $O\!\big((K/\varepsilon^2)\log(1/\delta)\big)$ pulls [Even-Dar, Mannor & Mansour 2006]; the right objective when an experiment must *end* with a decision.
+  - **EXP3** — the adversarial setting (no i.i.d. assumption; rewards chosen by an adversary): exponential weights over arms, $O(\sqrt{TK\log K})$ regret [Auer, Cesa-Bianchi, Freund & Schapire 2002]. Reach for it when "i.i.d. per arm" is a lie (strategic environments, markets).
+  - **Non-stationary variants** — discounted UCB and sliding-window UCB track drifting arm means [Garivier & Moulines 2011]; the bandit answer to the problem §2's rating systems solve for skills.
+  - **LinUCB / contextual bandits** — arms (or rounds) carry features; a linear reward model shares strength across arms, with UCB on the model's uncertainty [Li, Chu, Langford & Schapire 2010]. The bridge to §10's feature-based world; full contextual learning is its own field [Lattimore & Szepesvári 2020 — the textbook for all of the above].
+- **Estimation & complexity** — $O(1)$ state per arm: counts and sums (UCB family) or posterior parameters (TS). State is **exactly mergeable** across batches and machines — the strongest incremental-update story of any method in this survey.
+- **Handles** — uncertainty ✓✓ (the mechanism, not an afterthought) · absolute reward scale ✓ (like §13, unlike §§1–6) · dynamics △ (non-stationary variants) · ties/margins/intransitivity — n/a (no pairwise structure).
+- **Pros** — solves ranking *and* allocation at once; minimal assumptions (UCB needs only bounded rewards); trivially incremental and serializable state; sublinear regret with matching lower bounds; scales to any arm count that fits in memory.
+- **Cons** — arms are unrelated unless you go contextual (no strength-sharing through a comparison graph — beating a strong opponent teaches BT a lot, converting a user teaches a bandit only about that arm); rankings of rarely-pulled arms stay uncertain *by design* (the policy starves losers of data — fine for decisions, awkward for full leaderboards); logged-data reuse needs care (the logging policy biases naive estimates — §10.2/§13.5's IPS machinery applies).
+- **Use cases** — adaptive A/B/n tests; headline/creative/ad selection; recommender exploration slots; dose-finding; any "rank variants by payoff while serving traffic" loop; offline ranking of arms from logged (arm, reward) events.
+- **Relationships** — the *active* version of Wilson-score win-rate ranking (§7.1: same per-entity tallies, plus a policy); dueling bandits (§8.2) are the preference-feedback sibling; V(s) estimation (§13) is the delayed-reward generalization — and mcrl-rs's per-state return samples are exactly (arm, reward)-shaped, so its output feeds bandit state directly.
+- **Propagon status** — **candidate — recommended** (PRD FR-8): greedy/ε-greedy, UCB1, and Thompson Sampling (Beta + Gaussian) over a shared (arm, reward) dataset with a `select()` policy API in v2.0; KL-UCB, EXP3, sliding-window UCB, LinUCB in v2.x.
+- **References** — [Thompson 1933; Lai & Robbins 1985; Auer, Cesa-Bianchi & Fischer 2002; Auer et al. 2002 (EXP3); Garivier & Cappé 2011; Garivier & Moulines 2011; Chapelle & Li 2011; Agrawal & Goyal 2012; Even-Dar, Mannor & Mansour 2006; Li et al. 2010; Russo et al. 2018; Lattimore & Szepesvári 2020].
+
+### 8.2 Dueling Bandits (2009–2012)
 
 - **TL;DR** — Multi-armed bandits where the only feedback is "which of these two was preferred" — find the best item (or ranking) from relative feedback while not embarrassing yourself en route.
 - **Inputs / Output** — sequential choice of pairs + noisy preference feedback → best arm / ranking, with regret guarantees.
@@ -696,19 +725,19 @@ Everything so far ranks a *given* dataset. This family chooses **which compariso
 - **Pros** — query-efficient by design; principled stopping; the natural harness for online evaluation against live preferences.
 - **Cons** — sequential infrastructure required (real-time assignment); analyses lean on stationarity; most algorithms target the *single best* item — full-ranking variants are costlier.
 - **Use cases** — online evaluation of search rankers/recommenders via interleaving; live A/B/n with preference feedback; budgeted crowdsourcing for "find the best."
-- **Relationships** — bandit counterpart of §1's estimation; degenerate full-feedback case is §7; preference-based RL generalizes it to trajectories (→ §13 and RLHF, §10.6).
+- **Relationships** — the preference-feedback sibling of §8.1's scalar-reward bandits; bandit counterpart of §1's estimation; degenerate full-feedback case is §7; preference-based RL generalizes it to trajectories (→ §13 and RLHF, §10.6).
 - **Propagon status** — out-of-scope as an online service; a *simulator/policy library* over logged data is a plausible future direction.
 - **References** — [Yue et al. 2012; Bengs et al. 2021].
 
-### 8.2 Active Ranking from Pairwise Comparisons (2011) — compact
+### 8.3 Active Ranking from Pairwise Comparisons (2011) — compact
 
 **Class: Semi-parametric (geometric) × Active.** If items embed in $\mathbb{R}^d$ and preferences follow distance to a reference point, adaptive query selection recovers the full ranking with $O(d \log n)$ comparisons instead of $\binom{n}{2}$ — exponential savings when the latent dimension is small, with robust variants under noise [Jamieson & Nowak 2011]. The geometric assumption is strong; the result matters as the template for "structure ⇒ logarithmic query complexity." *Propagon: out-of-scope.* [Jamieson & Nowak 2011].
 
-### 8.3 Just Sort It — Quicksort as Active Ranking (2017) — compact
+### 8.4 Just Sort It — Quicksort as Active Ranking (2017) — compact
 
 **Class: Semi-parametric × Active.** Run plain quicksort with noisy comparisons; under BT-type noise whose strength parameters are well-spread, a *single run's* output ranking is near-optimal, and aggregating a handful of runs estimates PL parameters at budget $O(n \log n)$ — matching specialized active-ranking machinery with an algorithm every engineer already knows [Maystre & Grossglauser 2017]. Excellent practical recipe for comparison-budgeted crowdsourcing: sort once, maybe thrice, then fit §1.4/§3.2 on the collected comparisons. *Propagon: documentation recipe (pairs with `lsr`).* [Maystre & Grossglauser 2017].
 
-### 8.4 Active Top-k: When Parametric Assumptions Do Not Help (2019) — compact
+### 8.5 Active Top-k: When Parametric Assumptions Do Not Help (2019) — compact
 
 **Class: theory anchor × Active.** For adaptively identifying the top-$k$ items (or full ranking), the sample complexity is governed by pairwise-probability gaps $|P(i \succ j) - \tfrac12|$ — and imposing parametric (BT-type) structure improves the worst-case budget by **at most logarithmic factors** over assuming nothing [Heckel, Shah, Ramchandran & Wainwright 2019]. Together with §7.2 this completes the argument of §0.1: parametric models earn their keep through *prediction, covariates, uncertainty, and dynamics* — not through fundamentally cheaper rank identification. *Propagon: out-of-scope (theory anchor).* [Heckel et al. 2019].
 
@@ -1052,7 +1081,8 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 | Partial, overlapping top-k lists | MC4 (§6.4) | Borda on shared items | Kemeny (ill-posed on partial lists) |
 | Crowdsourced comparisons, uneven annotators | Crowd-BT (§11.2) | + style/position covariates (§12.2) | Trusting raw majorities |
 | Suspected cycles / matchup effects | HodgeRank audit first (§3.6) | Blade-Chest, mElo (§9) if curl is high | Forcing a scalar and shipping it |
-| Comparisons are expensive, you choose pairs | Just-Sort-It (§8.3) | Dueling bandits (§8.1) if live | Exhaustive all-pairs |
+| Comparisons are expensive, you choose pairs | Just-Sort-It (§8.4) | Dueling bandits (§8.2) if live | Exhaustive all-pairs |
+| Sequential experiments with scalar rewards (CTR, conversion) | Thompson Sampling / UCB1 (§8.1) | Best-arm identification to conclude (§8.1); mcrl-rs (§13) if rewards are delayed | Fixed uniform allocation; ranking by raw means mid-experiment |
 | Have a graph, no explicit comparisons | PageRank (§4.4) | BiRank (bipartite, §4.7); harmonic centrality (axiom-clean, §4.10); Katz (DAGs, §4.3) | Eigenvector centrality on digraphs |
 | Interaction logs (users × items) | BiRank (§4.7) | PPR; counterfactual de-biasing (§10.2) if positions logged | Raw popularity |
 | Trajectories with rewards, no head-to-head | MC V(s) + bootstrap (mcrl-rs, §13.1–13.2) | TD for long horizons (§13.3); then feed §1/§6 with $P(V_a > V_b)$ edges | Pretending sessions are matches |
@@ -1103,14 +1133,15 @@ Status of every method family against the current codebase (CLI subcommands in `
 | Crowd-BT (§11.2) | Medium | Annotator column; crowdsourcing market |
 | Library-wide `--bootstrap N` (§11.4) | Medium | Error bars on every scorer at once |
 | I-LSR + native multiway input (§3.2) | Medium | Exact PL MLE; ranking-file ingestion |
+| Standard bandits: greedy/ε-greedy, UCB1, Thompson Sampling (§8.1) | Low | (arm, reward) dataset + `select()` policy API; adaptive-experimentation use cases (PRD FR-8) |
 
 ### Candidates — worthwhile, lower priority
 
-mElo (§9.2) · Blade-Chest (§9.1) · WHR (§2.6) · Keener (§3.3) · footrule 2-approx as Kemeny init (§6.5) · MC4 aggregation (§6.4) · Katz / eigenvector / HITS / LeaderRank / harmonic centrality (§4) · k-core (§4.11) · SerialRank (§3.5) · offense-defense (§5.3) · Mallows φ (§1.7) · TD extension in mcrl-rs (§13.3).
+mElo (§9.2) · Blade-Chest (§9.1) · WHR (§2.6) · Keener (§3.3) · footrule 2-approx as Kemeny init (§6.5) · MC4 aggregation (§6.4) · Katz / eigenvector / HITS / LeaderRank / harmonic centrality (§4) · k-core (§4.11) · SerialRank (§3.5) · offense-defense (§5.3) · Mallows φ (§1.7) · KL-UCB / EXP3 / sliding-window UCB / LinUCB (§8.1) · TD extension in mcrl-rs (§13.3).
 
 ### Out-of-scope (documented for completeness)
 
-TrueSkill proper (§2.4 — Weng-Lin covers the need) · dynamic-BT state-space family (§2.7) · dueling bandits as a live service (§8) · α-Rank (§9.3 — payoff-tensor input) · feature-based LTR & differentiable ranking (§10.3–10.5) · RLHF training loops (§10.6) · GP preference learning (§11.3) · click-log counterfactual LTR (§10.2) · VAEP-style domain valuation (§13.4) · OPE (§13.5) · geodesic centralities beyond harmonic (§4.10) · economic GARP testing (§14.6).
+TrueSkill proper (§2.4 — Weng-Lin covers the need) · dynamic-BT state-space family (§2.7) · dueling bandits as a live service (§8.2) · α-Rank (§9.3 — payoff-tensor input) · feature-based LTR & differentiable ranking (§10.3–10.5) · RLHF training loops (§10.6) · GP preference learning (§11.3) · click-log counterfactual LTR (§10.2) · VAEP-style domain valuation (§13.4) · OPE (§13.5) · geodesic centralities beyond harmonic (§4.10) · economic GARP testing (§14.6).
 
 ---
 
@@ -1118,12 +1149,15 @@ TrueSkill proper (§2.4 — Weng-Lin covers the need) · dynamic-BT state-space 
 
 - Adams, R.P. & Zemel, R.S. (2011). *Ranking via Sinkhorn propagation.* [arXiv:1106.1925](https://arxiv.org/abs/1106.1925).
 - Afriat, S.N. (1967). *The construction of utility functions from expenditure data.* International Economic Review 8(1), 67–77.
+- Agrawal, S. & Goyal, N. (2012). *Analysis of Thompson Sampling for the multi-armed bandit problem.* COLT 2012. [arXiv:1111.1797](https://arxiv.org/abs/1111.1797).
 - Agresti, A. (2013). *Categorical Data Analysis* (3rd ed.). Wiley.
 - Agresti, A. & Coull, B.A. (1998). *Approximate is better than "exact" for interval estimation of binomial proportions.* The American Statistician 52(2), 119–126.
 - Ailon, N., Charikar, M. & Newman, A. (2008). *Aggregating inconsistent information: Ranking and clustering.* Journal of the ACM 55(5), Article 23.
 - Aldous, D. (2017). *Elo ratings and the sports model: A neglected topic in applied probability?* Statistical Science 32(4), 616–629.
 - Ameli, S., Zhuang, S., Stoica, I. & Mahoney, M.W. (2025). *A statistical framework for ranking LLM-based chatbots.* ICLR 2025. [arXiv:2412.18407](https://arxiv.org/abs/2412.18407).
 - Atkins, J.E., Boman, E.G. & Hendrickson, B. (1998). *A spectral algorithm for seriation and the consecutive ones problem.* SIAM Journal on Computing 28(1), 297–310.
+- Auer, P., Cesa-Bianchi, N. & Fischer, P. (2002). *Finite-time analysis of the multiarmed bandit problem.* Machine Learning 47(2–3), 235–256.
+- Auer, P., Cesa-Bianchi, N., Freund, Y. & Schapire, R.E. (2002). *The nonstochastic multiarmed bandit problem.* SIAM Journal on Computing 32(1), 48–77.
 - Balduzzi, D., Tuyls, K., Pérolat, J. & Graepel, T. (2018). *Re-evaluating evaluation.* NeurIPS 2018. [arXiv:1806.02643](https://arxiv.org/abs/1806.02643).
 - Bartholdi, J., Tovey, C.A. & Trick, M.A. (1989). *Voting schemes for which it can be difficult to tell who won the election.* Social Choice and Welfare 6(2), 157–165.
 - Bavelas, A. (1950). *Communication patterns in task-oriented groups.* Journal of the Acoustical Society of America 22(6), 725–730.
@@ -1146,6 +1180,7 @@ TrueSkill proper (§2.4 — Weng-Lin covers the need) · dynamic-BT state-space 
 - Caron, F. & Doucet, A. (2012). *Efficient Bayesian inference for generalized Bradley-Terry models.* Journal of Computational and Graphical Statistics 21(1), 174–196. [arXiv:1011.1761](https://arxiv.org/abs/1011.1761).
 - Cattelan, M. (2012). *Models for paired comparison data: A review with emphasis on dependent data.* Statistical Science 27(3), 412–433. [arXiv:1210.1016](https://arxiv.org/abs/1210.1016).
 - Cattelan, M., Varin, C. & Firth, D. (2013). *Dynamic Bradley-Terry modelling of sports tournaments.* Journal of the Royal Statistical Society: Series C 62(1), 135–150.
+- Chapelle, O. & Li, L. (2011). *An empirical evaluation of Thompson sampling.* NIPS 2011.
 - Chen, S. & Joachims, T. (2016). *Modeling intransitivity in matchup and comparison data.* WSDM 2016.
 - Chen, X., Bennett, P.N., Collins-Thompson, K. & Horvitz, E. (2013). *Pairwise ranking aggregation in a crowdsourced setting.* WSDM 2013.
 - Chiang, W.-L., Zheng, L., Sheng, Y., Angelopoulos, A.N., Li, T., Li, D., Zhang, H., Zhu, B., Jordan, M., Gonzalez, J.E. & Stoica, I. (2024). *Chatbot Arena: An open platform for evaluating LLMs by human preference.* ICML 2024. [arXiv:2403.04132](https://arxiv.org/abs/2403.04132).
@@ -1168,12 +1203,15 @@ TrueSkill proper (§2.4 — Weng-Lin covers the need) · dynamic-BT state-space 
 - Efron, B. (1979). *Bootstrap methods: Another look at the jackknife.* Annals of Statistics 7(1), 1–26.
 - Elo, A.E. (1978). *The Rating of Chessplayers, Past and Present.* Arco.
 - Estrada, E. & Rodríguez-Velázquez, J.A. (2005). *Subgraph centrality in complex networks.* Physical Review E 71, 056103.
+- Even-Dar, E., Mannor, S. & Mansour, Y. (2006). *Action elimination and stopping conditions for the multi-armed bandit and reinforcement learning problems.* JMLR 7, 1079–1105. [jmlr.org](https://jmlr.org/papers/v7/evendar06a.html).
 - Fahrmeir, L. & Tutz, G. (1994). *Dynamic stochastic models for time-dependent ordered paired comparison systems.* JASA 89(428), 1438–1449.
 - Fang, S., Han, R., Luo, Y. & Xu, Y. (2026). *Recent advances in the Bradley-Terry model: Theory, algorithms, and applications.* [arXiv:2601.14727](https://arxiv.org/abs/2601.14727).
 - Fogel, F., d'Aspremont, A. & Vojnović, M. (2014). *SerialRank: Spectral ranking using seriation.* NIPS 2014. [arXiv:1406.5370](https://arxiv.org/abs/1406.5370).
 - Ford, L.R., Jr. (1957). *Solution of a ranking problem from binary comparisons.* American Mathematical Monthly 64(8, part 2), 28–33.
 - Freeman, L.C. (1977). *A set of measures of centrality based on betweenness.* Sociometry 40(1), 35–41.
 - Freeman, L.C. (1979). *Centrality in social networks: Conceptual clarification.* Social Networks 1(3), 215–239.
+- Garivier, A. & Cappé, O. (2011). *The KL-UCB algorithm for bounded stochastic bandits and beyond.* COLT 2011, PMLR 19, 359–376. [proceedings.mlr.press](https://proceedings.mlr.press/v19/garivier11a.html).
+- Garivier, A. & Moulines, E. (2011). *On upper-confidence bound policies for switching bandit problems.* ALT 2011, LNCS 6925, 174–188.
 - Glickman, M.E. (1999). *Parameter estimation in large dynamic paired comparison experiments.* Journal of the Royal Statistical Society: Series C 48(3), 377–394.
 - Glickman, M.E. (2001). *Dynamic paired comparison models with stochastic variances.* Journal of Applied Statistics 28(6), 673–689.
 - Glickman, M.E. (2022). *Example of the Glicko-2 system.* Technical note, [glicko.net](http://www.glicko.net/glicko/glicko2.pdf).
@@ -1199,10 +1237,13 @@ TrueSkill proper (§2.4 — Weng-Lin covers the need) · dynamic-BT state-space 
 - Kenyon-Mathieu, C. & Schudy, W. (2007). *How to rank with few errors.* STOC 2007.
 - Kitsak, M., Gallos, L.K., Havlin, S., Liljeros, F., Muchnik, L., Stanley, H.E. & Makse, H.A. (2010). *Identification of influential spreaders in complex networks.* Nature Physics 6, 888–893. [arXiv:1001.5285](https://arxiv.org/abs/1001.5285).
 - Kleinberg, J.M. (1999). *Authoritative sources in a hyperlinked environment.* Journal of the ACM 46(5), 604–632.
+- Lai, T.L. & Robbins, H. (1985). *Asymptotically efficient adaptive allocation rules.* Advances in Applied Mathematics 6(1), 4–22.
 - Lanctot, M., Larson, K., Bachrach, Y., Marris, L., Li, Z., Bhoopchand, A., Anthony, T., Tanner, B. & Koop, A. (2023). *Evaluating agents using social choice theory.* [arXiv:2312.03121](https://arxiv.org/abs/2312.03121).
 - Langville, A.N. & Meyer, C.D. (2006). *Google's PageRank and Beyond: The Science of Search Engine Rankings.* Princeton University Press.
 - Langville, A.N. & Meyer, C.D. (2012). *Who's #1? The Science of Rating and Ranking.* Princeton University Press.
+- Lattimore, T. & Szepesvári, C. (2020). *Bandit Algorithms.* Cambridge University Press.
 - Lempel, R. & Moran, S. (2001). *SALSA: The stochastic approach for link-structure analysis.* ACM TOIS 19(2), 131–160.
+- Li, L., Chu, W., Langford, J. & Schapire, R.E. (2010). *A contextual-bandit approach to personalized news article recommendation.* WWW 2010. [arXiv:1003.0146](https://arxiv.org/abs/1003.0146).
 - LMSYS (2024). *Does style matter? Disentangling style and substance in Chatbot Arena.* [lmsys.org blog, 2024-08-28](https://lmsys.org/blog/2024-08-28-style-control/).
 - Lü, L., Zhang, Y.-C., Yeung, C.H. & Zhou, T. (2011). *Leaders in social networks, the Delicious case.* PLoS ONE 6(6), e21202.
 - Luce, R.D. (1959). *Individual Choice Behavior: A Theoretical Analysis.* Wiley.
@@ -1227,6 +1268,7 @@ TrueSkill proper (§2.4 — Weng-Lin covers the need) · dynamic-BT state-space 
 - Rao, P.V. & Kupper, L.L. (1967). *Ties in paired-comparison experiments: A generalization of the Bradley-Terry model.* JASA 62(317), 194–204.
 - Routley, K. & Schulte, O. (2015). *A Markov game model for valuing player actions in ice hockey.* UAI 2015.
 - Rubin, D.B. (1981). *The Bayesian bootstrap.* Annals of Statistics 9(1), 130–134.
+- Russo, D., Van Roy, B., Kazerouni, A., Osband, I. & Wen, Z. (2018). *A tutorial on Thompson sampling.* Foundations and Trends in Machine Learning 11(1), 1–96. [arXiv:1707.02038](https://arxiv.org/abs/1707.02038).
 - Saari, D.G. & Merlin, V.R. (1996). *The Copeland method I: Relationships and the dictionary.* Economic Theory 8, 51–76.
 - Schulze, M. (2011). *A new monotonic, clone-independent, reversal symmetric, and Condorcet-consistent single-winner election method.* Social Choice and Welfare 36(2), 267–303.
 - Seidman, S.B. (1983). *Network structure and minimum degree.* Social Networks 5(3), 269–287.
@@ -1235,6 +1277,7 @@ TrueSkill proper (§2.4 — Weng-Lin covers the need) · dynamic-BT state-space 
 - Stern, H. (1990). *Models for distributions on permutations.* JASA 85(410), 558–564.
 - Sun, H., Shen, Y. & Ton, J.-F. (2024). *Rethinking Bradley-Terry models in preference-based reward modeling: Foundations, theory, and alternatives.* [arXiv:2411.04991](https://arxiv.org/abs/2411.04991).
 - Sutton, R.S. & Barto, A.G. (2018). *Reinforcement Learning: An Introduction* (2nd ed.). MIT Press.
+- Thompson, W.R. (1933). *On the likelihood that one unknown probability exceeds another in view of the evidence of two samples.* Biometrika 25(3/4), 285–294.
 - Thurstone, L.L. (1927). *A law of comparative judgment.* Psychological Review 34(4), 273–286.
 - Tideman, T.N. (1987). *Independence of clones as a criterion for voting rules.* Social Choice and Welfare 4(3), 185–206.
 - Train, K.E. (2009). *Discrete Choice Methods with Simulation* (2nd ed.). Cambridge University Press.
