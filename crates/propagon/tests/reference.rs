@@ -576,3 +576,72 @@ fn plackett_luce_on_pairs_reduces_to_bradley_terry() -> TestResult {
 
     Ok(())
 }
+
+/// Bayesian BT (Caron & Doucet 2012 Gibbs, arXiv:1011.1761) on the Agresti
+/// baseball data: with shape a = 1 the posterior concentrates around the
+/// MLE, so log-ability posteriors must agree with the published
+/// BradleyTerry2 values within Monte-Carlo noise, and the team order must
+/// match exactly.
+#[test]
+fn bayesian_bt_agrees_with_published_mle() -> TestResult {
+    use propagon::algos::BayesianBradleyTerry;
+
+    const TEAMS: [&str; 7] = [
+        "Milwaukee",
+        "Detroit",
+        "Toronto",
+        "New York",
+        "Boston",
+        "Cleveland",
+        "Baltimore",
+    ];
+    const WINS: [[u32; 7]; 7] = [
+        [0, 7, 9, 7, 7, 9, 11],
+        [6, 0, 7, 5, 11, 9, 9],
+        [4, 6, 0, 7, 7, 8, 12],
+        [6, 8, 6, 0, 6, 7, 10],
+        [6, 2, 6, 7, 0, 7, 12],
+        [4, 4, 5, 6, 6, 0, 6],
+        [2, 4, 1, 3, 1, 7, 0],
+    ];
+    const EXPECTED: [f64; 6] = [1.5814, 1.4364, 1.2945, 1.2476, 1.1077, 0.6839];
+
+    let mut d = PairwiseDataset::new();
+    for (i, row) in WINS.iter().enumerate() {
+        for (j, &wins) in row.iter().enumerate() {
+            if wins > 0 {
+                d.push(TEAMS[i], TEAMS[j], wins as f32);
+            }
+        }
+    }
+
+    let model = BayesianBradleyTerry {
+        samples: 4000,
+        burn_in: 1000,
+        ..Default::default()
+    }
+    .fit(&d)?;
+    let means: std::collections::HashMap<&str, f64> = model.scores().collect();
+    let baltimore = means.get("Baltimore").ok_or("Baltimore fitted")?;
+
+    for (team, expected) in TEAMS.iter().zip(EXPECTED) {
+        let ability = (means.get(team).ok_or("team fitted")? / baltimore).ln();
+        assert!(
+            (ability - expected).abs() < 0.2,
+            "{team}: posterior {ability:.3} vs MLE {expected}"
+        );
+    }
+
+    let order: Vec<&str> = {
+        let mut v: Vec<(&str, f64)> = model.scores().collect();
+        v.sort_by(|a, b| b.1.total_cmp(&a.1));
+        v.into_iter().map(|(n, _)| n).collect()
+    };
+    assert_eq!(
+        order,
+        TEAMS.to_vec(),
+        "posterior order matches published order"
+    );
+
+    Ok(())
+}

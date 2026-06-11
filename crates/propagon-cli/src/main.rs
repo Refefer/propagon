@@ -24,10 +24,10 @@ use std::sync::Mutex;
 
 use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use propagon::algos::{
-    Bandit, BanditModel, BanditPolicy, BiRank, Borda, BradleyTerryLR, BradleyTerryMM, Colley,
-    Confidence, Copeland, Elo, EsRum, Estimator, Glicko2, HodgeFlow, HodgeRank, Keener, Kemeny,
-    KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4, PageRank, PlackettLuce, RankCentrality,
-    RumDistribution, Sink, WinRate, extract_components,
+    Bandit, BanditModel, BanditPolicy, BayesianBradleyTerry, BiRank, Borda, BradleyTerryLR,
+    BradleyTerryMM, Colley, Confidence, Copeland, Elo, EsRum, Estimator, Glicko2, HodgeFlow,
+    HodgeRank, Keener, Kemeny, KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4, PageRank, PlackettLuce,
+    RankCentrality, RumDistribution, Sink, WinRate, extract_components,
 };
 use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
 
@@ -314,6 +314,20 @@ fn tournament_cmd() -> Command {
                 ))
                 .arg(opt::<usize>("iterations", "Power-iteration budget"))
                 .arg(opt::<f64>("tolerance", "Early-exit threshold")),
+        ))
+        .subcommand(with_path(
+            Command::new("bayesian-bradley-terry")
+                .visible_alias("bayes-bt")
+                .about("Bradley-Terry posterior with credible intervals (Gibbs)")
+                .arg(opt::<f64>("shape", "Gamma prior shape (1.0: MAP = MLE)"))
+                .arg(opt::<f64>("rate", "Gamma prior rate (scale anchor)"))
+                .arg(opt::<usize>("samples", "Posterior draws after burn-in"))
+                .arg(opt::<usize>("burn-in", "Warm-up sweeps to discard"))
+                .arg(opt::<f64>(
+                    "credible",
+                    "Central credible mass (default 0.9)",
+                ))
+                .arg(opt::<u64>("seed", "Sampler seed")),
         ))
         .subcommand(with_path(
             Command::new("hodge-rank")
@@ -790,6 +804,25 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
 
             let model = kn.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.emit(&model)
+        }
+        "bayesian-bradley-terry" => {
+            ctx.reject_load_state(algo)?;
+            let mut bb = BayesianBradleyTerry::default();
+            set(sm, "shape", &mut bb.shape);
+            set(sm, "rate", &mut bb.rate);
+            set(sm, "samples", &mut bb.samples);
+            set(sm, "burn-in", &mut bb.burn_in);
+            set(sm, "credible", &mut bb.credible);
+            set(sm, "seed", &mut bb.seed);
+
+            let model = bb.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            ctx.save(&model)?;
+            let mut out = std::io::stdout().lock();
+
+            match ctx.format.as_str() {
+                "jsonl" => emit::jsonl(&mut out, &model),
+                _ => emit::bayes_bt(&mut out, &model),
+            }
         }
         "hodge-rank" => {
             ctx.reject_load_state(algo)?;

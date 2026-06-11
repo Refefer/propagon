@@ -7,6 +7,7 @@
 //! warm-start refitting.
 
 mod bandits;
+mod bayes_bt;
 mod birank;
 mod borda;
 mod bt_lr;
@@ -31,6 +32,7 @@ mod rank_centrality;
 mod rate;
 
 pub use bandits::{Bandit, BanditModel, BanditPolicy};
+pub use bayes_bt::{BayesBtModel, BayesianBradleyTerry};
 pub use birank::{BiRank, BiRankModel};
 pub use borda::{Borda, BordaModel};
 pub use bt_lr::{BradleyTerryLR, BtmLrModel};

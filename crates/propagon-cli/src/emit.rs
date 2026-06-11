@@ -4,7 +4,9 @@
 
 use std::io::Write;
 
-use propagon::algos::{BiRankModel, BtmMmModel, Glicko2Model, PlackettLuceModel, SectionKind};
+use propagon::algos::{
+    BayesBtModel, BiRankModel, BtmMmModel, Glicko2Model, PlackettLuceModel, SectionKind,
+};
 use propagon::{RankModel, Result};
 
 /// `"{id}: {score}"` per line, sorted descending (ties by name).
@@ -66,6 +68,17 @@ pub fn btm_mm(out: &mut impl Write, model: &BtmMmModel) -> Result<()> {
             let _ = ranked;
             writeln!(out, "{name}: {score}")?;
         }
+    }
+    Ok(())
+}
+
+/// Bayesian BT: `mean lo hi` per entity at 6 decimals, sorted by posterior
+/// mean descending.
+pub fn bayes_bt(out: &mut impl Write, model: &BayesBtModel) -> Result<()> {
+    let mut rows: Vec<_> = model.posteriors().collect();
+    rows.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+    for (name, mean, lo, hi) in rows {
+        writeln!(out, "{name}: {mean:.6} {lo:.6} {hi:.6}")?;
     }
     Ok(())
 }
