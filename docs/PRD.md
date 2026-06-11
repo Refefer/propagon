@@ -251,12 +251,29 @@ Per-algorithm support matrix (v2.0 set):
 
 *Acceptance*: `pip install propagon && python -c "import propagon"` works on the three desktop OSes; `npm i propagon` + 10-line ESM snippet ranks a dataset in Firefox; identical state files interchange between all surfaces.
 
-### FR-7 — CLI continuity
+### FR-7 — CLI (grouped by data shape; no v1 surface compatibility)
 
-- **FR-7.1** `propagon-cli` (clap 4) preserves v1 ranking subcommand names and flags: `rate`, `glicko2`, `btm-lr`, `btm-mm`, `es-rum`, `kemeny`, `lsr`, `page-rank`, `birank`, `extract-components`.
-- **FR-7.2** The CLI accepts string-ID edge files natively (interner); `dehydrate`/`hydrate` remain for one release as deprecated aliases, then are removed.
-- **FR-7.3** A **golden-output test suite** over `example/tournament` is frozen *before* the port begins; the clap-4 CLI must reproduce v1 outputs (modulo documented seed-handling changes).
-- **FR-7.4** New cross-cutting flags: `--threads N`, `--save-state PATH`, `--load-state PATH`, `--format jsonl|tsv` (tsv = v1-style score output, the default for compatibility).
+The v2 CLI makes a clean break from the v1 surface (owner decision: zero
+backward-compatibility requirements). Subcommands are grouped by input shape:
+
+- **FR-7.1** `propagon tournament <algo> <path>` — pairwise rankers over
+  `winner loser [weight]` rows: `rate`, `elo`, `glicko2`, `btm-mm`, `btm-lr`,
+  `lsr`, `rank-centrality`, `es-rum`, `kemeny`, `borda`, `copeland`. Group
+  flags: `--min-count`, `--groups-are-separate` (rating periods).
+- **FR-7.2** `propagon graph <algo> <path>` — node importance and utilities
+  over `src dst [weight]` edges: `page-rank` (with `--matches` for the
+  loser-endorses-winner orientation of tournament files), `birank`,
+  `components`.
+- **FR-7.3** `propagon bandit <policy> <path>` — `greedy`, `epsilon-greedy`,
+  `ucb1`, `ts-beta`, `ts-gaussian` over `arm reward` rows, each with
+  `--select N` (print the next arms to play) and `--seed`.
+- **FR-7.4** Cross-cutting flags on every leaf: `--threads N`,
+  `--save-state PATH`, `--load-state PATH`, `--format tsv|jsonl`.
+- **FR-7.5** String ids are read natively (interner); the v1
+  `dehydrate`/`hydrate`/`remap.py` pipeline is **removed**, not deprecated.
+- **FR-7.6** The golden suite captured from v1 (`tests/golden/`) is retained
+  as a **numerical regression baseline**: v2 must reproduce v1's numbers
+  (tolerance/rank-correlation tiers) through the new command surface.
 
 ### FR-8 — Bandit policies (rank arms *and* pick the next one)
 

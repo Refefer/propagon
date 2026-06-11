@@ -1,10 +1,17 @@
 //! `propagon` — ranking from revealed preferences.
 //!
-//! v1-compatible surface: `propagon <path> <subcommand> [flags]`, same
-//! subcommand names and flags, `"{id}: {value}"` output. New in v2: string
-//! ids natively (no dehydrate step), `--save-state`/`--load-state` for
-//! incremental and warm-started runs, `--format jsonl`, `--threads`, and the
-//! `elo`, `borda`, `copeland`, `rank-centrality`, and `bandit` subcommands.
+//! Subcommands are grouped by the shape of the input data:
+//!
+//! - `propagon tournament <algo> <path>` — pairwise comparison rankers
+//!   (rate, elo, glicko2, btm-mm, btm-lr, lsr, rank-centrality, es-rum,
+//!   kemeny, borda, copeland) over `winner loser [weight]` rows.
+//! - `propagon graph <algo> <path>` — node-importance rankers and utilities
+//!   (page-rank, birank, components) over `src dst [weight]` edges.
+//! - `propagon bandit <policy> <path>` — multi-armed bandits (greedy,
+//!   epsilon-greedy, ucb1, ts-beta, ts-gaussian) over `arm reward` rows.
+//!
+//! Cross-cutting: string ids natively, `--save-state`/`--load-state` for
+//! incremental and warm-started runs, `--format tsv|jsonl`, `--threads`.
 
 mod emit;
 mod io;
@@ -92,33 +99,23 @@ where
         .value_parser(value_parser!(T))
 }
 
+/// Adds the input-path positional every leaf command takes.
+fn with_path(cmd: Command) -> Command {
+    cmd.arg(Arg::new("path").required(true).help("Input data file"))
+}
+
 fn cli() -> Command {
     Command::new("propagon")
         .version(env!("CARGO_PKG_VERSION"))
         .about("Ranking from revealed preferences (see docs/algorithms.md)")
         .subcommand_required(true)
-        .arg(Arg::new("path").required(true).help("Input data file"))
-        .arg(
-            opt::<usize>(
-                "min-count",
-                "Iteratively drop edges whose endpoints appear in fewer rows",
-            )
-            .global(true),
-        )
-        .arg(
-            flag(
-                "groups-are-separate",
-                "Treat blank-line-separated batches as separate periods",
-            )
-            .global(true),
-        )
         .arg(opt::<usize>("threads", "Worker threads (default: all cores)").global(true))
         .arg(
             Arg::new("format")
                 .long("format")
                 .value_parser(["tsv", "jsonl"])
                 .default_value("tsv")
-                .help("Output format: v1-style tsv or model-state jsonl")
+                .help("Output format: 'id: score' tsv or model-state jsonl")
                 .global(true),
         )
         .arg(opt::<PathBuf>("save-state", "Write the fitted model state to this file").global(true))
@@ -129,7 +126,30 @@ fn cli() -> Command {
             )
             .global(true),
         )
-        .subcommand(
+        .subcommand(tournament_cmd())
+        .subcommand(graph_cmd())
+        .subcommand(bandit_cmd())
+}
+
+fn tournament_cmd() -> Command {
+    Command::new("tournament")
+        .about("Rank entities from pairwise outcomes: 'winner loser [weight]' rows")
+        .subcommand_required(true)
+        .arg(
+            opt::<usize>(
+                "min-count",
+                "Iteratively drop rows whose endpoints appear fewer times",
+            )
+            .global(true),
+        )
+        .arg(
+            flag(
+                "groups-are-separate",
+                "Treat blank-line-separated batches as rating periods",
+            )
+            .global(true),
+        )
+        .subcommand(with_path(
             Command::new("rate")
                 .about("Win rates with Wilson intervals")
                 .arg(
@@ -138,22 +158,21 @@ fn cli() -> Command {
                         .value_parser(["0.95", "0.9", "0.90", "0.5"])
                         .default_value("0.95"),
                 ),
-        )
-        .subcommand(
+        ))
+        .subcommand(with_path(
+            Command::new("elo")
+                .about("Elo ratings (order-dependent online updates)")
+                .arg(opt::<f64>("k", "Update step size"))
+                .arg(opt::<f64>("initial-rating", "Rating for unseen entities"))
+                .arg(opt::<f64>("scale", "Logistic scale (default 400)")),
+        ))
+        .subcommand(with_path(
             Command::new("glicko2")
                 .about("Glicko-2 ratings (periods via --groups-are-separate)")
                 .arg(opt::<f64>("tau", "Volatility constraint (0.3-1.2)"))
                 .arg(flag("use-mu", "Emit only the internal-scale rating")),
-        )
-        .subcommand(
-            Command::new("btm-lr")
-                .about("Bradley-Terry via logistic SGD")
-                .arg(opt::<f64>("alpha", "Learning rate"))
-                .arg(opt::<f64>("decay", "L2 shrinkage per pass"))
-                .arg(opt::<usize>("passes", "Passes per period"))
-                .arg(flag("thrifty", "Sequential in-place updates")),
-        )
-        .subcommand(
+        ))
+        .subcommand(with_path(
             Command::new("btm-mm")
                 .about("Bradley-Terry via minorization-maximization")
                 .arg(opt::<usize>(
@@ -161,7 +180,7 @@ fn cli() -> Command {
                     "Skip components smaller than this",
                 ))
                 .arg(opt::<usize>("iterations", "Maximum MM sweeps"))
-                .arg(opt::<f64>("tol", "Convergence tolerance").alias("tolerance"))
+                .arg(opt::<f64>("tolerance", "Convergence tolerance").alias("tol"))
                 .arg(flag(
                     "remove-total-losers",
                     "Also remove never-won entities",
@@ -179,22 +198,48 @@ fn cli() -> Command {
                     "Weight of those links",
                 ))
                 .arg(opt::<u64>("seed", "Seed for random component links")),
-        )
-        .subcommand(
+        ))
+        .subcommand(with_path(
+            Command::new("btm-lr")
+                .about("Bradley-Terry via logistic SGD")
+                .arg(opt::<f64>("alpha", "Learning rate"))
+                .arg(opt::<f64>("decay", "L2 shrinkage per pass"))
+                .arg(opt::<usize>("passes", "Passes per period"))
+                .arg(flag("thrifty", "Sequential in-place updates")),
+        ))
+        .subcommand(with_path(
+            Command::new("lsr")
+                .about("Luce spectral ranking (Plackett-Luce)")
+                .arg(opt::<usize>(
+                    "steps",
+                    "Power passes / walk steps (0 = auto)",
+                ))
+                .arg(
+                    Arg::new("estimator")
+                        .long("estimator")
+                        .value_parser(["power", "monte-carlo"])
+                        .default_value("power"),
+                )
+                .arg(opt::<u64>("seed", "Seed for Monte Carlo walks")),
+        ))
+        .subcommand(with_path(
+            Command::new("rank-centrality")
+                .about("Rank Centrality spectral Bradley-Terry estimate")
+                .arg(opt::<usize>("iterations", "Maximum sweeps"))
+                .arg(opt::<f64>("tolerance", "Early-exit tolerance")),
+        ))
+        .subcommand(with_path(
             Command::new("es-rum")
                 .about("Gaussian random-utility model via evolution strategies")
                 .arg(opt::<usize>("passes", "ES iterations"))
                 .arg(opt::<f64>("alpha", "Initial perturbation scale"))
                 .arg(opt::<f64>("gamma", "L2 regularization"))
-                .arg(
-                    opt::<usize>("min-obs", "Minimum comparisons per entity")
-                        .alias("min-observations"),
-                )
+                .arg(opt::<usize>("min-obs", "Minimum comparisons per entity"))
                 .arg(opt::<usize>("prior", "Pseudo-count smoothing"))
                 .arg(flag("fixed", "Pin all variances to 1 (Thurstone-style)"))
                 .arg(opt::<u64>("seed", "Random seed")),
-        )
-        .subcommand(
+        ))
+        .subcommand(with_path(
             Command::new("kemeny")
                 .about("Kemeny-optimal consensus ranking")
                 .arg(opt::<usize>(
@@ -209,26 +254,22 @@ fn cli() -> Command {
                         .default_value("insertion"),
                 )
                 .arg(opt::<u64>("seed", "Seed for the DE search")),
-        )
-        .subcommand(
-            Command::new("lsr")
-                .about("Luce spectral ranking (Plackett-Luce)")
-                .arg(opt::<usize>(
-                    "steps",
-                    "Power passes / walk steps (0 = auto)",
-                ))
-                .arg(
-                    Arg::new("estimator")
-                        .long("estimator")
-                        .alias("algo")
-                        .value_parser(["power", "monte-carlo"])
-                        .default_value("power"),
-                )
-                .arg(opt::<u64>("seed", "Seed for Monte Carlo walks")),
-        )
-        .subcommand(
+        ))
+        .subcommand(with_path(
+            Command::new("borda").about("Borda count (weighted win totals)"),
+        ))
+        .subcommand(with_path(
+            Command::new("copeland").about("Copeland pairwise-majority scores"),
+        ))
+}
+
+fn graph_cmd() -> Command {
+    Command::new("graph")
+        .about("Rank nodes by graph structure: 'src dst [weight]' edges")
+        .subcommand_required(true)
+        .subcommand(with_path(
             Command::new("page-rank")
-                .about("PageRank over the match/endorsement graph")
+                .about("PageRank over an endorsement graph (src endorses dst)")
                 .arg(opt::<usize>("iterations", "Power iterations"))
                 .arg(opt::<f64>("damping-factor", "Damping factor"))
                 .arg(
@@ -236,84 +277,67 @@ fn cli() -> Command {
                         .long("sink-dispersion")
                         .value_parser(["reverse", "all", "none"])
                         .default_value("reverse"),
-                ),
-        )
-        .subcommand(
+                )
+                .arg(flag(
+                    "matches",
+                    "Treat rows as match results: 'winner loser' becomes loser -> winner",
+                )),
+        ))
+        .subcommand(with_path(
             Command::new("birank")
                 .about("BiRank over a bipartite interaction graph")
                 .arg(opt::<usize>("iterations", "Sweeps"))
                 .arg(opt::<f64>("alpha", "dst-side propagation weight"))
                 .arg(opt::<f64>("beta", "src-side propagation weight"))
                 .arg(opt::<u64>("seed", "Initialization seed")),
-        )
-        .subcommand(
-            Command::new("extract-components")
+        ))
+        .subcommand(with_path(
+            Command::new("components")
                 .about("Write each connected component to <path>.<i>")
-                .arg(opt::<usize>("min-graph-size", "Minimum component size").alias("min-size")),
-        )
-        .subcommand(
-            Command::new("elo")
-                .about("Elo ratings (order-dependent online updates)")
-                .arg(opt::<f64>("k", "Update step size"))
-                .arg(opt::<f64>("initial-rating", "Rating for unseen entities"))
-                .arg(opt::<f64>("scale", "Logistic scale (default 400)")),
-        )
-        .subcommand(Command::new("borda").about("Borda count (weighted win totals)"))
-        .subcommand(Command::new("copeland").about("Copeland pairwise-majority scores"))
-        .subcommand(
-            Command::new("rank-centrality")
-                .about("Rank Centrality spectral Bradley-Terry estimate")
-                .arg(opt::<usize>("iterations", "Maximum sweeps"))
-                .arg(opt::<f64>("tolerance", "Early-exit tolerance")),
-        )
-        .subcommand(
-            Command::new("bandit")
-                .about("Multi-armed bandit over 'arm reward' rows")
-                .arg(
-                    Arg::new("policy")
-                        .long("policy")
-                        .value_parser([
-                            "greedy",
-                            "epsilon-greedy",
-                            "ucb1",
-                            "ts-beta",
-                            "ts-gaussian",
-                        ])
-                        .default_value("ucb1"),
-                )
-                .arg(opt::<f64>("epsilon", "Exploration rate (epsilon-greedy)"))
-                .arg(opt::<f64>("exploration", "UCB exploration constant"))
-                .arg(opt::<f64>("prior-alpha", "Beta prior alpha (ts-beta)"))
-                .arg(opt::<f64>("prior-beta", "Beta prior beta (ts-beta)"))
+                .arg(opt::<usize>("min-graph-size", "Minimum component size")),
+        ))
+}
+
+fn bandit_cmd() -> Command {
+    let common = |cmd: Command| -> Command {
+        with_path(cmd)
+            .arg(opt::<u64>("seed", "Policy randomness seed"))
+            .arg(opt::<usize>(
+                "select",
+                "Print the next N arms to play instead of scores",
+            ))
+    };
+    Command::new("bandit")
+        .about("Multi-armed bandits over 'arm reward' rows")
+        .subcommand_required(true)
+        .subcommand(common(
+            Command::new("greedy").about("Always exploit the best empirical mean"),
+        ))
+        .subcommand(common(
+            Command::new("epsilon-greedy")
+                .about("Exploit with probability 1-epsilon, explore uniformly otherwise")
+                .arg(opt::<f64>("epsilon", "Exploration rate")),
+        ))
+        .subcommand(common(
+            Command::new("ucb1")
+                .about("Upper confidence bound exploration")
                 .arg(opt::<f64>(
-                    "prior-mean",
-                    "Gaussian prior mean (ts-gaussian)",
-                ))
-                .arg(opt::<f64>(
-                    "prior-weight",
-                    "Gaussian prior pseudo-observations",
-                ))
-                .arg(opt::<u64>("seed", "Policy randomness seed"))
-                .arg(opt::<usize>(
-                    "select",
-                    "Print the next N arms to play instead of scores",
+                    "exploration",
+                    "Exploration constant (classic UCB1: 2.0)",
                 )),
-        )
-        .subcommand(
-            Command::new("dehydrate")
-                .about("[deprecated] Map string ids to dense integers (v2 reads strings natively)")
-                .arg(opt::<String>("delim", "Field delimiter (default: tab)"))
-                .arg(opt::<PathBuf>(
-                    "features",
-                    "Optional features file to remap",
-                )),
-        )
-        .subcommand(
-            Command::new("hydrate")
-                .about("[deprecated] Map score-file ids back to names")
-                .arg(opt::<PathBuf>("vocab", "Vocab file from dehydrate").required(true))
-                .arg(opt::<PathBuf>("output", "Output path (default: stdout)")),
-        )
+        ))
+        .subcommand(common(
+            Command::new("ts-beta")
+                .about("Thompson Sampling with a Beta posterior (rewards in [0,1])")
+                .arg(opt::<f64>("prior-alpha", "Beta prior alpha"))
+                .arg(opt::<f64>("prior-beta", "Beta prior beta")),
+        ))
+        .subcommand(common(
+            Command::new("ts-gaussian")
+                .about("Thompson Sampling with a Gaussian posterior")
+                .arg(opt::<f64>("prior-mean", "Prior mean"))
+                .arg(opt::<f64>("prior-weight", "Prior pseudo-observations")),
+        ))
 }
 
 // ---------------------------------------------------------------- helpers
@@ -334,6 +358,41 @@ struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
+    fn from_matches(sm: &'a ArgMatches) -> Result<Self> {
+        let pool_holder = match sm.get_one::<usize>("threads") {
+            Some(&n) => Some(
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(n)
+                    .build()
+                    .map_err(|e| Error::InvalidInput(format!("--threads: {e}")))?,
+            ),
+            None => None,
+        };
+        Ok(Ctx {
+            path: Path::new(sm.get_one::<String>("path").expect("required").as_str()),
+            format: sm
+                .get_one::<String>("format")
+                .cloned()
+                .unwrap_or_else(|| "tsv".into()),
+            save_state: sm.get_one::<PathBuf>("save-state").cloned(),
+            load_state: sm.get_one::<PathBuf>("load-state").cloned(),
+            min_count: sm
+                .try_get_one::<usize>("min-count")
+                .ok()
+                .flatten()
+                .copied()
+                .unwrap_or(1),
+            periods: sm
+                .try_get_one::<bool>("groups-are-separate")
+                .ok()
+                .flatten()
+                .copied()
+                == Some(true),
+            progress: std::io::stderr().is_terminal().then(CliProgress::default),
+            pool_holder,
+        })
+    }
+
     fn opts(&self) -> FitOptions<'_> {
         let mut opts = FitOptions::default();
         if let Some(p) = &self.progress {
@@ -398,42 +457,30 @@ fn update_maybe_loaded<A: OnlineRanker>(
     Ok(model)
 }
 
-// ---------------------------------------------------------------- main
+// ---------------------------------------------------------------- dispatch
 
 fn run() -> Result<()> {
     let matches = cli().get_matches();
-    let (sub, sm) = matches.subcommand().expect("subcommand required");
+    match matches.subcommand().expect("subcommand required") {
+        ("tournament", gm) => {
+            let (algo, sm) = gm.subcommand().expect("subcommand required");
+            run_tournament(algo, sm)
+        }
+        ("graph", gm) => {
+            let (algo, sm) = gm.subcommand().expect("subcommand required");
+            run_graph(algo, sm)
+        }
+        ("bandit", gm) => {
+            let (policy, sm) = gm.subcommand().expect("subcommand required");
+            run_bandit(policy, sm)
+        }
+        (other, _) => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
+    }
+}
 
-    let pool_holder = match matches.get_one::<usize>("threads") {
-        Some(&n) => Some(
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(n)
-                .build()
-                .map_err(|e| Error::InvalidInput(format!("--threads: {e}")))?,
-        ),
-        None => None,
-    };
-
-    let ctx = Ctx {
-        path: Path::new(
-            matches
-                .get_one::<String>("path")
-                .expect("required")
-                .as_str(),
-        ),
-        format: sm
-            .get_one::<String>("format")
-            .cloned()
-            .unwrap_or_else(|| "tsv".into()),
-        save_state: sm.get_one::<PathBuf>("save-state").cloned(),
-        load_state: sm.get_one::<PathBuf>("load-state").cloned(),
-        min_count: get_or(sm, "min-count", 1usize),
-        periods: sm.get_flag("groups-are-separate"),
-        progress: std::io::stderr().is_terminal().then(CliProgress::default),
-        pool_holder,
-    };
-
-    match sub {
+fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
+    let ctx = Ctx::from_matches(sm)?;
+    match algo {
         "rate" => {
             let confidence = match sm
                 .get_one::<String>("confidence-interval")
@@ -445,6 +492,15 @@ fn run() -> Result<()> {
                 _ => Confidence::P50,
             };
             let algo = WinRate { confidence };
+            let model = update_maybe_loaded(&algo, &ctx.pairwise()?, &ctx)?;
+            ctx.emit(&model)
+        }
+        "elo" => {
+            let algo = Elo {
+                k: get_or(sm, "k", 32.0),
+                initial_rating: get_or(sm, "initial-rating", 1500.0),
+                scale: get_or(sm, "scale", 400.0),
+            };
             let model = update_maybe_loaded(&algo, &ctx.pairwise()?, &ctx)?;
             ctx.emit(&model)
         }
@@ -461,20 +517,10 @@ fn run() -> Result<()> {
                 _ => emit::glicko2(&mut out, &model, sm.get_flag("use-mu")),
             }
         }
-        "btm-lr" => {
-            let algo = BradleyTerryLR {
-                passes: get_or(sm, "passes", 10),
-                alpha: get_or(sm, "alpha", 1.0),
-                decay: get_or(sm, "decay", 1e-5),
-                thrifty: sm.get_flag("thrifty"),
-            };
-            let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
-            ctx.emit(&model)
-        }
         "btm-mm" => {
             let algo = BradleyTerryMM {
                 iterations: get_or(sm, "iterations", 10_000),
-                tolerance: get_or(sm, "tol", 1e-6),
+                tolerance: get_or(sm, "tolerance", 1e-6),
                 min_graph_size: get_or(sm, "min-graph-size", 1),
                 remove_total_losers: sm.get_flag("remove-total-losers"),
                 create_fake_games: get_or(sm, "create-fake-games", 0.0),
@@ -490,9 +536,46 @@ fn run() -> Result<()> {
                 _ => emit::btm_mm(&mut out, &model),
             }
         }
+        "btm-lr" => {
+            let algo = BradleyTerryLR {
+                passes: get_or(sm, "passes", 10),
+                alpha: get_or(sm, "alpha", 1.0),
+                decay: get_or(sm, "decay", 1e-5),
+                thrifty: sm.get_flag("thrifty"),
+            };
+            let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
+            ctx.emit(&model)
+        }
+        "lsr" => {
+            let estimator = match sm.get_one::<String>("estimator").unwrap().as_str() {
+                "monte-carlo" => Estimator::MonteCarlo,
+                _ => Estimator::PowerMethod,
+            };
+            let steps = match get_or(sm, "steps", 0usize) {
+                0 if estimator == Estimator::MonteCarlo => 1000,
+                0 => 10,
+                n => n,
+            };
+            let algo = Lsr {
+                steps,
+                estimator,
+                seed: get_or(sm, "seed", 2020),
+            };
+            let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
+            ctx.emit(&model)
+        }
+        "rank-centrality" => {
+            ctx.reject_load_state(algo)?;
+            let rc = RankCentrality {
+                iterations: get_or(sm, "iterations", 200),
+                tolerance: get_or(sm, "tolerance", 1e-10),
+            };
+            let model = rc.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            ctx.emit(&model)
+        }
         "es-rum" => {
-            ctx.reject_load_state(sub)?;
-            let algo = EsRum {
+            ctx.reject_load_state(algo)?;
+            let es = EsRum {
                 distribution: if sm.get_flag("fixed") {
                     RumDistribution::FixedNormal
                 } else {
@@ -505,7 +588,7 @@ fn run() -> Result<()> {
                 prior: get_or(sm, "prior", 0),
                 seed: get_or(sm, "seed", 2019),
             };
-            let model = algo.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let model = es.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
             match ctx.format.as_str() {
@@ -514,8 +597,8 @@ fn run() -> Result<()> {
             }
         }
         "kemeny" => {
-            ctx.reject_load_state(sub)?;
-            let algo = Kemeny {
+            ctx.reject_load_state(algo)?;
+            let km = Kemeny {
                 passes: get_or(sm, "passes", 0),
                 min_obs: get_or(sm, "min-obs", 1),
                 algo: match sm.get_one::<String>("algo").unwrap().as_str() {
@@ -524,35 +607,31 @@ fn run() -> Result<()> {
                 },
                 seed: get_or(sm, "seed", 2020),
             };
-            let model = algo.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let model = km.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.emit(&model)
         }
-        "lsr" => {
-            let estimator = match sm.get_one::<String>("estimator").unwrap().as_str() {
-                "monte-carlo" => Estimator::MonteCarlo,
-                _ => Estimator::PowerMethod,
-            };
-            let steps = match get_or(sm, "steps", 0usize) {
-                0 => {
-                    if estimator == Estimator::MonteCarlo {
-                        1000
-                    } else {
-                        10
-                    }
-                }
-                n => n,
-            };
-            let algo = Lsr {
-                steps,
-                estimator,
-                seed: get_or(sm, "seed", 2020),
-            };
-            let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
+        "borda" => {
+            ctx.reject_load_state(algo)?;
+            let model = Borda::default().fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.emit(&model)
         }
+        "copeland" => {
+            ctx.reject_load_state(algo)?;
+            let model = Copeland::default().fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        other => Err(Error::InvalidInput(format!(
+            "unknown tournament algorithm {other:?}"
+        ))),
+    }
+}
+
+fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
+    let ctx = Ctx::from_matches(sm)?;
+    match algo {
         "page-rank" => {
-            ctx.reject_load_state(sub)?;
-            let algo = PageRank {
+            ctx.reject_load_state(algo)?;
+            let pr = PageRank {
                 damping: get_or(sm, "damping-factor", 0.85),
                 iterations: get_or(sm, "iterations", 10),
                 sink: match sm.get_one::<String>("sink-dispersion").unwrap().as_str() {
@@ -561,22 +640,22 @@ fn run() -> Result<()> {
                     _ => Sink::Reverse,
                 },
             };
-            // v1 match-file orientation: a row `winner loser` is the
-            // endorsement `loser -> winner`.
-            let graph = io::read_graph(ctx.path, true)?;
-            let model = algo.fit_opts(&graph, &ctx.opts())?;
+            // --matches: rows are 'winner loser', i.e. the endorsement
+            // loser -> winner (the tournament-file orientation).
+            let graph = io::read_graph(ctx.path, sm.get_flag("matches"))?;
+            let model = pr.fit_opts(&graph, &ctx.opts())?;
             ctx.emit(&model)
         }
         "birank" => {
-            ctx.reject_load_state(sub)?;
-            let algo = BiRank {
+            ctx.reject_load_state(algo)?;
+            let br = BiRank {
                 iterations: get_or(sm, "iterations", 10),
                 alpha: get_or(sm, "alpha", 1.0),
                 beta: get_or(sm, "beta", 1.0),
                 seed: get_or(sm, "seed", 2019),
             };
             let graph = io::read_graph(ctx.path, false)?;
-            let model = algo.fit_opts(&graph, &ctx.opts())?;
+            let model = br.fit_opts(&graph, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
             match ctx.format.as_str() {
@@ -584,8 +663,8 @@ fn run() -> Result<()> {
                 _ => emit::birank(&mut out, &model),
             }
         }
-        "extract-components" => {
-            ctx.reject_load_state(sub)?;
+        "components" => {
+            ctx.reject_load_state(algo)?;
             let graph = io::read_graph(ctx.path, false)?;
             let comps = extract_components(graph.view(), get_or(sm, "min-graph-size", 1));
             for (i, comp) in comps.iter().enumerate() {
@@ -601,166 +680,55 @@ fn run() -> Result<()> {
             eprintln!("wrote {} components", comps.len());
             Ok(())
         }
-        "elo" => {
-            let algo = Elo {
-                k: get_or(sm, "k", 32.0),
-                initial_rating: get_or(sm, "initial-rating", 1500.0),
-                scale: get_or(sm, "scale", 400.0),
-            };
-            let model = update_maybe_loaded(&algo, &ctx.pairwise()?, &ctx)?;
-            ctx.emit(&model)
-        }
-        "borda" => {
-            ctx.reject_load_state(sub)?;
-            let model = Borda::default().fit_opts(&ctx.pairwise()?, &ctx.opts())?;
-            ctx.emit(&model)
-        }
-        "copeland" => {
-            ctx.reject_load_state(sub)?;
-            let model = Copeland::default().fit_opts(&ctx.pairwise()?, &ctx.opts())?;
-            ctx.emit(&model)
-        }
-        "rank-centrality" => {
-            ctx.reject_load_state(sub)?;
-            let algo = RankCentrality {
-                iterations: get_or(sm, "iterations", 200),
-                tolerance: get_or(sm, "tolerance", 1e-10),
-            };
-            let model = algo.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
-            ctx.emit(&model)
-        }
-        "bandit" => {
-            let policy = match sm.get_one::<String>("policy").unwrap().as_str() {
-                "greedy" => BanditPolicy::Greedy,
-                "epsilon-greedy" => BanditPolicy::EpsilonGreedy {
-                    epsilon: get_or(sm, "epsilon", 0.1),
-                },
-                "ts-beta" => BanditPolicy::ThompsonBeta {
-                    prior_alpha: get_or(sm, "prior-alpha", 1.0),
-                    prior_beta: get_or(sm, "prior-beta", 1.0),
-                },
-                "ts-gaussian" => BanditPolicy::ThompsonGaussian {
-                    prior_mean: get_or(sm, "prior-mean", 0.0),
-                    prior_weight: get_or(sm, "prior-weight", 1.0),
-                },
-                _ => BanditPolicy::Ucb1 {
-                    exploration: get_or(sm, "exploration", 2.0),
-                },
-            };
-            let algo = Bandit {
-                policy,
-                seed: get_or(sm, "seed", 42),
-            };
-            let data = io::read_rewards(ctx.path)?;
-            let mut model: BanditModel = match &ctx.load_state {
-                Some(p) => BanditModel::load_from_path(p)?,
-                None => algo.init(),
-            };
-            algo.update_opts(&mut model, &data, &ctx.opts())?;
-
-            if let Some(&k) = sm.get_one::<usize>("select") {
-                let arms = model.select_k(k)?;
-                ctx.save(&model)?; // after select: the draw counter advanced
-                for id in arms {
-                    println!("{}", model.arm_name(id).expect("id resolves"));
-                }
-                Ok(())
-            } else {
-                ctx.emit(&model)
-            }
-        }
-        "dehydrate" => {
-            eprintln!(
-                "warning: dehydrate is deprecated — v2 reads string ids natively; \
-                 this subcommand will be removed in a future release"
-            );
-            dehydrate(
-                ctx.path,
-                &get_or(sm, "delim", "\t".to_string()),
-                sm.get_one::<PathBuf>("features"),
-            )
-        }
-        "hydrate" => {
-            eprintln!(
-                "warning: hydrate is deprecated — v2 emits names directly; \
-                 this subcommand will be removed in a future release"
-            );
-            hydrate(
-                ctx.path,
-                sm.get_one::<PathBuf>("vocab").expect("required"),
-                sm.get_one::<PathBuf>("output"),
-            )
-        }
-        other => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
+        other => Err(Error::InvalidInput(format!(
+            "unknown graph algorithm {other:?}"
+        ))),
     }
 }
 
-// ------------------------------------------------- deprecated v1 utilities
-
-fn dehydrate(path: &Path, delim: &str, features: Option<&PathBuf>) -> Result<()> {
-    use std::io::Write;
-    let text = std::fs::read_to_string(path)?;
-    let mut interner = propagon::Interner::new();
-    let mut edges: Vec<(u32, u32, String)> = Vec::new();
-    for (lineno, line) in text.lines().enumerate() {
-        if line.trim().is_empty() {
-            continue;
+fn run_bandit(policy_name: &str, sm: &ArgMatches) -> Result<()> {
+    let ctx = Ctx::from_matches(sm)?;
+    let policy = match policy_name {
+        "greedy" => BanditPolicy::Greedy,
+        "epsilon-greedy" => BanditPolicy::EpsilonGreedy {
+            epsilon: get_or(sm, "epsilon", 0.1),
+        },
+        "ucb1" => BanditPolicy::Ucb1 {
+            exploration: get_or(sm, "exploration", 2.0),
+        },
+        "ts-beta" => BanditPolicy::ThompsonBeta {
+            prior_alpha: get_or(sm, "prior-alpha", 1.0),
+            prior_beta: get_or(sm, "prior-beta", 1.0),
+        },
+        "ts-gaussian" => BanditPolicy::ThompsonGaussian {
+            prior_mean: get_or(sm, "prior-mean", 0.0),
+            prior_weight: get_or(sm, "prior-weight", 1.0),
+        },
+        other => {
+            return Err(Error::InvalidInput(format!(
+                "unknown bandit policy {other:?}"
+            )));
         }
-        let mut it = line.split(delim);
-        let (Some(a), Some(b)) = (it.next(), it.next()) else {
-            return Err(Error::parse(
-                lineno + 1,
-                format!("expected two fields: {line:?}"),
-            ));
-        };
-        let w = it.next().unwrap_or("1").to_string();
-        let a = interner.intern(a.trim());
-        let b = interner.intern(b.trim());
-        edges.push((a, b, w));
-    }
-
-    let base = path.display();
-    let mut vocab = std::io::BufWriter::new(std::fs::File::create(format!("{base}.vocab"))?);
-    let mut feat_id =
-        std::io::BufWriter::new(std::fs::File::create(format!("{base}.features.id"))?);
-    for (idx, name) in interner.names().enumerate() {
-        writeln!(vocab, "{idx} {name}")?;
-        writeln!(feat_id, "{idx} {idx}")?;
-    }
-    let mut edges_f = std::io::BufWriter::new(std::fs::File::create(format!("{base}.edges"))?);
-    for (a, b, w) in edges {
-        writeln!(edges_f, "{a} {b} {w}")?;
-    }
-    if let Some(fpath) = features {
-        let mut out = std::io::BufWriter::new(std::fs::File::create(format!("{base}.features"))?);
-        for line in std::fs::read_to_string(fpath)?.lines() {
-            if let Some((name, rest)) = line.split_once(delim)
-                && let Some(id) = interner.get(name.trim())
-            {
-                writeln!(out, "{id} {rest}")?;
-            }
-        }
-    }
-    Ok(())
-}
-
-fn hydrate(path: &Path, vocab: &Path, output: Option<&PathBuf>) -> Result<()> {
-    use std::io::Write;
-    let mut names = std::collections::HashMap::new();
-    for line in std::fs::read_to_string(vocab)?.lines() {
-        if let Some((idx, name)) = line.split_once(' ') {
-            names.insert(idx.to_string(), name.to_string());
-        }
-    }
-    let mut out: Box<dyn Write> = match output {
-        Some(p) => Box::new(std::io::BufWriter::new(std::fs::File::create(p)?)),
-        None => Box::new(std::io::stdout().lock()),
     };
-    for line in std::fs::read_to_string(path)?.lines() {
-        if let Some((id, value)) = line.split_once(": ") {
-            let name = names.get(id).map(String::as_str).unwrap_or(id);
-            writeln!(out, "{name}\t{value}")?;
+    let algo = Bandit {
+        policy,
+        seed: get_or(sm, "seed", 42),
+    };
+    let data = io::read_rewards(ctx.path)?;
+    let mut model: BanditModel = match &ctx.load_state {
+        Some(p) => BanditModel::load_from_path(p)?,
+        None => algo.init(),
+    };
+    algo.update_opts(&mut model, &data, &ctx.opts())?;
+
+    if let Some(&k) = sm.get_one::<usize>("select") {
+        let arms = model.select_k(k)?;
+        ctx.save(&model)?; // after select: the draw counter advanced
+        for id in arms {
+            println!("{}", model.arm_name(id).expect("id resolves"));
         }
+        Ok(())
+    } else {
+        ctx.emit(&model)
     }
-    Ok(())
 }

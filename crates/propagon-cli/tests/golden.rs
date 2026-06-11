@@ -1,9 +1,10 @@
-//! End-to-end parity against captured v1 outputs (`tests/golden/`).
+//! End-to-end numerical regression against captured v1 outputs
+//! (`tests/golden/`). The CLI surface is v2's grouped form
+//! (`tournament`/`graph`/`bandit`); only the *numbers* are held to v1.
 //!
 //! Tiers (see `scripts/capture_golden.sh`):
-//! - **T (tolerance)**: numeric agreement per entity + identical ranking —
-//!   rate, glicko2, btm-mm, btm-lr, kemeny (insertion), lsr (power),
-//!   page-rank.
+//! - **T (tolerance)**: numeric agreement per entity — rate, glicko2,
+//!   btm-mm, btm-lr, kemeny (insertion), lsr (power), page-rank.
 //! - **S (sanity)**: rank correlation ≥ 0.95 — es-rum, birank (their RNG
 //!   streams legitimately differ from v1's retired `random`/xorshift crates).
 //!
@@ -23,10 +24,11 @@ fn repo(rel: &str) -> PathBuf {
 
 const EDGES: &str = "example/tournament/baseball.2018.edges";
 
+/// Runs `propagon <args...> <example-edges-path>`.
 fn run(args: &[&str]) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_propagon"))
-        .arg(repo(EDGES))
         .args(args)
+        .arg(repo(EDGES))
         .output()
         .expect("binary runs");
     assert!(
@@ -102,47 +104,57 @@ fn spearman(a: &HashMap<String, Vec<f64>>, b: &HashMap<String, Vec<f64>>) -> f64
 #[test]
 fn rate_matches_golden() {
     assert_tier_t(
-        &["rate", "--confidence-interval", "0.5"],
+        &["tournament", "rate", "--confidence-interval", "0.5"],
         "rate-090.out",
         1e-6,
     );
-    assert_tier_t(&["rate"], "rate-095.out", 1e-5);
+    assert_tier_t(&["tournament", "rate"], "rate-095.out", 1e-5);
 }
 
 #[test]
 fn glicko2_matches_golden() {
-    assert_tier_t(&["glicko2"], "glicko2.out", 5e-3);
-    assert_tier_t(&["glicko2", "--use-mu"], "glicko2-mu.out", 2e-3);
+    assert_tier_t(&["tournament", "glicko2"], "glicko2.out", 5e-3);
+    assert_tier_t(
+        &["tournament", "glicko2", "--use-mu"],
+        "glicko2-mu.out",
+        2e-3,
+    );
 }
 
 #[test]
 fn btm_mm_matches_golden() {
-    assert_tier_t(&["btm-mm"], "btm-mm.out", 1e-4);
+    assert_tier_t(&["tournament", "btm-mm"], "btm-mm.out", 1e-4);
 }
 
 #[test]
 fn btm_lr_matches_golden() {
-    assert_tier_t(&["btm-lr"], "btm-lr.out", 1e-3);
+    assert_tier_t(&["tournament", "btm-lr"], "btm-lr.out", 1e-3);
 }
 
 #[test]
 fn kemeny_matches_golden() {
-    assert_tier_t(&["kemeny", "--passes", "5"], "kemeny.out", 0.5);
+    assert_tier_t(
+        &["tournament", "kemeny", "--passes", "5"],
+        "kemeny.out",
+        0.5,
+    );
 }
 
 #[test]
 fn lsr_matches_golden() {
-    assert_tier_t(&["lsr", "--steps", "20"], "lsr.out", 2e-3);
+    assert_tier_t(&["tournament", "lsr", "--steps", "20"], "lsr.out", 2e-3);
 }
 
 #[test]
 fn page_rank_matches_golden() {
-    assert_tier_t(&["page-rank"], "page-rank.out", 1e-5);
+    // --matches reproduces v1's orientation: 'winner loser' rows become
+    // loser -> winner endorsements.
+    assert_tier_t(&["graph", "page-rank", "--matches"], "page-rank.out", 1e-5);
 }
 
 #[test]
 fn es_rum_rank_correlates_with_golden() {
-    let got = parse(&run(&["es-rum", "--passes", "100"]));
+    let got = parse(&run(&["tournament", "es-rum", "--passes", "100"]));
     let want = golden("es-rum.out");
     let rho = spearman(&got, &want);
     assert!(rho >= 0.95, "es-rum spearman {rho}");
@@ -160,7 +172,7 @@ fn birank_rank_correlates_with_golden() {
             parse(&lines[mid..].join("\n")),
         )
     };
-    let (got_u, got_p) = split(&run(&["birank"]));
+    let (got_u, got_p) = split(&run(&["graph", "birank"]));
     let golden_text =
         std::fs::read_to_string(repo("crates/propagon-cli/tests/golden/birank.out")).unwrap();
     let (want_u, want_p) = split(&golden_text);
@@ -185,10 +197,10 @@ fn glicko2_save_load_state_flow() {
     std::fs::write(&both, "a b\nc b\n\nb a\na c\n").unwrap();
     let state = dir.join("state.jsonl");
 
-    let run_at = |path: &PathBuf, extra: &[&str]| -> String {
+    let run_at = |extra: &[&str], path: &PathBuf| -> String {
         let out = Command::new(env!("CARGO_BIN_EXE_propagon"))
-            .arg(path)
             .args(extra)
+            .arg(path)
             .output()
             .expect("binary runs");
         assert!(
@@ -199,9 +211,25 @@ fn glicko2_save_load_state_flow() {
         String::from_utf8(out.stdout).unwrap()
     };
 
-    let _ = run_at(&p1, &["glicko2", "--save-state", state.to_str().unwrap()]);
-    let resumed = run_at(&p2, &["glicko2", "--load-state", state.to_str().unwrap()]);
-    let continuous = run_at(&both, &["glicko2", "--groups-are-separate"]);
+    let _ = run_at(
+        &[
+            "tournament",
+            "glicko2",
+            "--save-state",
+            state.to_str().unwrap(),
+        ],
+        &p1,
+    );
+    let resumed = run_at(
+        &[
+            "tournament",
+            "glicko2",
+            "--load-state",
+            state.to_str().unwrap(),
+        ],
+        &p2,
+    );
+    let continuous = run_at(&["tournament", "glicko2", "--groups-are-separate"], &both);
     assert_eq!(
         resumed, continuous,
         "resume must equal continuous two-period run"
@@ -210,64 +238,16 @@ fn glicko2_save_load_state_flow() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
-/// The deprecated dehydrate/hydrate pipeline still works end to end.
-#[test]
-fn dehydrate_hydrate_round_trip() {
-    let dir = std::env::temp_dir().join(format!("propagon-dehydrate-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let raw = dir.join("games");
-    std::fs::write(&raw, "ARI\tCOL\nATL\tPHI\nARI\tPHI\n").unwrap();
-
-    let out = Command::new(env!("CARGO_BIN_EXE_propagon"))
-        .arg(&raw)
-        .arg("dehydrate")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-
-    let edges = dir.join("games.edges");
-    let scores_out = Command::new(env!("CARGO_BIN_EXE_propagon"))
-        .arg(&edges)
-        .arg("rate")
-        .output()
-        .unwrap();
-    assert!(scores_out.status.success());
-    let scores_path = dir.join("scores");
-    std::fs::write(&scores_path, &scores_out.stdout).unwrap();
-
-    let hydrated = Command::new(env!("CARGO_BIN_EXE_propagon"))
-        .arg(&scores_path)
-        .arg("hydrate")
-        .arg("--vocab")
-        .arg(dir.join("games.vocab"))
-        .output()
-        .unwrap();
-    assert!(hydrated.status.success());
-    let text = String::from_utf8(hydrated.stdout).unwrap();
-    assert!(text.contains("ARI\t"), "hydrated output has names: {text}");
-
-    std::fs::remove_dir_all(&dir).ok();
-}
-
-/// New-in-v2 subcommands smoke-run on the example data.
+/// New-in-v2 tournament algorithms smoke-run on the example data.
 #[test]
 fn new_subcommands_run() {
-    for args in [
-        vec!["elo"],
-        vec!["borda"],
-        vec!["copeland"],
-        vec!["rank-centrality"],
-    ] {
-        let out = parse(&run(&args));
-        assert_eq!(out.len(), 30, "{args:?} ranks all 30 teams");
+    for algo in ["elo", "borda", "copeland", "rank-centrality"] {
+        let out = parse(&run(&["tournament", algo]));
+        assert_eq!(out.len(), 30, "{algo} ranks all 30 teams");
     }
 }
 
-/// Bandit subcommand: scores and seeded selection.
+/// Bandit group: per-policy subcommands, scores and seeded selection.
 #[test]
 fn bandit_subcommand_runs() {
     let dir = std::env::temp_dir().join(format!("propagon-bandit-{}", std::process::id()));
@@ -277,8 +257,8 @@ fn bandit_subcommand_runs() {
 
     let run_b = |extra: &[&str]| -> String {
         let out = Command::new(env!("CARGO_BIN_EXE_propagon"))
-            .arg(&rewards)
             .args(extra)
+            .arg(&rewards)
             .output()
             .unwrap();
         assert!(
@@ -289,16 +269,12 @@ fn bandit_subcommand_runs() {
         String::from_utf8(out.stdout).unwrap()
     };
 
-    let scores = parse(&run_b(&["bandit", "--policy", "greedy"]));
+    let scores = parse(&run_b(&["bandit", "greedy"]));
     assert_eq!(scores["A"][0], 1.0);
     assert_eq!(scores["B"][0], 0.5);
 
-    let pick1 = run_b(&[
-        "bandit", "--policy", "ts-beta", "--seed", "9", "--select", "1",
-    ]);
-    let pick2 = run_b(&[
-        "bandit", "--policy", "ts-beta", "--seed", "9", "--select", "1",
-    ]);
+    let pick1 = run_b(&["bandit", "ts-beta", "--seed", "9", "--select", "1"]);
+    let pick2 = run_b(&["bandit", "ts-beta", "--seed", "9", "--select", "1"]);
     assert_eq!(pick1, pick2, "seeded selection is deterministic");
     assert!(["A", "B", "C"].contains(&pick1.trim()));
 
