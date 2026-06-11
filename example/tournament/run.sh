@@ -1,25 +1,37 @@
-# Computes the power rankings for baseball's 2018 season
-# This assumes you have the propagon binary compiled and installed!
-propagon baseball.2018 dehydrate 
+#!/usr/bin/env bash
+# Ranks baseball's 2018 season with every tournament algorithm.
 #
-## Run the example with different model types
-propagon baseball.2018.edges glicko2 > baseball.2018.glicko2
-propagon baseball.2018.glicko2 hydrate --vocab baseball.2018.vocab > scores.glicko2
+# v2 reads team names directly (baseball.2018 holds quoted team names,
+# tab-separated) — no remapping step. Outputs land in ./out/.
+#
+# Build the binary first:  cargo build --release
+set -euo pipefail
 
-propagon baseball.2018.edges btm-mm > baseball.2018.btm-mm
-propagon baseball.2018.btm-mm hydrate --vocab baseball.2018.vocab > scores.btm-mm
+cd "$(dirname "$0")"
+BIN="${PROPAGON_BIN:-../../target/release/propagon}"
+DATA=baseball.2018
+mkdir -p out
 
-propagon baseball.2018.edges btm-lr > baseball.2018.btm-lr
-propagon baseball.2018.btm-lr hydrate --vocab baseball.2018.vocab > scores.btm-lr
+run() { # run <name> <algo...>
+  local name="$1"; shift
+  echo "== $name" >&2
+  "$BIN" tournament "$@" "$DATA" > "out/$name.scores"
+}
 
-propagon baseball.2018.edges rate --confidence-interval 0.9 > baseball.2018.rate
-propagon baseball.2018.rate hydrate --vocab baseball.2018.vocab > scores.rate
+run win-rate              win-rate --confidence-interval 0.95
+run elo                   elo
+run glicko2               glicko2
+run bradley-terry-mm      bradley-terry-model --estimator mm
+run bradley-terry-sgd     bradley-terry-model --estimator sgd
+run luce-spectral-ranking luce-spectral-ranking --steps 20
+run rank-centrality       rank-centrality
+run random-utility-model  random-utility-model --passes 100
+run kemeny                kemeny --passes 5
+run borda-count           borda-count
+run copeland              copeland
 
-propagon baseball.2018.edges es-rum --passes 100 > baseball.2018.es-rum
-propagon baseball.2018.es-rum hydrate --vocab baseball.2018.vocab | sort -t$'\t' -k2,2nr > scores.es-rum
+# Resumable state demo: save glicko2 state, then continue from it.
+"$BIN" tournament glicko2 --save-state out/glicko2.state.jsonl "$DATA" > /dev/null
+"$BIN" tournament glicko2 --load-state out/glicko2.state.jsonl "$DATA" > out/glicko2-resumed.scores
 
-propagon baseball.2018.edges kemeny --passes 5 > baseball.2018.kemeny
-propagon baseball.2018.kemeny hydrate --vocab baseball.2018.vocab > scores.kemeny
-
-propagon baseball.2018.edges lsr > baseball.2018.lsr
-propagon baseball.2018.lsr hydrate --vocab baseball.2018.vocab | sort -t$'\t' -k2,2nr > scores.lsr
+echo "done; leaderboards in $(pwd)/out/" >&2

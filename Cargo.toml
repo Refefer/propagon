@@ -8,6 +8,10 @@ authors = ["Andrew Stanton <refefer@gmail.com>"]
 edition = "2024"
 # let-chains (used in dataset and CLI code) stabilized in 1.88
 rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Refefer/propagon"
+keywords = ["ranking", "bradley-terry", "elo", "glicko2", "pagerank"]
+categories = ["algorithms", "science", "mathematics"]
 
 [workspace.dependencies]
 propagon = { path = "crates/propagon", version = "2.0.0-alpha.1" }
