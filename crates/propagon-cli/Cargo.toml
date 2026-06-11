@@ -1,0 +1,18 @@
+[package]
+name = "propagon-cli"
+description = "Command-line interface for the propagon ranking library"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "propagon"
+path = "src/main.rs"
+
+[dependencies]
+propagon.workspace = true
+clap.workspace = true
+indicatif.workspace = true
+serde_json.workspace = true
+log.workspace = true

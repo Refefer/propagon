@@ -1,0 +1,27 @@
+[package]
+name = "propagon"
+description = "Ranking from revealed preferences: Bradley-Terry, Elo, Glicko-2, spectral ranking, rank aggregation, centrality, and bandits"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["parallel", "io"]
+# Multi-threaded fitting via rayon. Disable for single-threaded targets (wasm).
+parallel = ["dep:rayon"]
+# std::fs convenience helpers (save_to_path / load_from_path).
+io = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
+rand_xoshiro.workspace = true
+rayon = { workspace = true, optional = true }
+
+[lints]
+workspace = true
