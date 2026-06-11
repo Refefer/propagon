@@ -31,6 +31,7 @@ mod pagerank;
 mod plackett_luce;
 mod rank_centrality;
 mod rate;
+mod weng_lin;
 
 pub use bandits::{Bandit, BanditModel, BanditPolicy};
 pub use bayes_bt::{BayesBtModel, BayesianBradleyTerry};
@@ -56,3 +57,4 @@ pub use pagerank::{PageRank, PageRankModel, Sink};
 pub use plackett_luce::{PlackettLuce, PlackettLuceModel};
 pub use rank_centrality::{RankCentrality, RankCentralityModel};
 pub use rate::{Confidence, WinRate, WinRateModel, wilson_interval};
+pub use weng_lin::{GammaPolicy, Rating, WengLin, WengLinModel, WengLinVariant};

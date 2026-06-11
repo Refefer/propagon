@@ -25,9 +25,10 @@ use std::sync::Mutex;
 use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use propagon::algos::{
     Bandit, BanditModel, BanditPolicy, BayesianBradleyTerry, BiRank, Borda, BradleyTerryLR,
-    BradleyTerryMM, Colley, Confidence, Copeland, CrowdBt, Elo, EsRum, Estimator, Glicko2,
-    HodgeFlow, HodgeRank, Keener, Kemeny, KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4, PageRank,
-    PlackettLuce, RankCentrality, RumDistribution, Sink, WinRate, extract_components,
+    BradleyTerryMM, Colley, Confidence, Copeland, CrowdBt, Elo, EsRum, Estimator, GammaPolicy,
+    Glicko2, HodgeFlow, HodgeRank, Keener, Kemeny, KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4,
+    PageRank, PlackettLuce, RankCentrality, RumDistribution, Sink, WengLin, WengLinVariant,
+    WinRate, extract_components,
 };
 use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
 
@@ -150,6 +151,7 @@ fn cli() -> Command {
         .subcommand(tournament_cmd())
         .subcommand(rankings_cmd())
         .subcommand(crowd_cmd())
+        .subcommand(matchups_cmd())
         .subcommand(graph_cmd())
         .subcommand(bandit_cmd())
 }
@@ -419,6 +421,37 @@ fn crowd_cmd() -> Command {
         ))
 }
 
+fn matchups_cmd() -> Command {
+    Command::new("matchups")
+        .about("Rate players from team matches: teams '|'-separated best-first, '=' ties players whitespace-separated")
+        .subcommand_required(true)
+        .subcommand(with_path(
+            Command::new("weng-lin")
+                .visible_alias("openskill")
+                .about("Bayesian (mu, sigma) ratings for multi-team multiplayer matches")
+                .arg(
+                    Arg::new("variant")
+                        .long("variant")
+                        .value_parser(["bradley-terry", "thurstone-mosteller"])
+                        .default_value("bradley-terry")
+                        .help("Pairwise likelihood"),
+                )
+                .arg(opt::<f64>("mu", "Initial rating mean"))
+                .arg(opt::<f64>("sigma", "Initial rating deviation"))
+                .arg(opt::<f64>("beta", "Performance noise"))
+                .arg(opt::<f64>("kappa", "Variance floor multiplier"))
+                .arg(opt::<f64>("epsilon", "Draw margin (thurstone-mosteller)"))
+                .arg(opt::<f64>("tau", "Pre-match sigma inflation (0 = off)"))
+                .arg(
+                    Arg::new("gamma")
+                        .long("gamma")
+                        .value_parser(["sigma-over-c", "one-over-k"])
+                        .default_value("sigma-over-c")
+                        .help("Variance-update damping policy"),
+                ),
+        ))
+}
+
 fn graph_cmd() -> Command {
     Command::new("graph")
         .about("Rank nodes by graph structure: 'src dst [weight]' edges")
@@ -656,6 +689,7 @@ fn run() -> Result<()> {
         "tournament" => run_tournament(leaf, sm),
         "rankings" => run_rankings(leaf, sm),
         "crowd" => run_crowd(leaf, sm),
+        "matchups" => run_matchups(leaf, sm),
         "graph" => run_graph(leaf, sm),
         "bandit" => run_bandit(leaf, sm),
         other => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
@@ -957,6 +991,41 @@ fn run_crowd(algo: &str, sm: &ArgMatches) -> Result<()> {
         }
         other => Err(Error::InvalidInput(format!(
             "unknown crowd algorithm {other:?}"
+        ))),
+    }
+}
+
+fn run_matchups(algo: &str, sm: &ArgMatches) -> Result<()> {
+    let ctx = Ctx::from_matches(sm)?;
+    match algo {
+        "weng-lin" => {
+            let mut wl = WengLin::default();
+            set(sm, "mu", &mut wl.mu);
+            set(sm, "sigma", &mut wl.sigma);
+            set(sm, "beta", &mut wl.beta);
+            set(sm, "kappa", &mut wl.kappa);
+            set(sm, "epsilon", &mut wl.epsilon);
+            set(sm, "tau", &mut wl.tau);
+
+            if choice(sm, "variant", "bradley-terry") == "thurstone-mosteller" {
+                wl.variant = WengLinVariant::ThurstoneMostellerFull;
+            }
+            if choice(sm, "gamma", "sigma-over-c") == "one-over-k" {
+                wl.gamma = GammaPolicy::OneOverK;
+            }
+
+            let data = io::read_matchups(ctx.path)?;
+            let model = update_maybe_loaded(&wl, &data, &ctx)?;
+            ctx.save(&model)?;
+            let mut out = std::io::stdout().lock();
+
+            match ctx.format.as_str() {
+                "jsonl" => emit::jsonl(&mut out, &model),
+                _ => emit::weng_lin(&mut out, &model),
+            }
+        }
+        other => Err(Error::InvalidInput(format!(
+            "unknown matchups algorithm {other:?}"
         ))),
     }
 }

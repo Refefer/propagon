@@ -554,3 +554,72 @@ impl super::AnnotatedPairsDataset {
         Ok(out)
     }
 }
+
+// ---------------------------------------------------------------- matchups
+
+#[derive(Clone, Serialize, Deserialize)]
+struct MatchRec {
+    t: Vec<Vec<u32>>,
+    r: Vec<u32>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MatchupsChunk {
+    mt: Vec<MatchRec>,
+}
+
+impl super::MatchupsDataset {
+    /// Serializes matches: player vocab, then match chunks (team rosters as
+    /// vocab indices plus competition ranks).
+    pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
+        write_header(
+            &mut w,
+            "matchups",
+            serde_json::Value::Object(Default::default()),
+            self.n_entities(),
+        )?;
+        write_vocab(&mut w, self.interner())?;
+
+        let matches: Vec<MatchRec> = self
+            .matches()
+            .map(|teams| {
+                let mut rec = MatchRec {
+                    t: Vec::new(),
+                    r: Vec::new(),
+                };
+                for (rank, roster) in teams {
+                    rec.t.push(roster.to_vec());
+                    rec.r.push(rank);
+                }
+                rec
+            })
+            .collect();
+
+        for chunk in matches.chunks(CHUNK / 16) {
+            let line = MatchupsChunk { mt: chunk.to_vec() };
+            serde_json::to_writer(&mut w, &line)?;
+            w.write_all(b"\n")?;
+        }
+        Ok(())
+    }
+
+    /// Loads a dataset written by `save_jsonl`.
+    pub fn load_jsonl<R: BufRead>(r: R) -> Result<Self> {
+        let reader = read_dataset_prefix(r, "matchups")?;
+        let mut out = super::MatchupsDataset::new();
+        let mut staged: Vec<(Vec<Vec<u32>>, Vec<u32>)> = Vec::new();
+
+        let (_, interner) = reader.rows(|chunk: MatchupsChunk| {
+            for rec in chunk.mt {
+                staged.push((rec.t, rec.r));
+            }
+            Ok(())
+        })?;
+
+        out.set_interner(interner);
+        for (teams, ranks) in staged {
+            out.push_match_ids(&teams, &ranks)?;
+        }
+        Ok(out)
+    }
+}

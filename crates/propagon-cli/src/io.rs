@@ -8,8 +8,8 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use propagon::{
-    AnnotatedPairsDataset, Error, GraphDataset, PairwiseDataset, RankingsDataset, Result,
-    RewardsDataset,
+    AnnotatedPairsDataset, Error, GraphDataset, MatchupsDataset, PairwiseDataset, RankingsDataset,
+    Result, RewardsDataset,
 };
 
 fn rows(path: &Path) -> Result<impl Iterator<Item = std::io::Result<String>>> {
@@ -130,6 +130,43 @@ pub fn read_annotated(path: &Path) -> Result<AnnotatedPairsDataset> {
                 .map_err(|e| Error::parse(lineno + 1, format!("bad weight {t:?}: {e}")))?,
         };
         ds.push(annotator, winner, loser, x);
+    }
+    if ds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(ds)
+}
+
+/// Reads a matchups file: one match per line, teams separated by `|`
+/// (best first), `=` joining teams tied at the same rank, players
+/// whitespace-separated within a team. Ranks are derived competition-style.
+pub fn read_matchups(path: &Path) -> Result<MatchupsDataset> {
+    let mut ds = MatchupsDataset::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let mut teams: Vec<Vec<&str>> = Vec::new();
+        let mut ranks: Vec<u32> = Vec::new();
+        let mut next_rank = 1u32;
+
+        for segment in line.split('|') {
+            let tied: Vec<&str> = segment.split('=').collect();
+            let here = next_rank;
+
+            for team in &tied {
+                teams.push(team.split_whitespace().collect());
+                ranks.push(here);
+            }
+            next_rank += tied.len() as u32;
+        }
+
+        let refs: Vec<&[&str]> = teams.iter().map(Vec::as_slice).collect();
+        ds.push_match(&refs, &ranks)
+            .map_err(|e| Error::parse(lineno + 1, format!("{e}: {line:?}")))?;
     }
     if ds.is_empty() {
         return Err(Error::EmptyDataset);

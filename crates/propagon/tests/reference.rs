@@ -645,3 +645,111 @@ fn bayesian_bt_agrees_with_published_mle() -> TestResult {
 
     Ok(())
 }
+
+/// Weng-Lin (JMLR 12 (2011), Algorithms 1 and 3) against the openskill.js
+/// model-level regression vectors — third-party values that two independent
+/// libraries agree on, and whose 1v1 cases were re-derived by hand from the
+/// paper's equations during planning:
+/// <https://github.com/philihp/openskill.js/blob/main/src/models/__tests__/bradley-terry-full.test.ts>
+/// <https://github.com/philihp/openskill.js/blob/main/src/models/__tests__/thurstone-mosteller-full.test.ts>
+/// All paper defaults (mu 25, sigma 25/3, beta 25/6, kappa 1e-4, eps 0.1,
+/// gamma sigma/c, no tau).
+#[test]
+fn weng_lin_matches_openskill_vectors() -> TestResult {
+    use propagon::MatchupsDataset;
+    use propagon::algos::{GammaPolicy, Rating, WengLin, WengLinVariant};
+
+    let rate =
+        |algo: &WengLin, teams: &[&[&str]]| -> Result<Vec<Rating>, Box<dyn std::error::Error>> {
+            let mut d = MatchupsDataset::new();
+            d.push_ordered(teams)?;
+            let mut m = algo.init();
+            algo.update(&mut m, &d)?;
+            Ok(m.ratings().map(|(_, r)| r).collect())
+        };
+
+    let bt = WengLin::default();
+
+    // BT-full 1v1.
+    let r = rate(&bt, &[&["w"], &["l"]])?;
+    assert!((r[0].mu - 27.63523138347365).abs() < 1e-9, "{}", r[0].mu);
+    assert!((r[0].sigma - 8.065506316323548).abs() < 1e-9);
+    assert!((r[1].mu - 22.36476861652635).abs() < 1e-9);
+    assert!((r[1].sigma - 8.065506316323548).abs() < 1e-9);
+
+    // BT-full 5-player free-for-all.
+    let r = rate(&bt, &[&["1"], &["2"], &["3"], &["4"], &["5"]])?;
+    let mus = [
+        35.5409255338946,
+        30.2704627669473,
+        25.0,
+        19.729537233052703,
+        14.4590744661054,
+    ];
+    for (got, want) in r.iter().zip(mus) {
+        assert!((got.mu - want).abs() < 1e-9, "{} vs {want}", got.mu);
+        assert!((got.sigma - 7.202515895247076).abs() < 1e-9);
+    }
+
+    // BT-full, three teams of sizes (3, 1, 2) finishing in listed order:
+    // exercises sum-aggregation and variance partitioning.
+    let r = rate(&bt, &[&["a1", "a2", "a3"], &["b1"], &["c1", "c2"]])?;
+    assert!((r[0].mu - 25.992743915179297).abs() < 1e-9, "{}", r[0].mu);
+    assert!((r[0].sigma - 8.19709997489984).abs() < 1e-9);
+    assert!((r[3].mu - 28.48909130001799).abs() < 1e-9, "{}", r[3].mu);
+    assert!((r[3].sigma - 8.220848339985736).abs() < 1e-9);
+    assert!((r[4].mu - 20.518164784802714).abs() < 1e-9, "{}", r[4].mu);
+    assert!((r[4].sigma - 8.127515465304823).abs() < 1e-9);
+
+    // gamma = 1/k variants pin the GammaPolicy enum.
+    let bt_k = WengLin {
+        gamma: GammaPolicy::OneOverK,
+        ..Default::default()
+    };
+    let r = rate(&bt_k, &[&["w"], &["l"]])?;
+    assert!(
+        (r[0].sigma - 8.122328620674137).abs() < 1e-9,
+        "{}",
+        r[0].sigma
+    );
+    let r = rate(&bt_k, &[&["1"], &["2"], &["3"], &["4"], &["5"]])?;
+    assert!(
+        (r[0].sigma - 7.993052538854532).abs() < 1e-9,
+        "{}",
+        r[0].sigma
+    );
+
+    // TM-full 1v1 (tolerance bounded by our normal-CDF approximation).
+    let tm = WengLin {
+        variant: WengLinVariant::ThurstoneMostellerFull,
+        ..Default::default()
+    };
+    let r = rate(&tm, &[&["w"], &["l"]])?;
+    assert!((r[0].mu - 29.230718708993216).abs() < 1e-6, "{}", r[0].mu);
+    assert!((r[0].sigma - 7.630934718709003).abs() < 1e-6);
+
+    // TM-full 5-player free-for-all.
+    let r = rate(&tm, &[&["1"], &["2"], &["3"], &["4"], &["5"]])?;
+    let mus = [
+        41.92287483597286,
+        33.46143741798643,
+        25.0,
+        16.53856258201357,
+        8.077125164027137,
+    ];
+    for (got, want) in r.iter().zip(mus) {
+        assert!((got.mu - want).abs() < 1e-6, "{} vs {want}", got.mu);
+        assert!((got.sigma - 4.958964145006544).abs() < 1e-6);
+    }
+
+    // TM-full three teams (3, 1, 2).
+    let r = rate(&tm, &[&["a1", "a2", "a3"], &["b1"], &["c1", "c2"]])?;
+    assert!((r[0].mu - 25.729796801442728).abs() < 1e-6, "{}", r[0].mu);
+    assert!((r[0].sigma - 8.153169236399172).abs() < 1e-6);
+    assert!((r[3].mu - 34.02513843037207).abs() < 1e-6, "{}", r[3].mu);
+    assert!((r[3].sigma - 7.757460494129447).abs() < 1e-6);
+    assert!((r[4].mu - 15.245064768185204).abs() < 1e-6, "{}", r[4].mu);
+    assert!((r[4].sigma - 7.372121080126496).abs() < 1e-6);
+
+    Ok(())
+}

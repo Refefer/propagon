@@ -63,8 +63,8 @@ pub mod state;
 mod traits;
 
 pub use dataset::{
-    Adjacency, AnnotatedPairsDataset, GraphDataset, GraphView, PairwiseDataset, RankingsDataset,
-    RewardsDataset, Tally,
+    Adjacency, AnnotatedPairsDataset, GraphDataset, GraphView, MatchupsDataset, PairwiseDataset,
+    RankingsDataset, RewardsDataset, Tally,
 };
 pub use error::{Error, Result};
 pub use interner::Interner;

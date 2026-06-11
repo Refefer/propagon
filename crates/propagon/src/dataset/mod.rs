@@ -9,12 +9,14 @@
 mod annotated;
 mod graph;
 mod io;
+mod matchups;
 mod pairwise;
 mod rankings;
 mod rewards;
 
 pub use annotated::AnnotatedPairsDataset;
 pub use graph::{Adjacency, GraphDataset, GraphView};
+pub use matchups::MatchupsDataset;
 pub use pairwise::{PairwiseDataset, Tally};
 pub use rankings::RankingsDataset;
 pub use rewards::RewardsDataset;
