@@ -8,7 +8,11 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-BIN="${PROPAGON_BIN:-../../target/release/propagon}"
+# Binary location: $PROPAGON_BIN, else cargo's target dir (honors any
+# target-dir override), else the conventional workspace path.
+TARGET_DIR="$(cargo metadata --format-version 1 --no-deps 2>/dev/null \
+  | grep -o '"target_directory":"[^"]*"' | cut -d'"' -f4 || true)"
+BIN="${PROPAGON_BIN:-${TARGET_DIR:-../../target}/release/propagon}"
 DATA=baseball.2018
 mkdir -p out
 

@@ -4,7 +4,11 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-BIN="${PROPAGON_BIN:-../../target/release/propagon}"
+# Binary location: $PROPAGON_BIN, else cargo's target dir (honors any
+# target-dir override), else the conventional workspace path.
+TARGET_DIR="$(cargo metadata --format-version 1 --no-deps 2>/dev/null \
+  | grep -o '"target_directory":"[^"]*"' | cut -d'"' -f4 || true)"
+BIN="${PROPAGON_BIN:-${TARGET_DIR:-../../target}/release/propagon}"
 mkdir -p out
 
 echo "== f1 2024 as a 20-driver free-for-all per race" >&2
@@ -14,6 +18,11 @@ echo "== f1 2024 as a 20-driver free-for-all per race" >&2
 # collapses fast; tau (openskill convention: 25/300) keeps ratings adaptive.
 "$BIN" matchups weng-lin --tau 0.0833 f1-2024.matchups > out/f1-tau.scores
 head -5 out/f1-bt.scores >&2
+
+echo "== uthermal 2v2 circuit main event (real 2v2, rotating partners)" >&2
+"$BIN" matchups weng-lin uthermal-2v2.matchups > out/uthermal-bt.scores
+"$BIN" matchups weng-lin --variant thurstone-mosteller uthermal-2v2.matchups > out/uthermal-tm.scores
+head -6 out/uthermal-bt.scores >&2
 
 echo "== doubles league (teams, with ties)" >&2
 "$BIN" matchups weng-lin doubles.matchups > out/doubles.scores
