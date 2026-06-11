@@ -383,6 +383,7 @@ dependencies = [
  "indicatif",
  "log",
  "propagon",
+ "rayon",
  "serde_json",
 ]
 
