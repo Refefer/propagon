@@ -20,8 +20,12 @@ pub enum Sink {
     /// Sinks bounce their mass back along their incoming edges.
     #[default]
     Reverse,
-    /// Sinks distribute their mass to every other node.
+    /// Sinks distribute their mass to every other node (v1 semantics:
+    /// the sink itself is excluded from its own redistribution).
     All,
+    /// The textbook treatment: a sink's row becomes uniform over **all**
+    /// nodes, itself included (Langville & Meyer's dangling-node fix).
+    Uniform,
     /// Sinks absorb mass (the L1 norm decays; v1 behavior).
     None,
 }
@@ -95,7 +99,7 @@ impl PageRank {
                     }
                 }
             }
-            Sink::All => {
+            Sink::All | Sink::Uniform => {
                 sink_pool = (0..n as u32).filter(|&i| is_sink[i as usize]).collect();
             }
         }
@@ -116,15 +120,28 @@ impl PageRank {
             }
 
             if !sink_pool.is_empty() {
-                // v1 Sink::All: every node receives the pooled sink mass,
-                // minus its own contribution (no self-endorsement).
-                let pooled: f64 =
-                    sink_pool.iter().map(|&v| policy[v as usize]).sum::<f64>() / (n - 1) as f64;
-                for (node, value) in next.iter_mut().enumerate() {
-                    *value += pooled;
-                    if is_sink[node] {
-                        *value -= policy[node] / (n - 1) as f64;
+                let sink_mass: f64 = sink_pool.iter().map(|&v| policy[v as usize]).sum();
+
+                match self.sink {
+                    // v1 Sink::All: every node receives the pooled sink mass,
+                    // minus its own contribution (no self-endorsement).
+                    Sink::All => {
+                        let pooled = sink_mass / (n - 1) as f64;
+                        for (node, value) in next.iter_mut().enumerate() {
+                            *value += pooled;
+                            if is_sink[node] {
+                                *value -= policy[node] / (n - 1) as f64;
+                            }
+                        }
                     }
+                    // Textbook: uniform over all nodes, self included.
+                    Sink::Uniform => {
+                        let pooled = sink_mass / n as f64;
+                        for value in next.iter_mut() {
+                            *value += pooled;
+                        }
+                    }
+                    Sink::Reverse | Sink::None => {}
                 }
             }
 

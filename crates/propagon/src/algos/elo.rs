@@ -34,6 +34,15 @@ impl Default for Elo {
     }
 }
 
+impl Elo {
+    /// Expected score of a player rated `ra` against one rated `rb`:
+    /// `1 / (1 + 10^((rb − ra) / scale))`. With the standard 400-point
+    /// scale: equal ratings → 0.5, +200 → ≈0.76, +400 → 10/11.
+    pub fn expected_score(&self, ra: f64, rb: f64) -> f64 {
+        1.0 / (1.0 + ((rb - ra) * std::f64::consts::LN_10 / self.scale).exp())
+    }
+}
+
 /// Elo ratings keyed by entity name.
 #[derive(Debug, Clone)]
 pub struct EloModel {
@@ -72,13 +81,12 @@ impl OnlineRanker for Elo {
         data: &PairwiseDataset,
         _opts: &FitOptions<'_>,
     ) -> Result<()> {
-        let ln10_scale = std::f64::consts::LN_10 / self.scale;
         for (w, l, x) in data.rows() {
             let wname = data.interner().resolve(w);
             let lname = data.interner().resolve(l);
             let wi = model.idx(wname);
             let li = model.idx(lname);
-            let expected = 1.0 / (1.0 + ((model.scores[li] - model.scores[wi]) * ln10_scale).exp());
+            let expected = self.expected_score(model.scores[wi], model.scores[li]);
             let delta = self.k * f64::from(x) * (1.0 - expected);
             model.scores[wi] += delta;
             model.scores[li] -= delta;

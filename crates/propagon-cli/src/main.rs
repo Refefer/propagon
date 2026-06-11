@@ -304,7 +304,7 @@ fn graph_cmd() -> Command {
                 .arg(
                     Arg::new("sink-dispersion")
                         .long("sink-dispersion")
-                        .value_parser(["reverse", "all", "none"])
+                        .value_parser(["reverse", "all", "uniform", "none"])
                         .default_value("reverse"),
                 )
                 .arg(flag(
@@ -692,6 +692,7 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
 
             pr.sink = match choice(sm, "sink-dispersion", "reverse") {
                 "all" => Sink::All,
+                "uniform" => Sink::Uniform,
                 "none" => Sink::None,
                 _ => Sink::Reverse,
             };

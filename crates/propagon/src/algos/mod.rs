@@ -39,4 +39,4 @@ pub use kemeny::{Kemeny, KemenyAlgo, KemenyModel, KemenyPasses};
 pub use lsr::{Estimator, Lsr, LsrModel};
 pub use pagerank::{PageRank, PageRankModel, Sink};
 pub use rank_centrality::{RankCentrality, RankCentralityModel};
-pub use rate::{Confidence, WinRate, WinRateModel};
+pub use rate::{Confidence, WinRate, WinRateModel, wilson_interval};

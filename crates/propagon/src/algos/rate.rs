@@ -31,14 +31,23 @@ pub enum Confidence {
     P95,
 }
 
-impl Confidence {
-    fn z(self) -> Option<f64> {
-        match self {
-            Confidence::P50 => None,
-            Confidence::P90 => Some(1.645),
-            Confidence::P95 => Some(1.96),
-        }
+/// The two-sided Wilson score interval for a binomial proportion at critical
+/// value `z`, from weighted success/failure tallies. Returns
+/// `(lower, upper)`; `(0, 0)` when there are no observations.
+///
+/// Reference values: Newcombe (1998), *Statistics in Medicine* 17:857-872,
+/// Table I method 3 (tested in `tests/reference.rs`).
+pub fn wilson_interval(successes: f64, failures: f64, z: f64) -> (f64, f64) {
+    let n = successes + failures;
+    if n == 0.0 {
+        return (0.0, 0.0);
     }
+
+    let z2 = z * z;
+    let nz2 = n + z2;
+    let center = (successes + z2 / 2.0) / nz2;
+    let spread = (z / nz2) * (successes * failures / n + z2 / 4.0).sqrt();
+    (center - spread, center + spread)
 }
 
 /// Win-rate ranker parameters. The struct is the algorithm; fields are params.
@@ -65,20 +74,19 @@ pub struct WinRateModel {
 }
 
 impl WinRateModel {
-    /// v1-compatible Wilson statistic (upper bound for P90/P95).
+    /// v1-compatible Wilson statistic: the **upper** interval bound for
+    /// P90/P95 (v1 ranked by the optimistic end), the point estimate for P50.
     fn statistic(&self, idx: usize) -> f64 {
         let (w, l) = (self.wins[idx], self.losses[idx]);
         let n = w + l;
         if n == 0.0 {
             return 0.0;
         }
-        match self.params.confidence.z() {
-            None => w / n,
-            Some(z) => {
-                let z2 = z * z;
-                let nz2 = n + z2;
-                (w + z2 / 2.0) / nz2 + (z / nz2) * (w * l / n + z2 / 4.0).sqrt()
-            }
+
+        match self.params.confidence {
+            Confidence::P50 => w / n,
+            Confidence::P90 => wilson_interval(w, l, 1.645).1,
+            Confidence::P95 => wilson_interval(w, l, 1.96).1,
         }
     }
 }
