@@ -3,12 +3,14 @@
 //! Subcommands are grouped by the shape of the input data:
 //!
 //! - `propagon tournament <algo> <path>` — pairwise comparison rankers
-//!   (rate, elo, glicko2, btm-mm, btm-lr, lsr, rank-centrality, es-rum,
-//!   kemeny, borda, copeland) over `winner loser [weight]` rows.
+//!   (win-rate, elo, glicko2, bradley-terry-model, luce-spectral-ranking,
+//!   rank-centrality, random-utility-model, kemeny, borda-count, copeland)
+//!   over `winner loser [weight]` rows.
 //! - `propagon graph <algo> <path>` — node-importance rankers and utilities
 //!   (page-rank, birank, components) over `src dst [weight]` edges.
 //! - `propagon bandit <policy> <path>` — multi-armed bandits (greedy,
-//!   epsilon-greedy, ucb1, ts-beta, ts-gaussian) over `arm reward` rows.
+//!   epsilon-greedy, upper-confidence-bound, thompson-beta,
+//!   thompson-gaussian) over `arm reward` rows.
 //!
 //! Cross-cutting: string ids natively, `--save-state`/`--load-state` for
 //! incremental and warm-started runs, `--format tsv|jsonl`, `--threads`.
@@ -150,8 +152,9 @@ fn tournament_cmd() -> Command {
             .global(true),
         )
         .subcommand(with_path(
-            Command::new("rate")
-                .about("Win rates with Wilson intervals")
+            Command::new("win-rate")
+                .visible_alias("rate")
+                .about("Win rates with Wilson confidence intervals")
                 .arg(
                     Arg::new("confidence-interval")
                         .long("confidence-interval")
@@ -173,43 +176,48 @@ fn tournament_cmd() -> Command {
                 .arg(flag("use-mu", "Emit only the internal-scale rating")),
         ))
         .subcommand(with_path(
-            Command::new("btm-mm")
-                .about("Bradley-Terry via minorization-maximization")
+            Command::new("bradley-terry-model")
+                .visible_alias("btm")
+                .about("Bradley-Terry strengths; pick the estimator with --estimator")
+                .arg(
+                    Arg::new("estimator")
+                        .long("estimator")
+                        .value_parser(["mm", "sgd"])
+                        .default_value("mm")
+                        .help("mm: minorization-maximization; sgd: logistic gradient descent"),
+                )
+                .arg(opt::<usize>("iterations", "(mm) Maximum MM sweeps"))
+                .arg(opt::<f64>("tolerance", "(mm) Convergence tolerance").alias("tol"))
                 .arg(opt::<usize>(
                     "min-graph-size",
-                    "Skip components smaller than this",
+                    "(mm) Skip components smaller than this",
                 ))
-                .arg(opt::<usize>("iterations", "Maximum MM sweeps"))
-                .arg(opt::<f64>("tolerance", "Convergence tolerance").alias("tol"))
                 .arg(flag(
                     "remove-total-losers",
-                    "Also remove never-won entities",
+                    "(mm) Also remove never-won entities",
                 ))
                 .arg(opt::<f64>(
                     "create-fake-games",
-                    "Patch one-sided entities with fake games of this weight",
+                    "(mm) Patch one-sided entities with fake games of this weight",
                 ))
                 .arg(opt::<usize>(
                     "random-subgraph-links",
-                    "Random links between components",
+                    "(mm) Random links between components",
                 ))
                 .arg(opt::<f64>(
                     "random-subgraph-weight",
-                    "Weight of those links",
+                    "(mm) Weight of those links",
                 ))
-                .arg(opt::<u64>("seed", "Seed for random component links")),
+                .arg(opt::<u64>("seed", "(mm) Seed for random component links"))
+                .arg(opt::<usize>("passes", "(sgd) Passes per period"))
+                .arg(opt::<f64>("alpha", "(sgd) Learning rate"))
+                .arg(opt::<f64>("decay", "(sgd) L2 shrinkage per pass"))
+                .arg(flag("thrifty", "(sgd) Sequential in-place updates")),
         ))
         .subcommand(with_path(
-            Command::new("btm-lr")
-                .about("Bradley-Terry via logistic SGD")
-                .arg(opt::<f64>("alpha", "Learning rate"))
-                .arg(opt::<f64>("decay", "L2 shrinkage per pass"))
-                .arg(opt::<usize>("passes", "Passes per period"))
-                .arg(flag("thrifty", "Sequential in-place updates")),
-        ))
-        .subcommand(with_path(
-            Command::new("lsr")
-                .about("Luce spectral ranking (Plackett-Luce)")
+            Command::new("luce-spectral-ranking")
+                .visible_alias("lsr")
+                .about("Luce spectral ranking (fast Plackett-Luce estimate)")
                 .arg(opt::<usize>(
                     "steps",
                     "Power passes / walk steps (0 = auto)",
@@ -229,7 +237,8 @@ fn tournament_cmd() -> Command {
                 .arg(opt::<f64>("tolerance", "Early-exit tolerance")),
         ))
         .subcommand(with_path(
-            Command::new("es-rum")
+            Command::new("random-utility-model")
+                .visible_alias("rum")
                 .about("Gaussian random-utility model via evolution strategies")
                 .arg(opt::<usize>("passes", "ES iterations"))
                 .arg(opt::<f64>("alpha", "Initial perturbation scale"))
@@ -256,7 +265,9 @@ fn tournament_cmd() -> Command {
                 .arg(opt::<u64>("seed", "Seed for the DE search")),
         ))
         .subcommand(with_path(
-            Command::new("borda").about("Borda count (weighted win totals)"),
+            Command::new("borda-count")
+                .visible_alias("borda")
+                .about("Borda count (weighted win totals)"),
         ))
         .subcommand(with_path(
             Command::new("copeland").about("Copeland pairwise-majority scores"),
@@ -319,21 +330,24 @@ fn bandit_cmd() -> Command {
                 .arg(opt::<f64>("epsilon", "Exploration rate")),
         ))
         .subcommand(common(
-            Command::new("ucb1")
-                .about("Upper confidence bound exploration")
+            Command::new("upper-confidence-bound")
+                .visible_alias("ucb1")
+                .about("Optimism under uncertainty: try arms you know least about")
                 .arg(opt::<f64>(
                     "exploration",
                     "Exploration constant (classic UCB1: 2.0)",
                 )),
         ))
         .subcommand(common(
-            Command::new("ts-beta")
+            Command::new("thompson-beta")
+                .visible_alias("ts-beta")
                 .about("Thompson Sampling with a Beta posterior (rewards in [0,1])")
                 .arg(opt::<f64>("prior-alpha", "Beta prior alpha"))
                 .arg(opt::<f64>("prior-beta", "Beta prior beta")),
         ))
         .subcommand(common(
-            Command::new("ts-gaussian")
+            Command::new("thompson-gaussian")
+                .visible_alias("ts-gaussian")
                 .about("Thompson Sampling with a Gaussian posterior")
                 .arg(opt::<f64>("prior-mean", "Prior mean"))
                 .arg(opt::<f64>("prior-weight", "Prior pseudo-observations")),
@@ -481,7 +495,7 @@ fn run() -> Result<()> {
 fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     match algo {
-        "rate" => {
+        "win-rate" => {
             let confidence = match sm
                 .get_one::<String>("confidence-interval")
                 .unwrap()
@@ -517,36 +531,38 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
                 _ => emit::glicko2(&mut out, &model, sm.get_flag("use-mu")),
             }
         }
-        "btm-mm" => {
-            let algo = BradleyTerryMM {
-                iterations: get_or(sm, "iterations", 10_000),
-                tolerance: get_or(sm, "tolerance", 1e-6),
-                min_graph_size: get_or(sm, "min-graph-size", 1),
-                remove_total_losers: sm.get_flag("remove-total-losers"),
-                create_fake_games: get_or(sm, "create-fake-games", 0.0),
-                random_subgraph_links: get_or(sm, "random-subgraph-links", 0),
-                random_subgraph_weight: get_or(sm, "random-subgraph-weight", 1e-3),
-                seed: get_or(sm, "seed", 1221),
-            };
-            let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
-            ctx.save(&model)?;
-            let mut out = std::io::stdout().lock();
-            match ctx.format.as_str() {
-                "jsonl" => emit::jsonl(&mut out, &model),
-                _ => emit::btm_mm(&mut out, &model),
+        "bradley-terry-model" => match sm.get_one::<String>("estimator").unwrap().as_str() {
+            "sgd" => {
+                let algo = BradleyTerryLR {
+                    passes: get_or(sm, "passes", 10),
+                    alpha: get_or(sm, "alpha", 1.0),
+                    decay: get_or(sm, "decay", 1e-5),
+                    thrifty: sm.get_flag("thrifty"),
+                };
+                let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
+                ctx.emit(&model)
             }
-        }
-        "btm-lr" => {
-            let algo = BradleyTerryLR {
-                passes: get_or(sm, "passes", 10),
-                alpha: get_or(sm, "alpha", 1.0),
-                decay: get_or(sm, "decay", 1e-5),
-                thrifty: sm.get_flag("thrifty"),
-            };
-            let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
-            ctx.emit(&model)
-        }
-        "lsr" => {
+            _ => {
+                let algo = BradleyTerryMM {
+                    iterations: get_or(sm, "iterations", 10_000),
+                    tolerance: get_or(sm, "tolerance", 1e-6),
+                    min_graph_size: get_or(sm, "min-graph-size", 1),
+                    remove_total_losers: sm.get_flag("remove-total-losers"),
+                    create_fake_games: get_or(sm, "create-fake-games", 0.0),
+                    random_subgraph_links: get_or(sm, "random-subgraph-links", 0),
+                    random_subgraph_weight: get_or(sm, "random-subgraph-weight", 1e-3),
+                    seed: get_or(sm, "seed", 1221),
+                };
+                let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
+                ctx.save(&model)?;
+                let mut out = std::io::stdout().lock();
+                match ctx.format.as_str() {
+                    "jsonl" => emit::jsonl(&mut out, &model),
+                    _ => emit::btm_mm(&mut out, &model),
+                }
+            }
+        },
+        "luce-spectral-ranking" => {
             let estimator = match sm.get_one::<String>("estimator").unwrap().as_str() {
                 "monte-carlo" => Estimator::MonteCarlo,
                 _ => Estimator::PowerMethod,
@@ -573,7 +589,7 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             let model = rc.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.emit(&model)
         }
-        "es-rum" => {
+        "random-utility-model" => {
             ctx.reject_load_state(algo)?;
             let es = EsRum {
                 distribution: if sm.get_flag("fixed") {
@@ -610,7 +626,7 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             let model = km.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.emit(&model)
         }
-        "borda" => {
+        "borda-count" => {
             ctx.reject_load_state(algo)?;
             let model = Borda::default().fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.emit(&model)
@@ -693,14 +709,14 @@ fn run_bandit(policy_name: &str, sm: &ArgMatches) -> Result<()> {
         "epsilon-greedy" => BanditPolicy::EpsilonGreedy {
             epsilon: get_or(sm, "epsilon", 0.1),
         },
-        "ucb1" => BanditPolicy::Ucb1 {
+        "upper-confidence-bound" => BanditPolicy::Ucb1 {
             exploration: get_or(sm, "exploration", 2.0),
         },
-        "ts-beta" => BanditPolicy::ThompsonBeta {
+        "thompson-beta" => BanditPolicy::ThompsonBeta {
             prior_alpha: get_or(sm, "prior-alpha", 1.0),
             prior_beta: get_or(sm, "prior-beta", 1.0),
         },
-        "ts-gaussian" => BanditPolicy::ThompsonGaussian {
+        "thompson-gaussian" => BanditPolicy::ThompsonGaussian {
             prior_mean: get_or(sm, "prior-mean", 0.0),
             prior_weight: get_or(sm, "prior-weight", 1.0),
         },

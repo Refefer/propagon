@@ -104,11 +104,11 @@ fn spearman(a: &HashMap<String, Vec<f64>>, b: &HashMap<String, Vec<f64>>) -> f64
 #[test]
 fn rate_matches_golden() {
     assert_tier_t(
-        &["tournament", "rate", "--confidence-interval", "0.5"],
+        &["tournament", "win-rate", "--confidence-interval", "0.5"],
         "rate-090.out",
         1e-6,
     );
-    assert_tier_t(&["tournament", "rate"], "rate-095.out", 1e-5);
+    assert_tier_t(&["tournament", "win-rate"], "rate-095.out", 1e-5);
 }
 
 #[test]
@@ -123,12 +123,16 @@ fn glicko2_matches_golden() {
 
 #[test]
 fn btm_mm_matches_golden() {
-    assert_tier_t(&["tournament", "btm-mm"], "btm-mm.out", 1e-4);
+    assert_tier_t(&["tournament", "bradley-terry-model"], "btm-mm.out", 1e-4);
 }
 
 #[test]
 fn btm_lr_matches_golden() {
-    assert_tier_t(&["tournament", "btm-lr"], "btm-lr.out", 1e-3);
+    assert_tier_t(
+        &["tournament", "bradley-terry-model", "--estimator", "sgd"],
+        "btm-lr.out",
+        1e-3,
+    );
 }
 
 #[test]
@@ -142,7 +146,11 @@ fn kemeny_matches_golden() {
 
 #[test]
 fn lsr_matches_golden() {
-    assert_tier_t(&["tournament", "lsr", "--steps", "20"], "lsr.out", 2e-3);
+    assert_tier_t(
+        &["tournament", "luce-spectral-ranking", "--steps", "20"],
+        "lsr.out",
+        2e-3,
+    );
 }
 
 #[test]
@@ -154,7 +162,12 @@ fn page_rank_matches_golden() {
 
 #[test]
 fn es_rum_rank_correlates_with_golden() {
-    let got = parse(&run(&["tournament", "es-rum", "--passes", "100"]));
+    let got = parse(&run(&[
+        "tournament",
+        "random-utility-model",
+        "--passes",
+        "100",
+    ]));
     let want = golden("es-rum.out");
     let rho = spearman(&got, &want);
     assert!(rho >= 0.95, "es-rum spearman {rho}");
@@ -238,12 +251,24 @@ fn glicko2_save_load_state_flow() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
-/// New-in-v2 tournament algorithms smoke-run on the example data.
+/// New-in-v2 tournament algorithms smoke-run on the example data, and the
+/// short visible aliases resolve to the same commands.
 #[test]
 fn new_subcommands_run() {
-    for algo in ["elo", "borda", "copeland", "rank-centrality"] {
+    for algo in ["elo", "borda-count", "copeland", "rank-centrality"] {
         let out = parse(&run(&["tournament", algo]));
         assert_eq!(out.len(), 30, "{algo} ranks all 30 teams");
+    }
+    for alias in ["rate", "btm", "lsr", "rum", "borda"] {
+        let extra: &[&str] = if alias == "lsr" {
+            &["--steps", "5"]
+        } else {
+            &[]
+        };
+        let mut args = vec!["tournament", alias];
+        args.extend_from_slice(extra);
+        let out = parse(&run(&args));
+        assert_eq!(out.len(), 30, "alias {alias} works");
     }
 }
 
@@ -273,8 +298,8 @@ fn bandit_subcommand_runs() {
     assert_eq!(scores["A"][0], 1.0);
     assert_eq!(scores["B"][0], 0.5);
 
-    let pick1 = run_b(&["bandit", "ts-beta", "--seed", "9", "--select", "1"]);
-    let pick2 = run_b(&["bandit", "ts-beta", "--seed", "9", "--select", "1"]);
+    let pick1 = run_b(&["bandit", "thompson-beta", "--seed", "9", "--select", "1"]);
+    let pick2 = run_b(&["bandit", "ts-beta", "--seed", "9", "--select", "1"]); // alias
     assert_eq!(pick1, pick2, "seeded selection is deterministic");
     assert!(["A", "B", "C"].contains(&pick1.trim()));
 

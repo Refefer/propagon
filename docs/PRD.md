@@ -257,15 +257,20 @@ The v2 CLI makes a clean break from the v1 surface (owner decision: zero
 backward-compatibility requirements). Subcommands are grouped by input shape:
 
 - **FR-7.1** `propagon tournament <algo> <path>` — pairwise rankers over
-  `winner loser [weight]` rows: `rate`, `elo`, `glicko2`, `btm-mm`, `btm-lr`,
-  `lsr`, `rank-centrality`, `es-rum`, `kemeny`, `borda`, `copeland`. Group
-  flags: `--min-count`, `--groups-are-separate` (rating periods).
+  `winner loser [weight]` rows: `win-rate`, `elo`, `glicko2`,
+  `bradley-terry-model` (one command; `--estimator mm|sgd` selects the
+  fitting method), `luce-spectral-ranking`, `rank-centrality`,
+  `random-utility-model`, `kemeny`, `borda-count`, `copeland`. Names are
+  spelled out for readability; short visible aliases exist (`rate`, `btm`,
+  `lsr`, `rum`, `borda`). Group flags: `--min-count`,
+  `--groups-are-separate` (rating periods).
 - **FR-7.2** `propagon graph <algo> <path>` — node importance and utilities
   over `src dst [weight]` edges: `page-rank` (with `--matches` for the
   loser-endorses-winner orientation of tournament files), `birank`,
   `components`.
 - **FR-7.3** `propagon bandit <policy> <path>` — `greedy`, `epsilon-greedy`,
-  `ucb1`, `ts-beta`, `ts-gaussian` over `arm reward` rows, each with
+  `upper-confidence-bound` (alias `ucb1`), `thompson-beta` (alias `ts-beta`),
+  `thompson-gaussian` (alias `ts-gaussian`) over `arm reward` rows, each with
   `--select N` (print the next arms to play) and `--seed`.
 - **FR-7.4** Cross-cutting flags on every leaf: `--threads N`,
   `--save-state PATH`, `--load-state PATH`, `--format tsv|jsonl`.
