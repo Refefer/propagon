@@ -29,6 +29,12 @@ use crate::traits::{FitOptions, OnlineRanker, RankModel};
 
 /// Exploration policy. Serialized into state files; mixing states produced
 /// under different policies is a parameter mismatch.
+///
+/// EXP3 caveat: replaying a reward log importance-weights each row by the
+/// probability the *current* mix would have played that arm — exact when
+/// the log was produced by this policy, an approximation otherwise; its
+/// state is order-dependent, so `merge` approximates (rather than equals)
+/// the concatenated log.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum BanditPolicy {
@@ -45,6 +51,14 @@ pub enum BanditPolicy {
     /// Thompson Sampling with a Gaussian posterior over the mean.
     /// `prior_weight` acts as pseudo-observations of `prior_mean`.
     ThompsonGaussian { prior_mean: f64, prior_weight: f64 },
+    /// KL-UCB (Garivier & Cappé 2011): the UCB1 idea with the exact
+    /// Bernoulli-KL confidence set — uniformly better constants. Rewards
+    /// must lie in `[0, 1]`. `c` scales the `ln ln t` term: the theory
+    /// wants `c ≥ 3`, the paper recommends `c = 0` in practice.
+    KlUcb { c: f64 },
+    /// EXP3 (Auer et al. 2002): adversarial-setting exponential weights
+    /// with exploration mix `gamma`. Rewards must lie in `[0, 1]`.
+    Exp3 { gamma: f64 },
 }
 
 impl BanditPolicy {
@@ -61,6 +75,10 @@ impl BanditPolicy {
     pub const DEFAULT_PRIOR_MEAN: f64 = 0.0;
     /// One pseudo-observation of the prior mean.
     pub const DEFAULT_PRIOR_WEIGHT: f64 = 1.0;
+    /// Garivier & Cappé's practical recommendation (theory wants ≥ 3).
+    pub const DEFAULT_KL_C: f64 = 0.0;
+    /// Conventional EXP3 exploration mix.
+    pub const DEFAULT_EXP3_GAMMA: f64 = 0.1;
 }
 
 impl Default for BanditPolicy {
@@ -97,13 +115,15 @@ struct PersistedParams {
     draws: u64,
 }
 
-/// One arm's sufficient statistics in the state file.
+/// One arm's sufficient statistics in the state file. `g` is EXP3's
+/// cumulative log-weight (0 under every other policy).
 #[derive(Debug, Serialize, Deserialize)]
 struct ArmLine {
     id: String,
     n: u64,
     sum: f64,
     sum_sq: f64,
+    g: f64,
 }
 
 /// Accumulating bandit state: per-arm `(n, Σr, Σr²)` plus the draw counter.
@@ -114,6 +134,8 @@ pub struct BanditModel {
     n: Vec<u64>,
     sum: Vec<f64>,
     sum_sq: Vec<f64>,
+    /// EXP3 log-weights (unused by other policies).
+    g: Vec<f64>,
     draws: u64,
 }
 
@@ -167,7 +189,52 @@ impl BanditModel {
                 prior_mean,
                 prior_weight,
             } => (prior_weight * prior_mean + self.sum[i]) / (prior_weight + self.n[i] as f64),
+            BanditPolicy::KlUcb { c } => self.kl_ucb_index(i, c),
+            BanditPolicy::Exp3 { gamma } => self.exp3_probs(gamma)[i],
         }
+    }
+
+    /// `max{q ∈ [μ̂, 1) : n·kl(μ̂, q) ≤ ln t + c·ln ln t}` by bisection.
+    fn kl_ucb_index(&self, i: usize, c: f64) -> f64 {
+        if self.n[i] == 0 {
+            return f64::INFINITY;
+        }
+
+        let n = self.n[i] as f64;
+        let p = self.mean(i).clamp(0.0, 1.0);
+        let t = self.total_n().max(1) as f64;
+        let mut bound = t.ln();
+        if c > 0.0 && t > std::f64::consts::E {
+            bound += c * t.ln().ln();
+        }
+        bound /= n;
+
+        let mut lo = p;
+        let mut hi = 1.0 - 1e-12;
+        if bernoulli_kl(p, hi) <= bound {
+            return hi;
+        }
+
+        for _ in 0..64 {
+            let mid = 0.5 * (lo + hi);
+            if bernoulli_kl(p, mid) <= bound {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        lo
+    }
+
+    /// EXP3 arm probabilities: `(1−γ)·softmax(g) + γ/K`.
+    fn exp3_probs(&self, gamma: f64) -> Vec<f64> {
+        let k = self.n_arms() as f64;
+        let peak = self.g.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let w: Vec<f64> = self.g.iter().map(|&e| (e - peak).exp()).collect();
+        let total: f64 = w.iter().sum();
+        w.iter()
+            .map(|&wi| (1.0 - gamma) * wi / total + gamma / k)
+            .collect()
     }
 
     /// Advances the persisted draw counter and returns this round's RNG.
@@ -185,8 +252,19 @@ impl BanditModel {
         }
         let mut rng = self.next_rng();
         let values = match self.params.policy {
-            BanditPolicy::Greedy | BanditPolicy::Ucb1 { .. } => {
+            BanditPolicy::Greedy | BanditPolicy::Ucb1 { .. } | BanditPolicy::KlUcb { .. } => {
                 (0..k).map(|i| self.estimate(i)).collect()
+            }
+            BanditPolicy::Exp3 { gamma } => {
+                // Gumbel-max: sorting log p + Gumbel noise samples arms
+                // without replacement proportional to the EXP3 mix.
+                self.exp3_probs(gamma)
+                    .into_iter()
+                    .map(|p| {
+                        let u: f64 = rand::Rng::random(&mut rng);
+                        p.ln() - (-u.ln()).ln()
+                    })
+                    .collect()
             }
             BanditPolicy::EpsilonGreedy { epsilon } => {
                 if !(0.0..=1.0).contains(&epsilon) {
@@ -281,6 +359,10 @@ impl BanditModel {
             self.n[idx] += other.n[i];
             self.sum[idx] += other.sum[i];
             self.sum_sq[idx] += other.sum_sq[i];
+            // EXP3 log-weights add; note its replay is order-dependent, so
+            // merged EXP3 state approximates (rather than equals) the
+            // concatenated log — unlike every other policy.
+            self.g[idx] += other.g[i];
         }
         self.draws += other.draws;
         Ok(())
@@ -292,6 +374,7 @@ impl BanditModel {
             self.n.push(0);
             self.sum.push(0.0);
             self.sum_sq.push(0.0);
+            self.g.push(0.0);
         }
         idx
     }
@@ -324,6 +407,7 @@ impl RankModel for BanditModel {
                 n: self.n[i],
                 sum: self.sum[i],
                 sum_sq: self.sum_sq[i],
+                g: self.g[i],
             })
             .collect();
         state::save_model(w, "bandit", &params, &lines)
@@ -341,9 +425,16 @@ impl RankModel for BanditModel {
             n: lines.iter().map(|l| l.n).collect(),
             sum: lines.iter().map(|l| l.sum).collect(),
             sum_sq: lines.iter().map(|l| l.sum_sq).collect(),
+            g: lines.iter().map(|l| l.g).collect(),
             draws: params.draws,
         })
     }
+}
+
+/// Bernoulli KL divergence `kl(p ‖ q)` with the 0·ln 0 = 0 convention.
+fn bernoulli_kl(p: f64, q: f64) -> f64 {
+    let term = |a: f64, b: f64| if a <= 0.0 { 0.0 } else { a * (a / b).ln() };
+    term(p, q) + term(1.0 - p, 1.0 - q)
 }
 
 impl OnlineRanker for Bandit {
@@ -357,6 +448,7 @@ impl OnlineRanker for Bandit {
             n: Vec::new(),
             sum: Vec::new(),
             sum_sq: Vec::new(),
+            g: Vec::new(),
             draws: 0,
         }
     }
@@ -367,16 +459,40 @@ impl OnlineRanker for Bandit {
         data: &RewardsDataset,
         _opts: &FitOptions<'_>,
     ) -> Result<()> {
-        let beta = matches!(self.policy, BanditPolicy::ThompsonBeta { .. });
+        let bounded = matches!(
+            self.policy,
+            BanditPolicy::ThompsonBeta { .. }
+                | BanditPolicy::KlUcb { .. }
+                | BanditPolicy::Exp3 { .. }
+        );
+        if let BanditPolicy::Exp3 { gamma } = self.policy
+            && !(gamma > 0.0 && gamma <= 1.0)
+        {
+            return Err(Error::InvalidInput(format!(
+                "exp3 gamma must lie in (0, 1], got {gamma}"
+            )));
+        }
+
         for (arm, reward) in data.rows() {
             let r = f64::from(reward);
-            if beta && !(0.0..=1.0).contains(&r) {
+            if bounded && !(0.0..=1.0).contains(&r) {
                 return Err(Error::InvalidInput(format!(
-                    "thompson-beta requires rewards in [0,1], got {r}"
+                    "this policy requires rewards in [0,1], got {r}"
                 )));
             }
             let name = data.interner().resolve(arm);
             let idx = model.intern_arm(name);
+
+            // EXP3 replays the log through the policy: importance-weight by
+            // the probability the *current* mix assigns the played arm.
+            // (Offline approximation: assumes the log's arms were drawn from
+            // this policy — see the module docs.)
+            if let BanditPolicy::Exp3 { gamma } = self.policy {
+                let k = model.n_arms() as f64;
+                let p = model.exp3_probs(gamma)[idx];
+                model.g[idx] += gamma * (r / p) / k;
+            }
+
             model.n[idx] += 1;
             model.sum[idx] += r;
             model.sum_sq[idx] += r * r;
@@ -512,5 +628,148 @@ mod tests {
         let good = picks.iter().filter(|p| *p == "GOOD").count();
         assert!(good > 150, "exploited only {good}/200 times");
         assert!(good < 200, "never explored in 200 rounds");
+    }
+}
+
+#[cfg(test)]
+mod new_policy_tests {
+    use super::*;
+
+    fn rewards(rows: &[(&str, f32)]) -> RewardsDataset {
+        let mut d = RewardsDataset::new();
+        for (a, r) in rows {
+            d.push(a, *r);
+        }
+        d
+    }
+
+    /// The bisected index satisfies its defining bound to solver precision:
+    /// n·kl(μ̂, q*) ≈ ln t and no larger q qualifies.
+    #[test]
+    fn kl_ucb_index_solves_the_bound() {
+        let b = Bandit {
+            policy: BanditPolicy::KlUcb {
+                c: BanditPolicy::DEFAULT_KL_C,
+            },
+            seed: 1,
+        };
+        let mut m = b.init();
+        b.update(
+            &mut m,
+            &rewards(&[("a", 1.0), ("a", 0.0), ("a", 1.0), ("b", 1.0)]),
+        )
+        .unwrap();
+
+        // arm a: n=3, mean=2/3, t=4 → bound = ln(4)/3.
+        let q = m.kl_ucb_index(0, 0.0);
+        let bound = 4f64.ln() / 3.0;
+        assert!((bernoulli_kl(2.0 / 3.0, q) - bound).abs() < 1e-9, "{q}");
+        assert!(q > 2.0 / 3.0 && q < 1.0);
+        assert!(
+            bernoulli_kl(2.0 / 3.0, (q + 1e-6).min(1.0 - 1e-12)) > bound,
+            "q is maximal"
+        );
+    }
+
+    /// KL-UCB dominates the empirical mean and shrinks with more data.
+    #[test]
+    fn kl_ucb_shrinks_with_evidence() {
+        let b = Bandit {
+            policy: BanditPolicy::KlUcb { c: 0.0 },
+            seed: 1,
+        };
+
+        let mut small = b.init();
+        b.update(&mut small, &rewards(&[("a", 1.0), ("a", 0.0), ("b", 0.0)]))
+            .unwrap();
+        let mut big = b.init();
+        let many: Vec<(&str, f32)> = (0..200)
+            .map(|i| ("a", if i % 2 == 0 { 1.0 } else { 0.0 }))
+            .chain(std::iter::once(("b", 0.0)))
+            .collect();
+        b.update(&mut big, &rewards(&many)).unwrap();
+
+        let gap_small = small.kl_ucb_index(0, 0.0) - 0.5;
+        let gap_big = big.kl_ucb_index(0, 0.0) - 0.5;
+        assert!(gap_big < gap_small, "{gap_big} vs {gap_small}");
+    }
+
+    /// Hand-computed EXP3 replay, two arms, two rows, γ = 0.5:
+    /// row 1 ("a", 1): p_a = 0.5 → g_a += 0.5·(1/0.5)/2 = 0.5;
+    /// row 2 ("a", 1): w = (e^0.5, 1), p_a = 0.5·e^.5/(e^.5+1) + 0.25
+    ///   → g_a += 0.5·(1/p_a)/2.
+    #[test]
+    fn exp3_replay_arithmetic() {
+        let b = Bandit {
+            policy: BanditPolicy::Exp3 { gamma: 0.5 },
+            seed: 1,
+        };
+        let mut m = b.init();
+        // Seed both arms first (single-arm rounds would use k=1).
+        b.update(&mut m, &rewards(&[("a", 0.0), ("b", 0.0)]))
+            .unwrap();
+        assert_eq!(m.g, vec![0.0, 0.0]);
+
+        b.update(&mut m, &rewards(&[("a", 1.0)])).unwrap();
+        assert!((m.g[0] - 0.5).abs() < 1e-12, "{}", m.g[0]);
+
+        b.update(&mut m, &rewards(&[("a", 1.0)])).unwrap();
+        let e = 0.5f64.exp();
+        let p_a = 0.5 * e / (e + 1.0) + 0.25;
+        assert!(
+            (m.g[0] - (0.5 + 0.5 / p_a / 2.0)).abs() < 1e-12,
+            "{}",
+            m.g[0]
+        );
+
+        // Probabilities favor the rewarded arm but keep the γ/K floor.
+        let probs = m.exp3_probs(0.5);
+        assert!(probs[0] > probs[1]);
+        assert!(probs[1] >= 0.25 - 1e-12);
+    }
+
+    #[test]
+    fn exp3_invalid_gamma_and_rewards_rejected() {
+        let bad_gamma = Bandit {
+            policy: BanditPolicy::Exp3 { gamma: 0.0 },
+            seed: 1,
+        };
+        let mut m = bad_gamma.init();
+        assert!(bad_gamma.update(&mut m, &rewards(&[("a", 1.0)])).is_err());
+
+        let b = Bandit {
+            policy: BanditPolicy::KlUcb { c: 0.0 },
+            seed: 1,
+        };
+        let mut m = b.init();
+        assert!(b.update(&mut m, &rewards(&[("a", 2.0)])).is_err());
+    }
+
+    /// Seeded EXP3 selection is reproducible and state round-trips with the
+    /// log-weight column intact.
+    #[test]
+    fn exp3_round_trip_and_determinism() {
+        let b = Bandit {
+            policy: BanditPolicy::Exp3 {
+                gamma: BanditPolicy::DEFAULT_EXP3_GAMMA,
+            },
+            seed: 9,
+        };
+        let mut m = b.init();
+        b.update(
+            &mut m,
+            &rewards(&[("a", 1.0), ("b", 0.0), ("a", 1.0), ("c", 1.0)]),
+        )
+        .unwrap();
+
+        let mut first = Vec::new();
+        m.save_jsonl(&mut first).unwrap();
+        let mut loaded = BanditModel::load_jsonl(first.as_slice()).unwrap();
+        let mut second = Vec::new();
+        loaded.save_jsonl(&mut second).unwrap();
+        assert_eq!(first, second);
+
+        // Same state, same draw counter → identical selection.
+        assert_eq!(m.select().unwrap(), loaded.select().unwrap());
     }
 }

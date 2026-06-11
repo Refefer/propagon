@@ -547,6 +547,16 @@ fn bandit_cmd() -> Command {
                 )),
         ))
         .subcommand(common(
+            Command::new("kl-ucb")
+                .about("KL-UCB: tighter-than-UCB1 indices for [0,1] rewards")
+                .arg(opt::<f64>("c", "ln ln t scale (theory: >= 3; practice: 0)")),
+        ))
+        .subcommand(common(
+            Command::new("exp3")
+                .about("EXP3 adversarial exponential weights (offline replay)")
+                .arg(opt::<f64>("gamma", "Exploration mix in (0,1]")),
+        ))
+        .subcommand(common(
             Command::new("thompson-beta")
                 .visible_alias("ts-beta")
                 .about("Thompson Sampling with a Beta posterior (rewards in [0,1])")
@@ -1187,6 +1197,16 @@ fn run_bandit(policy_name: &str, sm: &ArgMatches) -> Result<()> {
             let mut exploration = BanditPolicy::DEFAULT_EXPLORATION;
             set(sm, "exploration", &mut exploration);
             BanditPolicy::Ucb1 { exploration }
+        }
+        "kl-ucb" => {
+            let mut c = BanditPolicy::DEFAULT_KL_C;
+            set(sm, "c", &mut c);
+            BanditPolicy::KlUcb { c }
+        }
+        "exp3" => {
+            let mut gamma = BanditPolicy::DEFAULT_EXP3_GAMMA;
+            set(sm, "gamma", &mut gamma);
+            BanditPolicy::Exp3 { gamma }
         }
         "thompson-beta" => {
             let mut prior_alpha = BanditPolicy::DEFAULT_PRIOR_ALPHA;
