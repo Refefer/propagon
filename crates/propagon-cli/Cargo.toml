@@ -22,3 +22,11 @@ indicatif.workspace = true
 rayon.workspace = true
 serde_json.workspace = true
 log.workspace = true
+
+# AGENTS.md rule 5 option 2: stdout/stderr printing is the CLI's job, so the
+# print lints are relaxed for this crate only; the rule-7 denies still apply.
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+dbg_macro = "warn"

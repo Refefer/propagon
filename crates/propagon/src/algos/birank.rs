@@ -138,7 +138,7 @@ impl Ranker for BiRank {
         if data.is_empty() {
             return Err(Error::EmptyDataset);
         }
-        let progress = opts.progress();
+        let progress = opts.progress;
         let view = data.view();
 
         // Side-local identity spaces.
@@ -151,8 +151,8 @@ impl Ranker for BiRank {
 
         for (s, d, w) in view.edges() {
             let w = f64::from(w);
-            let sname = view.interner.name(s).expect("id resolves");
-            let dname = view.interner.name(d).expect("id resolves");
+            let sname = view.interner.resolve(s);
+            let dname = view.interner.resolve(d);
             let si = src_names.intern(sname) as usize;
             if si == src_edges.len() {
                 src_edges.push(Vec::new());

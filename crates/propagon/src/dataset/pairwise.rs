@@ -6,6 +6,10 @@
 //! **Periods** partition the rows in insertion order (v1's blank-line-separated
 //! batches). Rating-period systems (Glicko-2) treat each period as one update;
 //! batch fitters ignore periods and read all rows.
+//!
+//! Invariant (relied on across `algos/`): every stored id was produced by the
+//! owning interner — `push` interns, `push_ids`/`push_chunk` bounds-check —
+//! so `Interner::resolve` on a stored id cannot miss.
 
 use crate::error::{Error, Result};
 use crate::interner::Interner;

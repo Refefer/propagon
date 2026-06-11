@@ -76,7 +76,6 @@ impl Default for Bandit {
 struct PersistedParams {
     policy: BanditPolicy,
     seed: u64,
-    #[serde(default)]
     draws: u64,
 }
 
@@ -222,7 +221,7 @@ impl BanditModel {
     /// Picks the next arm to play.
     pub fn select(&mut self) -> Result<&str> {
         let id = self.select_k(1)?[0];
-        Ok(self.names.name(id).expect("selected id resolves"))
+        Ok(self.names.resolve(id))
     }
 
     /// Picks `k` distinct arms for this round, best first (e.g. a traffic
@@ -358,7 +357,7 @@ impl OnlineRanker for Bandit {
                     "thompson-beta requires rewards in [0,1], got {r}"
                 )));
             }
-            let name = data.interner().name(arm).expect("dataset id resolves");
+            let name = data.interner().resolve(arm);
             let idx = model.intern_arm(name);
             model.n[idx] += 1;
             model.sum[idx] += r;

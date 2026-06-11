@@ -56,14 +56,14 @@ where
     }
 }
 
-/// Runs `f` inside the supplied rayon pool when one is given (and the
-/// `parallel` feature is on); otherwise runs it directly.
+/// Runs `f` inside the configured thread pool (and directly when the
+/// `parallel` feature is off).
 pub fn run_scoped<R: Send>(opts: &crate::FitOptions<'_>, f: impl FnOnce() -> R + Send) -> R {
     #[cfg(feature = "parallel")]
     {
-        match opts.pool {
-            Some(pool) => pool.install(f),
-            None => f(),
+        match opts.threading {
+            crate::Threading::Shared => f(),
+            crate::Threading::Dedicated(pool) => pool.install(f),
         }
     }
     #[cfg(not(feature = "parallel"))]

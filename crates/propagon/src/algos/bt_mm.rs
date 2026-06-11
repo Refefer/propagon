@@ -62,125 +62,6 @@ impl Default for BradleyTerryMM {
     }
 }
 
-/// What a model section contains.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum SectionKind {
-    /// MM-fitted strengths, normalized to sum to 1 within the section.
-    Ranked,
-    /// Entities removed as undefeated; score = win count.
-    Undefeated,
-    /// Entities removed as never-winning; score = −loss count.
-    Winless,
-}
-
-/// A group of entities sharing one score scale.
-#[derive(Clone, Debug)]
-pub struct Section {
-    pub kind: SectionKind,
-    /// `(id, score)` sorted as v1 emitted them.
-    pub entries: Vec<(u32, f64)>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct EntryLine {
-    id: String,
-    s: f64,
-    g: usize,
-    k: SectionKind,
-}
-
-/// Fitted Bradley-Terry strengths, preserving v1's section structure
-/// (per-component rankings, then undefeated, then winless).
-#[derive(Debug, Clone)]
-pub struct BtmMmModel {
-    params: BradleyTerryMM,
-    names: Interner,
-    sections: Vec<Section>,
-}
-
-impl BtmMmModel {
-    /// Sections in emission order. The trailing two are always
-    /// [`SectionKind::Undefeated`] and [`SectionKind::Winless`] (possibly empty).
-    pub fn sections(&self) -> &[Section] {
-        &self.sections
-    }
-
-    pub fn name(&self, id: u32) -> Option<&str> {
-        self.names.name(id)
-    }
-}
-
-impl RankModel for BtmMmModel {
-    fn algorithm(&self) -> &'static str {
-        "btm-mm"
-    }
-
-    /// Flattened across sections; scores from different sections are on
-    /// different scales (see [`SectionKind`]).
-    fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
-        self.sections.iter().flat_map(|sec| {
-            sec.entries
-                .iter()
-                .map(|&(id, s)| (self.names.name(id).expect("id resolves"), s))
-        })
-    }
-
-    fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
-        let mut lines = Vec::new();
-        for (g, sec) in self.sections.iter().enumerate() {
-            for &(id, s) in &sec.entries {
-                lines.push(EntryLine {
-                    id: self.names.name(id).expect("id resolves").to_string(),
-                    s,
-                    g,
-                    k: sec.kind,
-                });
-            }
-        }
-        state::save_model(w, "btm-mm", &self.params, &lines)
-    }
-
-    fn load_jsonl<R: std::io::BufRead>(r: R) -> Result<Self> {
-        let (params, lines): (BradleyTerryMM, Vec<EntryLine>) = state::load_model(r, "btm-mm")?;
-        let mut names = Interner::new();
-        let mut sections: Vec<Section> = Vec::new();
-        for line in lines {
-            let id = names.intern(&line.id);
-            if line.g >= sections.len() {
-                sections.resize_with(line.g + 1, || Section {
-                    kind: line.k,
-                    entries: Vec::new(),
-                });
-            }
-            sections[line.g].kind = line.k;
-            sections[line.g].entries.push((id, line.s));
-        }
-        // Guarantee the two trailing bookkeeping sections exist.
-        ensure_trailing_sections(&mut sections);
-        Ok(Self {
-            params,
-            names,
-            sections,
-        })
-    }
-}
-
-fn ensure_trailing_sections(sections: &mut Vec<Section>) {
-    if !sections.iter().any(|s| s.kind == SectionKind::Undefeated) {
-        sections.push(Section {
-            kind: SectionKind::Undefeated,
-            entries: Vec::new(),
-        });
-    }
-    if !sections.iter().any(|s| s.kind == SectionKind::Winless) {
-        sections.push(Section {
-            kind: SectionKind::Winless,
-            entries: Vec::new(),
-        });
-    }
-}
-
 type Row = (u32, u32, f64);
 
 impl BradleyTerryMM {
@@ -198,38 +79,7 @@ impl BradleyTerryMM {
             (rows, undef, winless)
         }
     }
-}
 
-impl Ranker for BradleyTerryMM {
-    type Data = PairwiseDataset;
-    type Model = BtmMmModel;
-
-    fn fit_opts(&self, data: &PairwiseDataset, opts: &FitOptions<'_>) -> Result<BtmMmModel> {
-        self.fit_inner(data, None, opts)
-    }
-
-    fn fit_warm_opts(
-        &self,
-        data: &PairwiseDataset,
-        init: &BtmMmModel,
-        opts: &FitOptions<'_>,
-    ) -> Result<BtmMmModel> {
-        // Seed strengths by name from the previous model's ranked sections.
-        let mut warm: HashMap<String, f64> = HashMap::new();
-        for sec in init
-            .sections
-            .iter()
-            .filter(|s| s.kind == SectionKind::Ranked)
-        {
-            for &(id, s) in &sec.entries {
-                warm.insert(init.names.name(id).expect("id resolves").to_string(), s);
-            }
-        }
-        self.fit_inner(data, Some(&warm), opts)
-    }
-}
-
-impl BradleyTerryMM {
     fn fit_inner(
         &self,
         data: &PairwiseDataset,
@@ -239,7 +89,7 @@ impl BradleyTerryMM {
         if data.is_empty() {
             return Err(Error::EmptyDataset);
         }
-        let progress = opts.progress();
+        let progress = opts.progress;
         let (mut rows, undef, winless) = self.prepare(data);
 
         let mut components = connected_components(&rows, data.n_entities());
@@ -309,6 +159,35 @@ impl BradleyTerryMM {
             names: data.interner().clone(),
             sections,
         })
+    }
+}
+
+impl Ranker for BradleyTerryMM {
+    type Data = PairwiseDataset;
+    type Model = BtmMmModel;
+
+    fn fit_opts(&self, data: &PairwiseDataset, opts: &FitOptions<'_>) -> Result<BtmMmModel> {
+        self.fit_inner(data, None, opts)
+    }
+
+    fn fit_warm_opts(
+        &self,
+        data: &PairwiseDataset,
+        init: &BtmMmModel,
+        opts: &FitOptions<'_>,
+    ) -> Result<BtmMmModel> {
+        // Seed strengths by name from the previous model's ranked sections.
+        let mut warm: HashMap<String, f64> = HashMap::new();
+        for sec in init
+            .sections
+            .iter()
+            .filter(|s| s.kind == SectionKind::Ranked)
+        {
+            for &(id, s) in &sec.entries {
+                warm.insert(init.names.resolve(id).to_string(), s);
+            }
+        }
+        self.fit_inner(data, Some(&warm), opts)
     }
 }
 
@@ -533,6 +412,125 @@ fn mm_fit(
     let mut out: Vec<(u32, f64)> = new_policy.into_iter().collect();
     out.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     out
+}
+
+/// What a model section contains.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SectionKind {
+    /// MM-fitted strengths, normalized to sum to 1 within the section.
+    Ranked,
+    /// Entities removed as undefeated; score = win count.
+    Undefeated,
+    /// Entities removed as never-winning; score = −loss count.
+    Winless,
+}
+
+/// A group of entities sharing one score scale.
+#[derive(Clone, Debug)]
+pub struct Section {
+    pub kind: SectionKind,
+    /// `(id, score)` sorted as v1 emitted them.
+    pub entries: Vec<(u32, f64)>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct EntryLine {
+    id: String,
+    s: f64,
+    g: usize,
+    k: SectionKind,
+}
+
+/// Fitted Bradley-Terry strengths, preserving v1's section structure
+/// (per-component rankings, then undefeated, then winless).
+#[derive(Debug, Clone)]
+pub struct BtmMmModel {
+    params: BradleyTerryMM,
+    names: Interner,
+    sections: Vec<Section>,
+}
+
+impl BtmMmModel {
+    /// Sections in emission order. The trailing two are always
+    /// [`SectionKind::Undefeated`] and [`SectionKind::Winless`] (possibly empty).
+    pub fn sections(&self) -> &[Section] {
+        &self.sections
+    }
+
+    pub fn name(&self, id: u32) -> Option<&str> {
+        self.names.name(id)
+    }
+}
+
+impl RankModel for BtmMmModel {
+    fn algorithm(&self) -> &'static str {
+        "btm-mm"
+    }
+
+    /// Flattened across sections; scores from different sections are on
+    /// different scales (see [`SectionKind`]).
+    fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
+        self.sections.iter().flat_map(|sec| {
+            sec.entries
+                .iter()
+                .map(|&(id, s)| (self.names.resolve(id), s))
+        })
+    }
+
+    fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
+        let mut lines = Vec::new();
+        for (g, sec) in self.sections.iter().enumerate() {
+            for &(id, s) in &sec.entries {
+                lines.push(EntryLine {
+                    id: self.names.resolve(id).to_string(),
+                    s,
+                    g,
+                    k: sec.kind,
+                });
+            }
+        }
+        state::save_model(w, "btm-mm", &self.params, &lines)
+    }
+
+    fn load_jsonl<R: std::io::BufRead>(r: R) -> Result<Self> {
+        let (params, lines): (BradleyTerryMM, Vec<EntryLine>) = state::load_model(r, "btm-mm")?;
+        let mut names = Interner::new();
+        let mut sections: Vec<Section> = Vec::new();
+        for line in lines {
+            let id = names.intern(&line.id);
+            if line.g >= sections.len() {
+                sections.resize_with(line.g + 1, || Section {
+                    kind: line.k,
+                    entries: Vec::new(),
+                });
+            }
+            sections[line.g].kind = line.k;
+            sections[line.g].entries.push((id, line.s));
+        }
+        // Guarantee the two trailing bookkeeping sections exist.
+        ensure_trailing_sections(&mut sections);
+        Ok(Self {
+            params,
+            names,
+            sections,
+        })
+    }
+}
+
+fn ensure_trailing_sections(sections: &mut Vec<Section>) {
+    if !sections.iter().any(|s| s.kind == SectionKind::Undefeated) {
+        sections.push(Section {
+            kind: SectionKind::Undefeated,
+            entries: Vec::new(),
+        });
+    }
+    if !sections.iter().any(|s| s.kind == SectionKind::Winless) {
+        sections.push(Section {
+            kind: SectionKind::Winless,
+            entries: Vec::new(),
+        });
+    }
 }
 
 #[cfg(test)]

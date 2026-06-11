@@ -25,3 +25,6 @@ pub trait Progress: Sync {
 pub struct NoProgress;
 
 impl Progress for NoProgress {}
+
+/// Shared silent sink used by [`FitOptions::default`](crate::FitOptions).
+pub static SILENT: NoProgress = NoProgress;

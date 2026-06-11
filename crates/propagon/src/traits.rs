@@ -15,23 +15,38 @@ use std::io::{BufRead, Write};
 use crate::error::Result;
 use crate::progress::Progress;
 
-/// Execution options shared by all fitting entry points.
-///
-/// `Default` means: no progress reporting, the global thread pool (or
-/// sequential execution when the `parallel` feature is off).
+/// Where parallel fitting work executes.
+#[cfg(feature = "parallel")]
 #[derive(Clone, Copy, Default)]
-pub struct FitOptions<'a> {
-    /// Progress sink; `None` is silent.
-    pub progress: Option<&'a dyn Progress>,
-    /// Dedicated rayon pool to run inside. `None` uses the global pool.
-    #[cfg(feature = "parallel")]
-    pub pool: Option<&'a rayon::ThreadPool>,
+pub enum Threading<'a> {
+    /// rayon's shared global pool (the conventional default).
+    #[default]
+    Shared,
+    /// A caller-owned dedicated pool (FR-3: never reconfigure the global
+    /// pool out from under the host application).
+    Dedicated(&'a rayon::ThreadPool),
 }
 
-impl<'a> FitOptions<'a> {
-    /// The progress sink, defaulting to the silent implementation.
-    pub fn progress(&self) -> &dyn Progress {
-        self.progress.unwrap_or(&crate::progress::NoProgress)
+/// Execution options shared by all fitting entry points.
+///
+/// `Default` means: silent progress, the shared thread pool (or sequential
+/// execution when the `parallel` feature is off).
+#[derive(Clone, Copy)]
+pub struct FitOptions<'a> {
+    /// Progress sink; defaults to the silent [`crate::NoProgress`].
+    pub progress: &'a dyn Progress,
+    /// Thread-pool selection.
+    #[cfg(feature = "parallel")]
+    pub threading: Threading<'a>,
+}
+
+impl Default for FitOptions<'_> {
+    fn default() -> Self {
+        Self {
+            progress: &crate::progress::SILENT,
+            #[cfg(feature = "parallel")]
+            threading: Threading::Shared,
+        }
     }
 }
 

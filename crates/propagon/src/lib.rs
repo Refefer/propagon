@@ -48,6 +48,9 @@
 //! - `parallel` (default): multi-threaded fitting via rayon.
 //! - `io` (default): `save_to_path`/`load_from_path` conveniences.
 
+// AGENTS.md rule 7: unit tests fail loud by design; production code may not.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+
 pub mod algos;
 pub mod dataset;
 mod error;
@@ -63,5 +66,7 @@ pub use dataset::{
 };
 pub use error::{Error, Result};
 pub use interner::Interner;
-pub use progress::{NoProgress, Progress};
+pub use progress::{NoProgress, Progress, SILENT};
+#[cfg(feature = "parallel")]
+pub use traits::Threading;
 pub use traits::{FitOptions, OnlineRanker, RankModel, Ranker};

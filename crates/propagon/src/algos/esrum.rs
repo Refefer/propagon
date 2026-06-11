@@ -76,65 +76,6 @@ impl Default for EsRum {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct RumLine {
-    id: String,
-    mu: f64,
-    sigma: f64,
-}
-
-/// Fitted `(μ, σ)` per entity (normalized; relative scale only).
-#[derive(Debug, Clone)]
-pub struct EsRumModel {
-    params: EsRum,
-    names: Interner,
-    entries: Vec<[f64; 2]>,
-}
-
-impl EsRumModel {
-    /// `(name, μ, σ)` rows.
-    pub fn distributions(&self) -> impl Iterator<Item = (&str, f64, f64)> {
-        self.names
-            .names()
-            .zip(self.entries.iter())
-            .map(|(n, e)| (n, e[0], e[1]))
-    }
-}
-
-impl RankModel for EsRumModel {
-    fn algorithm(&self) -> &'static str {
-        "es-rum"
-    }
-
-    /// Primary score is μ.
-    fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
-        self.names.names().zip(self.entries.iter().map(|e| e[0]))
-    }
-
-    fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
-        let lines: Vec<RumLine> = self
-            .distributions()
-            .map(|(id, mu, sigma)| RumLine {
-                id: id.to_string(),
-                mu,
-                sigma,
-            })
-            .collect();
-        state::save_model(w, "es-rum", &self.params, &lines)
-    }
-
-    fn load_jsonl<R: std::io::BufRead>(r: R) -> Result<Self> {
-        let (params, lines): (EsRum, Vec<RumLine>) = state::load_model(r, "es-rum")?;
-        let names = Interner::from_names(lines.iter().map(|l| l.id.as_str()))?;
-        let entries = lines.iter().map(|l| [l.mu, l.sigma]).collect();
-        Ok(Self {
-            params,
-            names,
-            entries,
-        })
-    }
-}
-
 /// Aggregated comparison graph: `comps[i]` lists `(opponent, wins_of_i, games)`.
 type CompGraph = Vec<Vec<(usize, (usize, usize))>>;
 
@@ -230,14 +171,13 @@ impl EsRum {
         policy: &[[f64; 2]],
         graph: &CompGraph,
         out: &mut [[f64; 2]],
-        sigma: f64,
+        normal: &Normal<f64>,
         it: usize,
     ) {
         let weights = decay_weights(3);
         parallel::par_for_each_mut(out, |c_idx, candidate| {
             let comps = &graph[c_idx];
             let seed = self.seed + (c_idx + it + 1) as u64;
-            let normal = Normal::new(0.0, sigma).expect("sigma > 0");
 
             let mut grads: Vec<(f64, [f64; 2])> = (0..20)
                 .map(|g_idx| {
@@ -279,7 +219,13 @@ impl Ranker for EsRum {
         if data.is_empty() {
             return Err(Error::EmptyDataset);
         }
-        let progress = opts.progress();
+        if self.alpha <= 0.0 || self.alpha.is_nan() {
+            return Err(Error::InvalidInput(format!(
+                "es-rum alpha must be positive, got {}",
+                self.alpha
+            )));
+        }
+        let progress = opts.progress;
         let graph = self.build_graph(data);
         let n_vocab = graph.len();
 
@@ -298,9 +244,17 @@ impl Ranker for EsRum {
 
         parallel::run_scoped(opts, || {
             for it in 0..self.passes {
+                // Sigmas stay positive (alpha > 0 was validated, decay > 0),
+                // so these constructions cannot fail; the breaks degrade to
+                // "stop optimizing" rather than panic if they somehow did.
+                let Ok(indiv_normal) = Normal::new(0.0, sigma_indiv) else {
+                    break;
+                };
+
                 // Phase 1: per-entity tuning.
-                self.tune_individuals(&policy, &graph, &mut new_policy, sigma_indiv, it);
+                self.tune_individuals(&policy, &graph, &mut new_policy, &indiv_normal, it);
                 let mut new_score = self.score_all(&new_policy, &graph);
+
                 if new_score < last_loss {
                     std::mem::swap(&mut policy, &mut new_policy);
                     last_loss = new_score;
@@ -310,7 +264,9 @@ impl Ranker for EsRum {
 
                 // Phase 2: population-level perturbations (v1 gating).
                 if last_loss != new_score {
-                    let normal = Normal::new(0.0, sigma_group).expect("sigma > 0");
+                    let Ok(normal) = Normal::new(0.0, sigma_group) else {
+                        break;
+                    };
                     let frozen = &policy;
                     let mut gradients: Vec<(f64, Vec<[f64; 2]>)> =
                         parallel::par_map_indexed(n_gradients, |idx| {
@@ -372,7 +328,7 @@ impl Ranker for EsRum {
             let mut sigma = policy[idx][1];
             self.distribution.bound(&mut sigma);
             let _ = &mut mu;
-            names.intern(data.interner().name(idx as u32).expect("id resolves"));
+            names.intern(data.interner().resolve(idx as u32));
             entries.push([mu, sigma]);
         }
         if entries.is_empty() {
@@ -393,6 +349,65 @@ impl Ranker for EsRum {
 
         Ok(EsRumModel {
             params: *self,
+            names,
+            entries,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct RumLine {
+    id: String,
+    mu: f64,
+    sigma: f64,
+}
+
+/// Fitted `(μ, σ)` per entity (normalized; relative scale only).
+#[derive(Debug, Clone)]
+pub struct EsRumModel {
+    params: EsRum,
+    names: Interner,
+    entries: Vec<[f64; 2]>,
+}
+
+impl EsRumModel {
+    /// `(name, μ, σ)` rows.
+    pub fn distributions(&self) -> impl Iterator<Item = (&str, f64, f64)> {
+        self.names
+            .names()
+            .zip(self.entries.iter())
+            .map(|(n, e)| (n, e[0], e[1]))
+    }
+}
+
+impl RankModel for EsRumModel {
+    fn algorithm(&self) -> &'static str {
+        "es-rum"
+    }
+
+    /// Primary score is μ.
+    fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
+        self.names.names().zip(self.entries.iter().map(|e| e[0]))
+    }
+
+    fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
+        let lines: Vec<RumLine> = self
+            .distributions()
+            .map(|(id, mu, sigma)| RumLine {
+                id: id.to_string(),
+                mu,
+                sigma,
+            })
+            .collect();
+        state::save_model(w, "es-rum", &self.params, &lines)
+    }
+
+    fn load_jsonl<R: std::io::BufRead>(r: R) -> Result<Self> {
+        let (params, lines): (EsRum, Vec<RumLine>) = state::load_model(r, "es-rum")?;
+        let names = Interner::from_names(lines.iter().map(|l| l.id.as_str()))?;
+        let entries = lines.iter().map(|l| [l.mu, l.sigma]).collect();
+        Ok(Self {
+            params,
             names,
             entries,
         })

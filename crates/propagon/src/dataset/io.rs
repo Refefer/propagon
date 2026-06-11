@@ -154,7 +154,6 @@ impl<R: BufRead> DatasetReader<R> {
 
 #[derive(Serialize, Deserialize, Default)]
 struct PairwiseMeta {
-    #[serde(default)]
     periods: Vec<usize>,
 }
 

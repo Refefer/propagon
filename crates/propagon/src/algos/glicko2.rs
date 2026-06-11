@@ -232,14 +232,14 @@ impl OnlineRanker for Glicko2 {
                 model.params, self
             )));
         }
-        let progress = opts.progress();
+        let progress = opts.progress;
         progress.start("glicko2 periods", Some(data.n_periods() as u64));
         for (i, period) in data.periods().enumerate() {
             let games: Vec<(usize, usize)> = data
                 .period_rows(period)
                 .map(|(w, l, _)| {
-                    let wn = data.interner().name(w).expect("dataset id resolves");
-                    let ln = data.interner().name(l).expect("dataset id resolves");
+                    let wn = data.interner().resolve(w);
+                    let ln = data.interner().resolve(l);
                     (model.intern(wn), model.intern(ln))
                 })
                 .collect();

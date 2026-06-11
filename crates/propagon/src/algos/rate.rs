@@ -143,7 +143,7 @@ impl OnlineRanker for WinRate {
         for (w, l, x) in data.rows() {
             // Resolve through names: id spaces differ across datasets.
             for (id, won) in [(w, true), (l, false)] {
-                let name = data.interner().name(id).expect("dataset id resolves");
+                let name = data.interner().resolve(id);
                 let idx = model.names.intern(name) as usize;
                 if idx == model.wins.len() {
                     model.wins.push(0.0);

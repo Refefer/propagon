@@ -114,14 +114,14 @@ fn warm_start_converges_much_faster() {
 
     let cold_sweeps = count_sweeps(&|c| {
         let opts = propagon::FitOptions {
-            progress: Some(c),
+            progress: c,
             ..Default::default()
         };
         algo.fit_opts(&extended, &opts).unwrap();
     });
     let warm_sweeps = count_sweeps(&|c| {
         let opts = propagon::FitOptions {
-            progress: Some(c),
+            progress: c,
             ..Default::default()
         };
         algo.fit_warm_opts(&extended, &cold_model, &opts).unwrap();

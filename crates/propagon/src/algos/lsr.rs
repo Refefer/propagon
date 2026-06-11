@@ -34,6 +34,18 @@ pub enum Estimator {
     MonteCarlo,
 }
 
+impl Estimator {
+    /// The canonical step budget per estimator (v1 defaults): 10 power
+    /// passes, or 1000 walk steps per node. The single source of truth for
+    /// "auto" step selection (the CLI defers here).
+    pub fn default_steps(self) -> usize {
+        match self {
+            Estimator::PowerMethod => 10,
+            Estimator::MonteCarlo => 1000,
+        }
+    }
+}
+
 /// LSR parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Lsr {
@@ -53,81 +65,6 @@ impl Default for Lsr {
             seed: 2020,
         }
     }
-}
-
-/// Fitted LSR scores (log-scale, mean-centered; higher is better).
-#[derive(Debug, Clone)]
-pub struct LsrModel {
-    params: Lsr,
-    names: Interner,
-    scores: Vec<f64>,
-}
-
-impl_simple_score_model!(LsrModel, "lsr");
-
-/// The chain in both orientations: `outgoing[i]` carries cumulative
-/// transition weights for sampling; `incoming[j]` carries plain transition
-/// probabilities for deterministic accumulation.
-struct Chain {
-    degree: Vec<f64>,
-    outgoing_cum: Vec<Vec<(u32, f64)>>,
-    incoming: Vec<Vec<(u32, f64)>>,
-}
-
-fn build_chain(data: &PairwiseDataset) -> Chain {
-    let n = data.n_entities();
-    let mut weights: Vec<std::collections::HashMap<u32, f64>> = vec![Default::default(); n];
-    for (w, l, x) in data.rows() {
-        // v1: mass flows loser -> winner with weight amt/2.
-        *weights[l as usize].entry(w).or_default() += f64::from(x) / 2.0;
-    }
-
-    let mut degree = vec![0.0; n];
-    let mut outgoing_cum: Vec<Vec<(u32, f64)>> = vec![Vec::new(); n];
-    let mut incoming: Vec<Vec<(u32, f64)>> = vec![Vec::new(); n];
-    for i in 0..n {
-        let mut entries: Vec<(u32, f64)> = weights[i].iter().map(|(&k, &v)| (k, v)).collect();
-        entries.sort_unstable_by_key(|e| e.0); // deterministic order
-        let d: f64 = entries.iter().map(|e| e.1).sum();
-        degree[i] = d;
-        let mut cum = 0.0;
-        for (k, v) in entries {
-            let p = v / d;
-            incoming[k as usize].push((i as u32, p));
-            cum += v;
-            outgoing_cum[i].push((k, cum / d));
-        }
-    }
-    Chain {
-        degree,
-        outgoing_cum,
-        incoming,
-    }
-}
-
-/// L2 residual ‖π − πM‖ (v1 `compute_error`).
-fn residual(pi: &[f64], chain: &Chain) -> f64 {
-    let mut est = vec![0.0; pi.len()];
-    for (j, inc) in chain.incoming.iter().enumerate() {
-        for &(i, p) in inc {
-            est[j] += pi[i as usize] * p;
-        }
-    }
-    pi.iter()
-        .zip(&est)
-        .map(|(a, b)| (a - b) * (a - b))
-        .sum::<f64>()
-        .sqrt()
-}
-
-/// Shared post-processing: discount degree, move to log scale, center.
-fn finalize(mut pi: Vec<f64>, chain: &Chain) -> Vec<f64> {
-    for (i, x) in pi.iter_mut().enumerate() {
-        *x = (*x / chain.degree[i].max(EPS).sqrt()).ln();
-    }
-    let avg = pi.iter().sum::<f64>() / pi.len() as f64;
-    pi.iter_mut().for_each(|v| *v -= avg);
-    pi
 }
 
 impl Lsr {
@@ -158,13 +95,13 @@ impl Lsr {
             pi = next;
             progress.update(pass as u64 + 1);
             if pass % 5 == 0 {
-                progress.message(&format!("residual {:0.3e}", residual(&pi, chain)));
+                progress.message(&format!("residual {:0.3e}", chain.residual(&pi)));
             }
         }
         progress.finish();
 
-        let err = residual(&pi, chain);
-        (err, finalize(pi, chain))
+        let err = chain.residual(&pi);
+        (err, chain.finalize(pi))
     }
 
     fn monte_carlo(&self, chain: &Chain, progress: &dyn crate::Progress) -> (f64, Vec<f64>) {
@@ -201,8 +138,8 @@ impl Lsr {
         pi.iter_mut().for_each(|v| *v /= total);
         progress.finish();
 
-        let err = residual(&pi, chain);
-        (err, finalize(pi, chain))
+        let err = chain.residual(&pi);
+        (err, chain.finalize(pi))
     }
 }
 
@@ -214,10 +151,10 @@ impl Ranker for Lsr {
         if data.is_empty() {
             return Err(Error::EmptyDataset);
         }
-        let chain = build_chain(data);
+        let chain = Chain::build(data);
         let (err, scores) = parallel::run_scoped(opts, || match self.estimator {
-            Estimator::PowerMethod => self.power_method(&chain, None, opts.progress()),
-            Estimator::MonteCarlo => self.monte_carlo(&chain, opts.progress()),
+            Estimator::PowerMethod => self.power_method(&chain, None, opts.progress),
+            Estimator::MonteCarlo => self.monte_carlo(&chain, opts.progress),
         });
         log::debug!("lsr residual: {err:0.3e}");
         Ok(LsrModel {
@@ -236,7 +173,7 @@ impl Ranker for Lsr {
         if data.is_empty() {
             return Err(Error::EmptyDataset);
         }
-        let chain = build_chain(data);
+        let chain = Chain::build(data);
         // Invert the log/degree transform to recover a starting distribution.
         let n = data.n_entities();
         let mut pi = vec![1.0 / n as f64; n];
@@ -248,15 +185,98 @@ impl Ranker for Lsr {
         let total: f64 = pi.iter().sum();
         pi.iter_mut().for_each(|v| *v /= total);
 
-        let (err, scores) = parallel::run_scoped(opts, || {
-            self.power_method(&chain, Some(pi), opts.progress())
-        });
+        let (err, scores) =
+            parallel::run_scoped(opts, || self.power_method(&chain, Some(pi), opts.progress));
         log::debug!("lsr warm residual: {err:0.3e}");
         Ok(LsrModel {
             params: *self,
             names: data.interner().clone(),
             scores,
         })
+    }
+}
+
+/// Fitted LSR scores (log-scale, mean-centered; higher is better).
+#[derive(Debug, Clone)]
+pub struct LsrModel {
+    params: Lsr,
+    names: Interner,
+    scores: Vec<f64>,
+}
+
+impl_simple_score_model!(LsrModel, "lsr");
+
+/// The chain in both orientations: `outgoing_cum[i]` carries cumulative
+/// transition weights for sampling; `incoming[j]` carries plain transition
+/// probabilities for deterministic accumulation.
+struct Chain {
+    degree: Vec<f64>,
+    outgoing_cum: Vec<Vec<(u32, f64)>>,
+    incoming: Vec<Vec<(u32, f64)>>,
+}
+
+impl Chain {
+    fn build(data: &PairwiseDataset) -> Self {
+        let n = data.n_entities();
+        let mut weights: Vec<std::collections::HashMap<u32, f64>> = vec![Default::default(); n];
+
+        for (w, l, x) in data.rows() {
+            // v1: mass flows loser -> winner with weight amt/2.
+            *weights[l as usize].entry(w).or_default() += f64::from(x) / 2.0;
+        }
+
+        let mut degree = vec![0.0; n];
+        let mut outgoing_cum: Vec<Vec<(u32, f64)>> = vec![Vec::new(); n];
+        let mut incoming: Vec<Vec<(u32, f64)>> = vec![Vec::new(); n];
+
+        for i in 0..n {
+            let mut entries: Vec<(u32, f64)> = weights[i].iter().map(|(&k, &v)| (k, v)).collect();
+            entries.sort_unstable_by_key(|e| e.0); // deterministic order
+            let d: f64 = entries.iter().map(|e| e.1).sum();
+            degree[i] = d;
+
+            let mut cum = 0.0;
+            for (k, v) in entries {
+                let p = v / d;
+                incoming[k as usize].push((i as u32, p));
+                cum += v;
+                outgoing_cum[i].push((k, cum / d));
+            }
+        }
+
+        Chain {
+            degree,
+            outgoing_cum,
+            incoming,
+        }
+    }
+
+    /// L2 residual ‖π − πM‖ (v1 `compute_error`).
+    fn residual(&self, pi: &[f64]) -> f64 {
+        let mut est = vec![0.0; pi.len()];
+
+        for (j, inc) in self.incoming.iter().enumerate() {
+            for &(i, p) in inc {
+                est[j] += pi[i as usize] * p;
+            }
+        }
+
+        pi.iter()
+            .zip(&est)
+            .map(|(a, b)| (a - b) * (a - b))
+            .sum::<f64>()
+            .sqrt()
+    }
+
+    /// Shared post-processing: discount degree, move to log scale, center.
+    fn finalize(&self, mut pi: Vec<f64>) -> Vec<f64> {
+        for (i, x) in pi.iter_mut().enumerate() {
+            *x = (*x / self.degree[i].max(EPS).sqrt()).ln();
+        }
+
+        let avg = pi.iter().sum::<f64>() / pi.len() as f64;
+        pi.iter_mut().for_each(|v| *v -= avg);
+        pi
     }
 }
 
@@ -271,7 +291,7 @@ mod tests {
         d.push("1", "2", 1.0);
         d.push("2", "3", 2.0);
         d.push("3", "1", 1.0);
-        let chain = build_chain(&d);
+        let chain = Chain::build(&d);
         // ids: 1->0, 2->1, 3->2
         assert_eq!(chain.degree, vec![0.5, 0.5, 1.0]);
         assert_eq!(chain.outgoing_cum[0], vec![(2, 1.0)]); // 1 lost to 3
@@ -296,7 +316,7 @@ mod tests {
         ] {
             d.push(w, l, x);
         }
-        let chain = build_chain(&d);
+        let chain = Chain::build(&d);
         let lsr = Lsr {
             steps: 50,
             ..Default::default()

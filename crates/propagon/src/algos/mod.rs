@@ -35,7 +35,7 @@ pub use de::{DifferentialEvolution, Fitness};
 pub use elo::{Elo, EloModel};
 pub use esrum::{EsRum, EsRumModel, RumDistribution};
 pub use glicko2::{Glicko2, Glicko2Model, PlayerState};
-pub use kemeny::{Kemeny, KemenyAlgo, KemenyModel};
+pub use kemeny::{Kemeny, KemenyAlgo, KemenyModel, KemenyPasses};
 pub use lsr::{Estimator, Lsr, LsrModel};
 pub use pagerank::{PageRank, PageRankModel, Sink};
 pub use rank_centrality::{RankCentrality, RankCentralityModel};

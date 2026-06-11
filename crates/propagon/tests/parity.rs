@@ -6,7 +6,9 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use propagon::algos::{BradleyTerryMM, Confidence, Glicko2, Kemeny, Lsr, SectionKind, WinRate};
+use propagon::algos::{
+    BradleyTerryMM, Confidence, Glicko2, Kemeny, KemenyPasses, Lsr, SectionKind, WinRate,
+};
 use propagon::{OnlineRanker, PairwiseDataset, RankModel, Ranker};
 
 fn repo_path(rel: &str) -> PathBuf {
@@ -145,7 +147,7 @@ fn rate_matches_v1_golden() {
 #[test]
 fn kemeny_insertion_matches_v1_golden() {
     let model = Kemeny {
-        passes: 5,
+        passes: KemenyPasses::Fixed(5),
         ..Default::default()
     }
     .fit(&baseball())

@@ -27,11 +27,32 @@ impl Interner {
         if let Some(&id) = self.map.get(name) {
             return id;
         }
-        let id = u32::try_from(self.names.len()).expect("interner exceeded u32 capacity");
+
+        let id = match u32::try_from(self.names.len()) {
+            Ok(id) => id,
+            Err(_) => {
+                // 2^32 distinct names is hundreds of GB of strings — beyond
+                // any practical dataset. Refuse to grow rather than panic.
+                log::error!("interner at u32 capacity; mapping {name:?} to the last id");
+                return u32::MAX;
+            }
+        };
+
         let boxed: Box<str> = name.into();
         self.names.push(boxed.clone());
         self.map.insert(boxed, id);
         id
+    }
+
+    /// Resolves an id that is known to have come from this interner (model
+    /// and dataset internals uphold that invariant at construction). The
+    /// out-of-range case is unreachable by construction; it degrades to a
+    /// placeholder instead of panicking.
+    pub(crate) fn resolve(&self, id: u32) -> &str {
+        self.names
+            .get(id as usize)
+            .map(AsRef::as_ref)
+            .unwrap_or("<unresolved>")
     }
 
     /// Looks up an existing id without inserting.

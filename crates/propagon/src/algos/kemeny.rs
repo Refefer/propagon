@@ -25,12 +25,21 @@ pub enum KemenyAlgo {
     DiffEvo,
 }
 
+/// Search budget: how many insertion passes / DE fitness evaluations to run.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum KemenyPasses {
+    /// The canonical budget for the chosen algorithm: 1 insertion pass,
+    /// or 50,000 DE evaluations.
+    #[default]
+    Auto,
+    Fixed(usize),
+}
+
 /// Kemeny parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Kemeny {
-    /// Insertion passes, or DE fitness-evaluation budget. `0` = the v1
-    /// default for the chosen algorithm (1 insertion pass; 50,000 DE evals).
-    pub passes: usize,
+    pub passes: KemenyPasses,
     /// Entities with fewer comparisons than this are dropped from output.
     pub min_obs: usize,
     pub algo: KemenyAlgo,
@@ -41,7 +50,7 @@ pub struct Kemeny {
 impl Default for Kemeny {
     fn default() -> Self {
         Self {
-            passes: 0,
+            passes: KemenyPasses::Auto,
             min_obs: 1,
             algo: KemenyAlgo::Insertion,
             seed: 2020,
@@ -49,102 +58,12 @@ impl Default for Kemeny {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct RankLine {
-    id: String,
-    rank: usize, // n..1, higher is better (v1 output convention)
-}
-
-/// Consensus order (best first), exposed as descending rank scores.
-#[derive(Debug, Clone)]
-pub struct KemenyModel {
-    params: Kemeny,
-    names: Interner,
-    /// Entity ids best-first.
-    order: Vec<u32>,
-}
-
-impl KemenyModel {
-    /// The consensus ranking, best first.
-    pub fn order(&self) -> impl Iterator<Item = &str> {
-        self.order
-            .iter()
-            .map(|&id| self.names.name(id).expect("id resolves"))
-    }
-}
-
-impl RankModel for KemenyModel {
-    fn algorithm(&self) -> &'static str {
-        "kemeny"
-    }
-
-    /// Rank positions as scores: best entity gets `n`, worst gets `1`.
-    fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
-        let n = self.order.len();
-        self.order
-            .iter()
-            .enumerate()
-            .map(move |(pos, &id)| (self.names.name(id).expect("id resolves"), (n - pos) as f64))
-    }
-
-    fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
-        let n = self.order.len();
-        let lines: Vec<RankLine> = self
-            .order
-            .iter()
-            .enumerate()
-            .map(|(pos, &id)| RankLine {
-                id: self.names.name(id).expect("id resolves").to_string(),
-                rank: n - pos,
-            })
-            .collect();
-        state::save_model(w, "kemeny", &self.params, &lines)
-    }
-
-    fn load_jsonl<R: std::io::BufRead>(r: R) -> Result<Self> {
-        let (params, mut lines): (Kemeny, Vec<RankLine>) = state::load_model(r, "kemeny")?;
-        lines.sort_by_key(|l| std::cmp::Reverse(l.rank));
-        let mut names = Interner::new();
-        let order = lines.iter().map(|l| names.intern(&l.id)).collect();
-        Ok(Self {
-            params,
-            names,
-            order,
-        })
-    }
-}
-
-/// `graph[i][j] = (wins of i over j, total games between i and j)`.
-type PrefGraph = Vec<Vec<(usize, (usize, usize))>>;
-
-fn build_graph(data: &PairwiseDataset) -> PrefGraph {
-    let n = data.n_entities();
-    let mut maps: Vec<HashMap<usize, (usize, usize)>> = vec![HashMap::new(); n];
-    for (w, l, x) in data.rows() {
-        let margin = x as usize;
-        let e = maps[w as usize].entry(l as usize).or_insert((0, 0));
-        e.0 += margin;
-        e.1 += margin;
-        let e = maps[l as usize].entry(w as usize).or_insert((0, 0));
-        e.1 += margin;
-    }
-    maps.into_iter()
-        .map(|m| {
-            let mut v: Vec<_> = m.into_iter().collect();
-            v.sort_unstable_by_key(|e| e.0);
-            v
-        })
-        .collect()
-}
-
 impl Kemeny {
     fn effective_passes(&self) -> usize {
-        if self.passes > 0 {
-            return self.passes;
-        }
-        match self.algo {
-            KemenyAlgo::Insertion => 1,
-            KemenyAlgo::DiffEvo => 50_000,
+        match (self.passes, self.algo) {
+            (KemenyPasses::Fixed(n), _) => n,
+            (KemenyPasses::Auto, KemenyAlgo::Insertion) => 1,
+            (KemenyPasses::Auto, KemenyAlgo::DiffEvo) => 50_000,
         }
     }
 
@@ -223,7 +142,7 @@ impl Kemeny {
     }
 
     /// v1 `de_kem`: differential evolution over real-valued position scores.
-    fn diff_evo(&self, graph: &PrefGraph, progress: &dyn crate::Progress) -> Vec<usize> {
+    fn diff_evo(&self, graph: &PrefGraph, progress: &dyn crate::Progress) -> Result<Vec<usize>> {
         let n = graph.len();
         let de = DifferentialEvolution {
             dims: n,
@@ -236,18 +155,51 @@ impl Kemeny {
             restart_on_stale: 0,
             range: 1.0,
         };
+
         let passes = self.effective_passes();
         progress.start("de evaluations", Some(passes as u64));
         let fit = KemenyFit { graph };
         let (_best, weights) = de.fit(&fit, passes, self.seed, None, |best, remaining| {
             progress.update((passes - remaining) as u64);
             progress.message(&format!("concordant {best:0.0}"));
-        });
+        })?;
         progress.finish();
 
         let mut order: Vec<(usize, f32)> = weights.into_iter().enumerate().collect();
         order.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-        order.into_iter().map(|(idx, _)| idx).collect()
+
+        Ok(order.into_iter().map(|(idx, _)| idx).collect())
+    }
+}
+
+impl Ranker for Kemeny {
+    type Data = PairwiseDataset;
+    type Model = KemenyModel;
+
+    fn fit_opts(&self, data: &PairwiseDataset, opts: &FitOptions<'_>) -> Result<KemenyModel> {
+        if data.is_empty() {
+            return Err(Error::EmptyDataset);
+        }
+        let graph = build_graph(data);
+        let order_idx = match self.algo {
+            KemenyAlgo::Insertion => self.insertion(&graph, opts.progress),
+            KemenyAlgo::DiffEvo => {
+                crate::parallel::run_scoped(opts, || self.diff_evo(&graph, opts.progress))?
+            }
+        };
+
+        // min_obs filter (v1: total games per entity).
+        let order: Vec<u32> = order_idx
+            .into_iter()
+            .filter(|&idx| graph[idx].iter().map(|(_, (_, n))| n).sum::<usize>() >= self.min_obs)
+            .map(|idx| idx as u32)
+            .collect();
+
+        Ok(KemenyModel {
+            params: *self,
+            names: data.interner().clone(),
+            order,
+        })
     }
 }
 
@@ -292,32 +244,87 @@ impl Fitness for KemenyFit<'_> {
     }
 }
 
-impl Ranker for Kemeny {
-    type Data = PairwiseDataset;
-    type Model = KemenyModel;
+/// `graph[i][j] = (wins of i over j, total games between i and j)`.
+type PrefGraph = Vec<Vec<(usize, (usize, usize))>>;
 
-    fn fit_opts(&self, data: &PairwiseDataset, opts: &FitOptions<'_>) -> Result<KemenyModel> {
-        if data.is_empty() {
-            return Err(Error::EmptyDataset);
-        }
-        let graph = build_graph(data);
-        let order_idx = match self.algo {
-            KemenyAlgo::Insertion => self.insertion(&graph, opts.progress()),
-            KemenyAlgo::DiffEvo => {
-                crate::parallel::run_scoped(opts, || self.diff_evo(&graph, opts.progress()))
-            }
-        };
+fn build_graph(data: &PairwiseDataset) -> PrefGraph {
+    let n = data.n_entities();
+    let mut maps: Vec<HashMap<usize, (usize, usize)>> = vec![HashMap::new(); n];
+    for (w, l, x) in data.rows() {
+        let margin = x as usize;
+        let e = maps[w as usize].entry(l as usize).or_insert((0, 0));
+        e.0 += margin;
+        e.1 += margin;
+        let e = maps[l as usize].entry(w as usize).or_insert((0, 0));
+        e.1 += margin;
+    }
+    maps.into_iter()
+        .map(|m| {
+            let mut v: Vec<_> = m.into_iter().collect();
+            v.sort_unstable_by_key(|e| e.0);
+            v
+        })
+        .collect()
+}
 
-        // min_obs filter (v1: total games per entity).
-        let order: Vec<u32> = order_idx
-            .into_iter()
-            .filter(|&idx| graph[idx].iter().map(|(_, (_, n))| n).sum::<usize>() >= self.min_obs)
-            .map(|idx| idx as u32)
+#[derive(Debug, Serialize, Deserialize)]
+struct RankLine {
+    id: String,
+    rank: usize, // n..1, higher is better (v1 output convention)
+}
+
+/// Consensus order (best first), exposed as descending rank scores.
+#[derive(Debug, Clone)]
+pub struct KemenyModel {
+    params: Kemeny,
+    names: Interner,
+    /// Entity ids best-first.
+    order: Vec<u32>,
+}
+
+impl KemenyModel {
+    /// The consensus ranking, best first.
+    pub fn order(&self) -> impl Iterator<Item = &str> {
+        self.order.iter().map(|&id| self.names.resolve(id))
+    }
+}
+
+impl RankModel for KemenyModel {
+    fn algorithm(&self) -> &'static str {
+        "kemeny"
+    }
+
+    /// Rank positions as scores: best entity gets `n`, worst gets `1`.
+    fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
+        let n = self.order.len();
+        self.order
+            .iter()
+            .enumerate()
+            .map(move |(pos, &id)| (self.names.resolve(id), (n - pos) as f64))
+    }
+
+    fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
+        let n = self.order.len();
+        let lines: Vec<RankLine> = self
+            .order
+            .iter()
+            .enumerate()
+            .map(|(pos, &id)| RankLine {
+                id: self.names.resolve(id).to_string(),
+                rank: n - pos,
+            })
             .collect();
+        state::save_model(w, "kemeny", &self.params, &lines)
+    }
 
-        Ok(KemenyModel {
-            params: *self,
-            names: data.interner().clone(),
+    fn load_jsonl<R: std::io::BufRead>(r: R) -> Result<Self> {
+        let (params, mut lines): (Kemeny, Vec<RankLine>) = state::load_model(r, "kemeny")?;
+        lines.sort_by_key(|l| std::cmp::Reverse(l.rank));
+        let mut names = Interner::new();
+        let order = lines.iter().map(|l| names.intern(&l.id)).collect();
+        Ok(Self {
+            params,
+            names,
             order,
         })
     }
@@ -335,7 +342,7 @@ mod tests {
         d.push("2", "1", 1.0);
         d.push("3", "2", 1.0);
         let m = Kemeny {
-            passes: 1,
+            passes: KemenyPasses::Fixed(1),
             ..Default::default()
         }
         .fit(&d)
@@ -353,7 +360,7 @@ mod tests {
         d.push("2", "1", 1.0);
         d.push("3", "2", 1.0);
         let m = Kemeny {
-            passes: 10,
+            passes: KemenyPasses::Fixed(10),
             ..Default::default()
         }
         .fit(&d)
@@ -372,7 +379,7 @@ mod tests {
         }
         let m = Kemeny {
             algo: KemenyAlgo::DiffEvo,
-            passes: 20_000,
+            passes: KemenyPasses::Fixed(20_000),
             ..Default::default()
         }
         .fit(&d)

@@ -96,7 +96,7 @@ impl Ranker for BradleyTerryLR {
 
 impl BradleyTerryLR {
     fn run(&self, data: &PairwiseDataset, scores: &mut [f64], opts: &FitOptions<'_>) {
-        let progress = opts.progress();
+        let progress = opts.progress;
         let total = (self.passes * data.n_periods()) as u64;
         progress.start("sgd passes", Some(total));
         let mut done = 0;

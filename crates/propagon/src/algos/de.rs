@@ -48,10 +48,19 @@ impl DifferentialEvolution {
         seed: u64,
         x_in: Option<&[f32]>,
         mut callback: impl FnMut(f32, usize),
-    ) -> (f32, Vec<f32>) {
+    ) -> crate::Result<(f32, Vec<f32>)> {
+        if self.dims == 0 || self.lambda < 2 || self.range <= 0.0 || self.f.0 >= self.f.1 {
+            return Err(crate::Error::InvalidInput(format!(
+                "differential evolution needs dims > 0, lambda >= 2, range > 0, f.0 < f.1; \
+                 got dims {}, lambda {}, range {}, f {:?}",
+                self.dims, self.lambda, self.range, self.f
+            )));
+        }
+
         let mut fns = 0;
         let mut best_fit = f32::NEG_INFINITY;
         let mut best_cand = vec![0.0; self.dims];
+
         while fns < total_fns {
             let (used, fit, cand) = self.run_pass(
                 fit_fn,
@@ -60,14 +69,16 @@ impl DifferentialEvolution {
                 x_in,
                 self.restart_on_stale,
                 &mut callback,
-            );
+            )?;
             fns += used;
+
             if fit > best_fit {
                 best_fit = fit;
                 best_cand = cand;
             }
         }
-        (best_fit, best_cand)
+
+        Ok((best_fit, best_cand))
     }
 
     fn run_pass<F: Fitness>(
@@ -78,9 +89,18 @@ impl DifferentialEvolution {
         x_in: Option<&[f32]>,
         early_terminate: usize,
         callback: &mut impl FnMut(f32, usize),
-    ) -> (usize, f32, Vec<f32>) {
+    ) -> crate::Result<(usize, f32, Vec<f32>)> {
+        let bad_dist =
+            |e: rand::distr::uniform::Error| crate::Error::InvalidInput(format!("de bounds: {e}"));
         let mut rng = StdRng::seed_from_u64(seed);
-        let init = Uniform::new(-self.range, self.range).expect("range > 0");
+        let init = Uniform::new(-self.range, self.range).map_err(bad_dist)?;
+
+        // Loop-invariant distributions, validated once (`fit` checked the
+        // parameter preconditions already).
+        let f_dist = Uniform::new(self.f.0, self.f.1).map_err(bad_dist)?;
+        let unit = Uniform::new(0.0f32, 1.0).map_err(bad_dist)?;
+        let norm = Normal::new(0.0f32, 1.0)
+            .map_err(|e| crate::Error::Numeric(format!("unit normal: {e}")))?;
 
         let mut pop: Vec<Vec<f32>> = (0..self.lambda)
             .map(|_| (0..self.dims).map(|_| init.sample(&mut rng)).collect())
@@ -136,11 +156,7 @@ impl DifferentialEvolution {
             stale_len += 1;
             last_update += 1;
 
-            let f_lr = Uniform::new(self.f.0, self.f.1)
-                .expect("f range valid")
-                .sample(&mut rng);
-            let unit = Uniform::new(0.0f32, 1.0).expect("unit range");
-            let norm = Normal::new(0.0f32, 1.0).expect("unit normal");
+            let f_lr = f_dist.sample(&mut rng);
 
             // Each candidate's proposal is computed independently with a
             // per-index seeded RNG (v1 pattern) — deterministic and parallel.
@@ -170,10 +186,13 @@ impl DifferentialEvolution {
                         let f = fit_fn.score(&x);
                         f.is_finite().then_some((x, f))
                     } else {
-                        // DE/best/1 crossover.
+                        // DE/best/1 crossover. `fit` guarantees lambda >= 2,
+                        // so the misses below are unreachable; degrade to
+                        // "keep the original candidate" rather than panic.
                         let mut chosen = pop_ref.choose_multiple(&mut local, 2);
-                        let a = chosen.next().expect("population >= 2");
-                        let b = chosen.next().expect("population >= 2");
+                        let (Some(a), Some(b)) = (chosen.next(), chosen.next()) else {
+                            return None;
+                        };
                         let mut x = vec![0.0f32; self.dims];
                         for i in 0..self.dims {
                             x[i] = if unit.sample(&mut local) < self.cr {
@@ -200,7 +219,7 @@ impl DifferentialEvolution {
         }
 
         let best_idx = arg_max(&fits);
-        (fns, fits[best_idx], pop.swap_remove(best_idx))
+        Ok((fns, fits[best_idx], pop.swap_remove(best_idx)))
     }
 }
 
@@ -245,7 +264,9 @@ mod tests {
             restart_on_stale: 0,
             range: 1.0,
         };
-        let (fit, result) = de.fit(&Matyas(-10.0, 10.0), 10_000, 2020, None, |_, _| {});
+        let (fit, result) = de
+            .fit(&Matyas(-10.0, 10.0), 10_000, 2020, None, |_, _| {})
+            .unwrap();
         assert!(fit > -1e-6, "fitness {fit}");
         assert!((result[0] - 10.0).abs() < 1e-2, "x = {}", result[0]);
         assert!((result[1] + 10.0).abs() < 1e-2, "y = {}", result[1]);

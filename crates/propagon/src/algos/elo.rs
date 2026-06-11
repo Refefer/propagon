@@ -74,8 +74,8 @@ impl OnlineRanker for Elo {
     ) -> Result<()> {
         let ln10_scale = std::f64::consts::LN_10 / self.scale;
         for (w, l, x) in data.rows() {
-            let wname = data.interner().name(w).expect("dataset id resolves");
-            let lname = data.interner().name(l).expect("dataset id resolves");
+            let wname = data.interner().resolve(w);
+            let lname = data.interner().resolve(l);
             let wi = model.idx(wname);
             let li = model.idx(lname);
             let expected = 1.0 / (1.0 + ((model.scores[li] - model.scores[wi]) * ln10_scale).exp());

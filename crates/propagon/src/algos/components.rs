@@ -50,8 +50,8 @@ pub fn extract_components(view: GraphView<'_>, min_size: usize) -> Vec<GraphData
     for (s, d, w) in view.edges() {
         let c = component[s as usize];
         let g = &mut out[c];
-        let sn = view.interner.name(s).expect("id resolves");
-        let dn = view.interner.name(d).expect("id resolves");
+        let sn = view.interner.resolve(s);
+        let dn = view.interner.resolve(d);
         g.push(sn, dn, w);
     }
 

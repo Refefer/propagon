@@ -107,7 +107,7 @@ impl Ranker for RankCentrality {
 
         // Power iteration with implicit self-loops (rows already sum ≤ 1).
         let scores = parallel::run_scoped(opts, || {
-            let progress = opts.progress();
+            let progress = opts.progress;
             progress.start("rank-centrality sweeps", Some(self.iterations as u64));
             let mut pi = vec![1.0 / n as f64; n];
             for it in 0..self.iterations {
