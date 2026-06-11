@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use propagon::{Error, GraphDataset, PairwiseDataset, Result, RewardsDataset};
+use propagon::{Error, GraphDataset, PairwiseDataset, RankingsDataset, Result, RewardsDataset};
 
 fn rows(path: &Path) -> Result<impl Iterator<Item = std::io::Result<String>>> {
     let f = File::open(path)
@@ -81,6 +81,26 @@ pub fn read_graph(path: &Path, swap: bool) -> Result<GraphDataset> {
         return Err(Error::EmptyDataset);
     }
     Ok(g)
+}
+
+/// Reads a ballots file: one ranking per line, items whitespace-separated,
+/// best first. Blank lines are skipped.
+pub fn read_rankings(path: &Path) -> Result<RankingsDataset> {
+    let mut ds = RankingsDataset::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        ds.push_ranking(line.split_whitespace())
+            .map_err(|e| Error::parse(lineno + 1, format!("{e}: {line:?}")))?;
+    }
+    if ds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(ds)
 }
 
 /// Reads `(arm, reward)` rows for bandits: `arm reward` per line.

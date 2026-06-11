@@ -519,3 +519,60 @@ fn keener_matches_comperank() -> TestResult {
 
     Ok(())
 }
+
+/// Plackett-Luce restricted to 2-item ballots is exactly Bradley-Terry
+/// (Hunter 2004, eq. 30 reduces to eq. 3) — so feeding each Agresti
+/// baseball game as a two-item ranking must reproduce the published
+/// BradleyTerry2 abilities (same citation as
+/// `bradley_terry_matches_agresti_baseball` above).
+#[test]
+fn plackett_luce_on_pairs_reduces_to_bradley_terry() -> TestResult {
+    use propagon::algos::PlackettLuce;
+
+    const TEAMS: [&str; 7] = [
+        "Milwaukee",
+        "Detroit",
+        "Toronto",
+        "New York",
+        "Boston",
+        "Cleveland",
+        "Baltimore",
+    ];
+    const WINS: [[u32; 7]; 7] = [
+        [0, 7, 9, 7, 7, 9, 11],
+        [6, 0, 7, 5, 11, 9, 9],
+        [4, 6, 0, 7, 7, 8, 12],
+        [6, 8, 6, 0, 6, 7, 10],
+        [6, 2, 6, 7, 0, 7, 12],
+        [4, 4, 5, 6, 6, 0, 6],
+        [2, 4, 1, 3, 1, 7, 0],
+    ];
+    const EXPECTED: [f64; 6] = [1.5814, 1.4364, 1.2945, 1.2476, 1.1077, 0.6839];
+
+    let mut ballots = RankingsDataset::new();
+    for (i, row) in WINS.iter().enumerate() {
+        for (j, &wins) in row.iter().enumerate() {
+            for _ in 0..wins {
+                ballots.push_ranking([TEAMS[i], TEAMS[j]])?;
+            }
+        }
+    }
+
+    let model = PlackettLuce {
+        tolerance: 1e-12,
+        ..Default::default()
+    }
+    .fit(&ballots)?;
+    let gamma: std::collections::HashMap<&str, f64> = model.scores().collect();
+    let baltimore = gamma.get("Baltimore").ok_or("Baltimore fitted")?;
+
+    for (team, expected) in TEAMS.iter().zip(EXPECTED) {
+        let ability = (gamma.get(team).ok_or("team fitted")? / baltimore).ln();
+        assert!(
+            (ability - expected).abs() < 1e-3,
+            "{team}: {ability:.4} vs {expected}"
+        );
+    }
+
+    Ok(())
+}

@@ -75,6 +75,26 @@ impl RankingsDataset {
     pub fn rankings(&self) -> impl Iterator<Item = &[u32]> {
         (0..self.len()).map(|i| self.ranking(i))
     }
+
+    /// Explodes every ballot into its implied pairwise outcomes (each
+    /// ordered pair contributes one unit-weight comparison) — the standard
+    /// rank-breaking bridge to the pairwise rankers (Kemeny, Copeland, …).
+    pub fn to_pairwise(&self) -> crate::dataset::PairwiseDataset {
+        let mut out = crate::dataset::PairwiseDataset::new();
+
+        for ranking in self.rankings() {
+            for (p, &winner) in ranking.iter().enumerate() {
+                for &loser in &ranking[p + 1..] {
+                    out.push(
+                        self.interner.resolve(winner),
+                        self.interner.resolve(loser),
+                        1.0,
+                    );
+                }
+            }
+        }
+        out
+    }
 }
 
 #[cfg(test)]

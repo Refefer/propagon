@@ -26,8 +26,8 @@ use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use propagon::algos::{
     Bandit, BanditModel, BanditPolicy, BiRank, Borda, BradleyTerryLR, BradleyTerryMM, Colley,
     Confidence, Copeland, Elo, EsRum, Estimator, Glicko2, HodgeFlow, HodgeRank, Keener, Kemeny,
-    KemenyAlgo, KemenyPasses, Lsr, Massey, PageRank, RankCentrality, RumDistribution, Sink,
-    WinRate, extract_components,
+    KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4, PageRank, PlackettLuce, RankCentrality,
+    RumDistribution, Sink, WinRate, extract_components,
 };
 use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
 
@@ -148,6 +148,7 @@ fn cli() -> Command {
             .global(true),
         )
         .subcommand(tournament_cmd())
+        .subcommand(rankings_cmd())
         .subcommand(graph_cmd())
         .subcommand(bandit_cmd())
 }
@@ -327,6 +328,53 @@ fn tournament_cmd() -> Command {
                 )
                 .arg(opt::<usize>("iterations", "Maximum solver iterations"))
                 .arg(opt::<f64>("tolerance", "Relative residual target")),
+        ))
+}
+
+fn rankings_cmd() -> Command {
+    Command::new("rankings")
+        .visible_alias("ballots")
+        .about("Aggregate full or partial rankings: one ballot per line, best first")
+        .subcommand_required(true)
+        .subcommand(with_path(
+            Command::new("plackett-luce")
+                .visible_alias("pl")
+                .about("Plackett-Luce maximum likelihood (Hunter's MM)")
+                .arg(opt::<usize>("iterations", "Maximum MM sweeps"))
+                .arg(opt::<f64>("tolerance", "Mean-change stopping rule")),
+        ))
+        .subcommand(with_path(
+            Command::new("markov-chain")
+                .visible_alias("mc4")
+                .about("MC4 Markov-chain aggregation (majority-move random walk)")
+                .arg(opt::<f64>("damping", "Teleport mix in [0,1]"))
+                .arg(opt::<usize>("iterations", "Power-iteration budget"))
+                .arg(opt::<f64>("tolerance", "Early-exit threshold")),
+        ))
+        .subcommand(with_path(
+            Command::new("borda-count")
+                .visible_alias("borda")
+                .about("Positional Borda points (m-rank per ballot)"),
+        ))
+        .subcommand(with_path(
+            Command::new("kemeny")
+                .about("Kemeny consensus over the ballots' implied pairwise preferences")
+                .arg(opt::<usize>(
+                    "passes",
+                    "Insertion passes / DE evaluation budget",
+                ))
+                .arg(opt::<usize>(
+                    "min-obs",
+                    "Drop entities with fewer comparisons",
+                ))
+                .arg(
+                    Arg::new("algo")
+                        .long("algo")
+                        .value_parser(["insertion", "de"])
+                        .default_value("insertion")
+                        .help("Search heuristic"),
+                )
+                .arg(opt::<u64>("seed", "Seed for the DE search")),
         ))
 }
 
@@ -565,6 +613,7 @@ fn run() -> Result<()> {
 
     match group {
         "tournament" => run_tournament(leaf, sm),
+        "rankings" => run_rankings(leaf, sm),
         "graph" => run_graph(leaf, sm),
         "bandit" => run_bandit(leaf, sm),
         other => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
@@ -763,6 +812,62 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
         }
         other => Err(Error::InvalidInput(format!(
             "unknown tournament algorithm {other:?}"
+        ))),
+    }
+}
+
+fn run_rankings(algo: &str, sm: &ArgMatches) -> Result<()> {
+    let ctx = Ctx::from_matches(sm)?;
+    let data = io::read_rankings(ctx.path)?;
+
+    match algo {
+        "plackett-luce" => {
+            let mut pl = PlackettLuce::default();
+            set(sm, "iterations", &mut pl.iterations);
+            set(sm, "tolerance", &mut pl.tolerance);
+
+            let model = fit_maybe_warm(&pl, &data, &ctx)?;
+            ctx.save(&model)?;
+            let mut out = std::io::stdout().lock();
+
+            match ctx.format.as_str() {
+                "jsonl" => emit::jsonl(&mut out, &model),
+                _ => emit::plackett_luce(&mut out, &model),
+            }
+        }
+        "markov-chain" => {
+            ctx.reject_load_state(algo)?;
+            let mut mc = Mc4::default();
+            set(sm, "damping", &mut mc.damping);
+            set(sm, "iterations", &mut mc.iterations);
+            set(sm, "tolerance", &mut mc.tolerance);
+
+            let model = mc.fit_opts(&data, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "borda-count" => {
+            ctx.reject_load_state(algo)?;
+            let model = Borda::default().fit_rankings(&data)?;
+            ctx.emit(&model)
+        }
+        "kemeny" => {
+            ctx.reject_load_state(algo)?;
+            let mut km = Kemeny::default();
+            set(sm, "min-obs", &mut km.min_obs);
+            set(sm, "seed", &mut km.seed);
+
+            if choice(sm, "algo", "insertion") == "de" {
+                km.algo = KemenyAlgo::DiffEvo;
+            }
+            if let Some(&n) = sm.get_one::<usize>("passes") {
+                km.passes = KemenyPasses::Fixed(n);
+            }
+
+            let model = km.fit_opts(&data.to_pairwise(), &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        other => Err(Error::InvalidInput(format!(
+            "unknown rankings algorithm {other:?}"
         ))),
     }
 }

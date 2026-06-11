@@ -4,7 +4,7 @@
 
 use std::io::Write;
 
-use propagon::algos::{BiRankModel, BtmMmModel, Glicko2Model, SectionKind};
+use propagon::algos::{BiRankModel, BtmMmModel, Glicko2Model, PlackettLuceModel, SectionKind};
 use propagon::{RankModel, Result};
 
 /// `"{id}: {score}"` per line, sorted descending (ties by name).
@@ -64,6 +64,24 @@ pub fn btm_mm(out: &mut impl Write, model: &BtmMmModel) -> Result<()> {
         for &(id, score) in &section.entries {
             let name = model.name(id).unwrap_or("<unresolved>");
             let _ = ranked;
+            writeln!(out, "{name}: {score}")?;
+        }
+    }
+    Ok(())
+}
+
+/// Plackett-Luce sections in btm style: ranked components first, then
+/// undefeated, then winless, blank-line separated.
+pub fn plackett_luce(out: &mut impl Write, model: &PlackettLuceModel) -> Result<()> {
+    let mut first = true;
+    for section in model.sections() {
+        if !first {
+            writeln!(out)?;
+        }
+        first = false;
+
+        for &(id, score) in &section.entries {
+            let name = model.name(id).unwrap_or("<unresolved>");
             writeln!(out, "{name}: {score}")?;
         }
     }
