@@ -62,7 +62,7 @@ pub fn btm_mm(out: &mut impl Write, model: &BtmMmModel) -> Result<()> {
         }
         first_section = false;
         for &(id, score) in &section.entries {
-            let name = model.name(id).expect("id resolves");
+            let name = model.name(id).unwrap_or("<unresolved>");
             let _ = ranked;
             writeln!(out, "{name}: {score}")?;
         }

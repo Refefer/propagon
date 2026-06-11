@@ -25,8 +25,8 @@ use std::sync::Mutex;
 use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use propagon::algos::{
     Bandit, BanditModel, BanditPolicy, BiRank, Borda, BradleyTerryLR, BradleyTerryMM, Confidence,
-    Copeland, Elo, EsRum, Estimator, Glicko2, Kemeny, KemenyAlgo, Lsr, PageRank, RankCentrality,
-    RumDistribution, Sink, WinRate, extract_components,
+    Copeland, Elo, EsRum, Estimator, Glicko2, Kemeny, KemenyAlgo, KemenyPasses, Lsr, PageRank,
+    RankCentrality, RumDistribution, Sink, WinRate, extract_components,
 };
 use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
 
@@ -53,27 +53,45 @@ impl Progress for CliProgress {
         };
         pb.set_style(
             indicatif::ProgressStyle::with_template("[{msg}] {wide_bar} {pos}/{len} {eta_precise}")
-                .expect("static template"),
+                .unwrap_or_else(|_| indicatif::ProgressStyle::default_bar()),
         );
         pb.set_message(phase.to_string());
         pb.enable_steady_tick(std::time::Duration::from_millis(200));
-        *self.bar.lock().unwrap() = Some(pb);
+        *self
+            .bar
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pb);
     }
 
     fn update(&self, done: u64) {
-        if let Some(pb) = self.bar.lock().unwrap().as_ref() {
+        if let Some(pb) = self
+            .bar
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
             pb.set_position(done);
         }
     }
 
     fn message(&self, msg: &str) {
-        if let Some(pb) = self.bar.lock().unwrap().as_ref() {
+        if let Some(pb) = self
+            .bar
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
             pb.set_message(msg.to_string());
         }
     }
 
     fn finish(&self) {
-        if let Some(pb) = self.bar.lock().unwrap().take() {
+        if let Some(pb) = self
+            .bar
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
             pb.finish_and_clear();
         }
     }
@@ -356,8 +374,21 @@ fn bandit_cmd() -> Command {
 
 // ---------------------------------------------------------------- helpers
 
-fn get_or<T: Clone + Send + Sync + 'static>(m: &ArgMatches, name: &str, default: T) -> T {
-    m.get_one::<T>(name).cloned().unwrap_or(default)
+/// Overrides `field` only when the user actually passed the flag — the
+/// param-struct `Default` stays the single source of numeric defaults
+/// (AGENTS.md rule 1).
+fn set<T: Clone + Send + Sync + 'static>(m: &ArgMatches, name: &str, field: &mut T) {
+    if let Some(v) = m.get_one::<T>(name) {
+        *field = v.clone();
+    }
+}
+
+/// Reads a clap-defaulted choice flag; the fallback literal mirrors the
+/// `default_value` and is unreachable.
+fn choice<'a>(m: &'a ArgMatches, name: &str, fallback: &'a str) -> &'a str {
+    m.get_one::<String>(name)
+        .map(String::as_str)
+        .unwrap_or(fallback)
 }
 
 struct Ctx<'a> {
@@ -382,8 +413,12 @@ impl<'a> Ctx<'a> {
             ),
             None => None,
         };
+        let Some(path) = sm.get_one::<String>("path") else {
+            return Err(Error::InvalidInput("missing input path".into()));
+        };
+
         Ok(Ctx {
-            path: Path::new(sm.get_one::<String>("path").expect("required").as_str()),
+            path: Path::new(path.as_str()),
             format: sm
                 .get_one::<String>("format")
                 .cloned()
@@ -408,12 +443,16 @@ impl<'a> Ctx<'a> {
     }
 
     fn opts(&self) -> FitOptions<'_> {
-        let mut opts = FitOptions::default();
-        if let Some(p) = &self.progress {
-            opts.progress = Some(p);
+        FitOptions {
+            progress: match &self.progress {
+                Some(p) => p,
+                None => &propagon::SILENT,
+            },
+            threading: match &self.pool_holder {
+                Some(pool) => propagon::Threading::Dedicated(pool),
+                None => propagon::Threading::Shared,
+            },
         }
-        opts.pool = self.pool_holder.as_ref();
-        opts
     }
 
     fn pairwise(&self) -> Result<propagon::PairwiseDataset> {
@@ -475,20 +514,22 @@ fn update_maybe_loaded<A: OnlineRanker>(
 
 fn run() -> Result<()> {
     let matches = cli().get_matches();
-    match matches.subcommand().expect("subcommand required") {
-        ("tournament", gm) => {
-            let (algo, sm) = gm.subcommand().expect("subcommand required");
-            run_tournament(algo, sm)
-        }
-        ("graph", gm) => {
-            let (algo, sm) = gm.subcommand().expect("subcommand required");
-            run_graph(algo, sm)
-        }
-        ("bandit", gm) => {
-            let (policy, sm) = gm.subcommand().expect("subcommand required");
-            run_bandit(policy, sm)
-        }
-        (other, _) => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
+
+    // `subcommand_required(true)` makes the misses below unreachable.
+    let Some((group, gm)) = matches.subcommand() else {
+        return Err(Error::InvalidInput("a subcommand is required".into()));
+    };
+    let Some((leaf, sm)) = gm.subcommand() else {
+        return Err(Error::InvalidInput(format!(
+            "{group} requires an algorithm subcommand"
+        )));
+    };
+
+    match group {
+        "tournament" => run_tournament(leaf, sm),
+        "graph" => run_graph(leaf, sm),
+        "bandit" => run_bandit(leaf, sm),
+        other => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
     }
 }
 
@@ -496,11 +537,7 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     match algo {
         "win-rate" => {
-            let confidence = match sm
-                .get_one::<String>("confidence-interval")
-                .unwrap()
-                .as_str()
-            {
+            let confidence = match choice(sm, "confidence-interval", "0.95") {
                 "0.95" => Confidence::P95,
                 "0.9" | "0.90" => Confidence::P90,
                 _ => Confidence::P50,
@@ -510,52 +547,57 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             ctx.emit(&model)
         }
         "elo" => {
-            let algo = Elo {
-                k: get_or(sm, "k", 32.0),
-                initial_rating: get_or(sm, "initial-rating", 1500.0),
-                scale: get_or(sm, "scale", 400.0),
-            };
+            let mut algo = Elo::default();
+            set(sm, "k", &mut algo.k);
+            set(sm, "initial-rating", &mut algo.initial_rating);
+            set(sm, "scale", &mut algo.scale);
+
             let model = update_maybe_loaded(&algo, &ctx.pairwise()?, &ctx)?;
             ctx.emit(&model)
         }
         "glicko2" => {
-            let algo = Glicko2 {
-                tau: get_or(sm, "tau", 0.5),
-                ..Default::default()
-            };
+            let mut algo = Glicko2::default();
+            set(sm, "tau", &mut algo.tau);
+
             let model = update_maybe_loaded(&algo, &ctx.pairwise()?, &ctx)?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
+
             match ctx.format.as_str() {
                 "jsonl" => emit::jsonl(&mut out, &model),
                 _ => emit::glicko2(&mut out, &model, sm.get_flag("use-mu")),
             }
         }
-        "bradley-terry-model" => match sm.get_one::<String>("estimator").unwrap().as_str() {
+        "bradley-terry-model" => match choice(sm, "estimator", "mm") {
             "sgd" => {
-                let algo = BradleyTerryLR {
-                    passes: get_or(sm, "passes", 10),
-                    alpha: get_or(sm, "alpha", 1.0),
-                    decay: get_or(sm, "decay", 1e-5),
-                    thrifty: sm.get_flag("thrifty"),
-                };
+                let mut algo = BradleyTerryLR::default();
+                set(sm, "passes", &mut algo.passes);
+                set(sm, "alpha", &mut algo.alpha);
+                set(sm, "decay", &mut algo.decay);
+                algo.thrifty = sm.get_flag("thrifty");
+
                 let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
                 ctx.emit(&model)
             }
             _ => {
-                let algo = BradleyTerryMM {
-                    iterations: get_or(sm, "iterations", 10_000),
-                    tolerance: get_or(sm, "tolerance", 1e-6),
-                    min_graph_size: get_or(sm, "min-graph-size", 1),
-                    remove_total_losers: sm.get_flag("remove-total-losers"),
-                    create_fake_games: get_or(sm, "create-fake-games", 0.0),
-                    random_subgraph_links: get_or(sm, "random-subgraph-links", 0),
-                    random_subgraph_weight: get_or(sm, "random-subgraph-weight", 1e-3),
-                    seed: get_or(sm, "seed", 1221),
-                };
+                let mut algo = BradleyTerryMM::default();
+                set(sm, "iterations", &mut algo.iterations);
+                set(sm, "tolerance", &mut algo.tolerance);
+                set(sm, "min-graph-size", &mut algo.min_graph_size);
+                set(sm, "create-fake-games", &mut algo.create_fake_games);
+                set(sm, "random-subgraph-links", &mut algo.random_subgraph_links);
+                set(
+                    sm,
+                    "random-subgraph-weight",
+                    &mut algo.random_subgraph_weight,
+                );
+                set(sm, "seed", &mut algo.seed);
+                algo.remove_total_losers = sm.get_flag("remove-total-losers");
+
                 let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
                 ctx.save(&model)?;
                 let mut out = std::io::stdout().lock();
+
                 match ctx.format.as_str() {
                     "jsonl" => emit::jsonl(&mut out, &model),
                     _ => emit::btm_mm(&mut out, &model),
@@ -563,50 +605,45 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             }
         },
         "luce-spectral-ranking" => {
-            let estimator = match sm.get_one::<String>("estimator").unwrap().as_str() {
-                "monte-carlo" => Estimator::MonteCarlo,
-                _ => Estimator::PowerMethod,
-            };
-            let steps = match get_or(sm, "steps", 0usize) {
-                0 if estimator == Estimator::MonteCarlo => 1000,
-                0 => 10,
-                n => n,
-            };
-            let algo = Lsr {
-                steps,
-                estimator,
-                seed: get_or(sm, "seed", 2020),
-            };
+            let mut algo = Lsr::default();
+
+            if choice(sm, "estimator", "power") == "monte-carlo" {
+                algo.estimator = Estimator::MonteCarlo;
+                algo.steps = algo.estimator.default_steps();
+            }
+            set(sm, "steps", &mut algo.steps);
+            set(sm, "seed", &mut algo.seed);
+
             let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
             ctx.emit(&model)
         }
         "rank-centrality" => {
             ctx.reject_load_state(algo)?;
-            let rc = RankCentrality {
-                iterations: get_or(sm, "iterations", 200),
-                tolerance: get_or(sm, "tolerance", 1e-10),
-            };
+            let mut rc = RankCentrality::default();
+            set(sm, "iterations", &mut rc.iterations);
+            set(sm, "tolerance", &mut rc.tolerance);
+
             let model = rc.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.emit(&model)
         }
         "random-utility-model" => {
             ctx.reject_load_state(algo)?;
-            let es = EsRum {
-                distribution: if sm.get_flag("fixed") {
-                    RumDistribution::FixedNormal
-                } else {
-                    RumDistribution::Gaussian
-                },
-                passes: get_or(sm, "passes", 100),
-                alpha: get_or(sm, "alpha", 1.0),
-                gamma: get_or(sm, "gamma", 1e-3),
-                min_obs: get_or(sm, "min-obs", 1),
-                prior: get_or(sm, "prior", 0),
-                seed: get_or(sm, "seed", 2019),
-            };
+            let mut es = EsRum::default();
+            set(sm, "passes", &mut es.passes);
+            set(sm, "alpha", &mut es.alpha);
+            set(sm, "gamma", &mut es.gamma);
+            set(sm, "min-obs", &mut es.min_obs);
+            set(sm, "prior", &mut es.prior);
+            set(sm, "seed", &mut es.seed);
+
+            if sm.get_flag("fixed") {
+                es.distribution = RumDistribution::FixedNormal;
+            }
+
             let model = es.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
+
             match ctx.format.as_str() {
                 "jsonl" => emit::jsonl(&mut out, &model),
                 _ => emit::esrum(&mut out, &model),
@@ -614,15 +651,17 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
         }
         "kemeny" => {
             ctx.reject_load_state(algo)?;
-            let km = Kemeny {
-                passes: get_or(sm, "passes", 0),
-                min_obs: get_or(sm, "min-obs", 1),
-                algo: match sm.get_one::<String>("algo").unwrap().as_str() {
-                    "de" => KemenyAlgo::DiffEvo,
-                    _ => KemenyAlgo::Insertion,
-                },
-                seed: get_or(sm, "seed", 2020),
-            };
+            let mut km = Kemeny::default();
+            set(sm, "min-obs", &mut km.min_obs);
+            set(sm, "seed", &mut km.seed);
+
+            if choice(sm, "algo", "insertion") == "de" {
+                km.algo = KemenyAlgo::DiffEvo;
+            }
+            if let Some(&n) = sm.get_one::<usize>("passes") {
+                km.passes = KemenyPasses::Fixed(n);
+            }
+
             let model = km.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
             ctx.emit(&model)
         }
@@ -647,15 +686,16 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
     match algo {
         "page-rank" => {
             ctx.reject_load_state(algo)?;
-            let pr = PageRank {
-                damping: get_or(sm, "damping-factor", 0.85),
-                iterations: get_or(sm, "iterations", 10),
-                sink: match sm.get_one::<String>("sink-dispersion").unwrap().as_str() {
-                    "all" => Sink::All,
-                    "none" => Sink::None,
-                    _ => Sink::Reverse,
-                },
+            let mut pr = PageRank::default();
+            set(sm, "damping-factor", &mut pr.damping);
+            set(sm, "iterations", &mut pr.iterations);
+
+            pr.sink = match choice(sm, "sink-dispersion", "reverse") {
+                "all" => Sink::All,
+                "none" => Sink::None,
+                _ => Sink::Reverse,
             };
+
             // --matches: rows are 'winner loser', i.e. the endorsement
             // loser -> winner (the tournament-file orientation).
             let graph = io::read_graph(ctx.path, sm.get_flag("matches"))?;
@@ -664,16 +704,17 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
         }
         "birank" => {
             ctx.reject_load_state(algo)?;
-            let br = BiRank {
-                iterations: get_or(sm, "iterations", 10),
-                alpha: get_or(sm, "alpha", 1.0),
-                beta: get_or(sm, "beta", 1.0),
-                seed: get_or(sm, "seed", 2019),
-            };
+            let mut br = BiRank::default();
+            set(sm, "iterations", &mut br.iterations);
+            set(sm, "alpha", &mut br.alpha);
+            set(sm, "beta", &mut br.beta);
+            set(sm, "seed", &mut br.seed);
+
             let graph = io::read_graph(ctx.path, false)?;
             let model = br.fit_opts(&graph, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
+
             match ctx.format.as_str() {
                 "jsonl" => emit::jsonl(&mut out, &model),
                 _ => emit::birank(&mut out, &model),
@@ -682,17 +723,23 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
         "components" => {
             ctx.reject_load_state(algo)?;
             let graph = io::read_graph(ctx.path, false)?;
-            let comps = extract_components(graph.view(), get_or(sm, "min-graph-size", 1));
+
+            let mut min_size = 1usize;
+            set(sm, "min-graph-size", &mut min_size);
+
+            let comps = extract_components(graph.view(), min_size);
             for (i, comp) in comps.iter().enumerate() {
                 let out_path = format!("{}.{i}", ctx.path.display());
                 let mut f = std::io::BufWriter::new(std::fs::File::create(&out_path)?);
+
                 for (s, d, w) in comp.view().edges() {
                     use std::io::Write;
-                    let sn = comp.interner().name(s).expect("id resolves");
-                    let dn = comp.interner().name(d).expect("id resolves");
+                    let sn = comp.interner().name(s).unwrap_or("<unresolved>");
+                    let dn = comp.interner().name(d).unwrap_or("<unresolved>");
                     writeln!(f, "{sn} {dn} {w}")?;
                 }
             }
+
             eprintln!("wrote {} components", comps.len());
             Ok(())
         }
@@ -704,32 +751,52 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
 
 fn run_bandit(policy_name: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
+
     let policy = match policy_name {
         "greedy" => BanditPolicy::Greedy,
-        "epsilon-greedy" => BanditPolicy::EpsilonGreedy {
-            epsilon: get_or(sm, "epsilon", 0.1),
-        },
-        "upper-confidence-bound" => BanditPolicy::Ucb1 {
-            exploration: get_or(sm, "exploration", 2.0),
-        },
-        "thompson-beta" => BanditPolicy::ThompsonBeta {
-            prior_alpha: get_or(sm, "prior-alpha", 1.0),
-            prior_beta: get_or(sm, "prior-beta", 1.0),
-        },
-        "thompson-gaussian" => BanditPolicy::ThompsonGaussian {
-            prior_mean: get_or(sm, "prior-mean", 0.0),
-            prior_weight: get_or(sm, "prior-weight", 1.0),
-        },
+        "epsilon-greedy" => {
+            let mut epsilon = BanditPolicy::DEFAULT_EPSILON;
+            set(sm, "epsilon", &mut epsilon);
+            BanditPolicy::EpsilonGreedy { epsilon }
+        }
+        "upper-confidence-bound" => {
+            let mut exploration = BanditPolicy::DEFAULT_EXPLORATION;
+            set(sm, "exploration", &mut exploration);
+            BanditPolicy::Ucb1 { exploration }
+        }
+        "thompson-beta" => {
+            let mut prior_alpha = BanditPolicy::DEFAULT_PRIOR_ALPHA;
+            let mut prior_beta = BanditPolicy::DEFAULT_PRIOR_BETA;
+            set(sm, "prior-alpha", &mut prior_alpha);
+            set(sm, "prior-beta", &mut prior_beta);
+            BanditPolicy::ThompsonBeta {
+                prior_alpha,
+                prior_beta,
+            }
+        }
+        "thompson-gaussian" => {
+            let mut prior_mean = BanditPolicy::DEFAULT_PRIOR_MEAN;
+            let mut prior_weight = BanditPolicy::DEFAULT_PRIOR_WEIGHT;
+            set(sm, "prior-mean", &mut prior_mean);
+            set(sm, "prior-weight", &mut prior_weight);
+            BanditPolicy::ThompsonGaussian {
+                prior_mean,
+                prior_weight,
+            }
+        }
         other => {
             return Err(Error::InvalidInput(format!(
                 "unknown bandit policy {other:?}"
             )));
         }
     };
-    let algo = Bandit {
+
+    let mut algo = Bandit {
         policy,
-        seed: get_or(sm, "seed", 42),
+        ..Default::default()
     };
+    set(sm, "seed", &mut algo.seed);
+
     let data = io::read_rewards(ctx.path)?;
     let mut model: BanditModel = match &ctx.load_state {
         Some(p) => BanditModel::load_from_path(p)?,
@@ -740,8 +807,9 @@ fn run_bandit(policy_name: &str, sm: &ArgMatches) -> Result<()> {
     if let Some(&k) = sm.get_one::<usize>("select") {
         let arms = model.select_k(k)?;
         ctx.save(&model)?; // after select: the draw counter advanced
+
         for id in arms {
-            println!("{}", model.arm_name(id).expect("id resolves"));
+            println!("{}", model.arm_name(id).unwrap_or("<unresolved>"));
         }
         Ok(())
     } else {

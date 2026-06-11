@@ -1,6 +1,9 @@
 //! Cross-cutting state guarantees (PRD FR-4/FR-5):
 //! - every model type save → load → save is byte-identical;
 //! - warm starts beat cold starts on appended data (BT-MM acceptance).
+//!
+//! Per AGENTS.md rule 7, integration tests are not exempt from the
+//! unwrap/expect denies: every test propagates errors via `Result`.
 
 use propagon::algos::{Borda, BradleyTerryMM, Copeland, Lsr, PageRank, RankCentrality};
 use propagon::{GraphDataset, PairwiseDataset, Progress, RankModel, Ranker};
@@ -27,28 +30,32 @@ fn graph() -> GraphDataset {
     g
 }
 
-fn assert_byte_identical<M: RankModel>(m: &M) {
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn assert_byte_identical<M: RankModel>(m: &M) -> TestResult {
     let mut first = Vec::new();
-    m.save_jsonl(&mut first).unwrap();
-    let loaded = M::load_jsonl(first.as_slice()).unwrap();
+    m.save_jsonl(&mut first)?;
+    let loaded = M::load_jsonl(first.as_slice())?;
     let mut second = Vec::new();
-    loaded.save_jsonl(&mut second).unwrap();
+    loaded.save_jsonl(&mut second)?;
     assert_eq!(
-        String::from_utf8(first).unwrap(),
-        String::from_utf8(second).unwrap(),
+        String::from_utf8(first)?,
+        String::from_utf8(second)?,
         "{} round trip not byte-identical",
         m.algorithm()
     );
+    Ok(())
 }
 
 #[test]
-fn remaining_models_round_trip_byte_identical() {
+fn remaining_models_round_trip_byte_identical() -> TestResult {
     // Models without their own in-module round-trip tests.
-    assert_byte_identical(&Borda::default().fit(&pairwise()).unwrap());
-    assert_byte_identical(&Copeland::default().fit(&pairwise()).unwrap());
-    assert_byte_identical(&Lsr::default().fit(&pairwise()).unwrap());
-    assert_byte_identical(&RankCentrality::default().fit(&pairwise()).unwrap());
-    assert_byte_identical(&PageRank::default().fit(&graph()).unwrap());
+    assert_byte_identical(&Borda::default().fit(&pairwise())?)?;
+    assert_byte_identical(&Copeland::default().fit(&pairwise())?)?;
+    assert_byte_identical(&Lsr::default().fit(&pairwise())?)?;
+    assert_byte_identical(&RankCentrality::default().fit(&pairwise())?)?;
+    assert_byte_identical(&PageRank::default().fit(&graph())?)?;
+    Ok(())
 }
 
 /// Records the highest sweep index reported through `Progress`.
@@ -65,7 +72,7 @@ impl Progress for SweepCounter {
 /// strictly fewer sweeps than a cold start. MM converges linearly, so the
 /// saving is the head of the error curve (log-scale): meaningful, not 10×.
 #[test]
-fn warm_start_converges_much_faster() {
+fn warm_start_converges_much_faster() -> TestResult {
     // A larger random-ish tournament so convergence takes real work.
     let mut base = PairwiseDataset::new();
     let names: Vec<String> = (0..40).map(|i| format!("t{i}")).collect();
@@ -96,7 +103,7 @@ fn warm_start_converges_much_faster() {
         tolerance: 1e-6,
         ..Default::default()
     };
-    let cold_model = algo.fit(&base).unwrap();
+    let cold_model = algo.fit(&base)?;
 
     // Append a small increment (the weekly-update scenario): a handful of
     // new results on top of ~1500 existing rows.
@@ -117,18 +124,19 @@ fn warm_start_converges_much_faster() {
             progress: c,
             ..Default::default()
         };
-        algo.fit_opts(&extended, &opts).unwrap();
+        drop(algo.fit_opts(&extended, &opts));
     });
     let warm_sweeps = count_sweeps(&|c| {
         let opts = propagon::FitOptions {
             progress: c,
             ..Default::default()
         };
-        algo.fit_warm_opts(&extended, &cold_model, &opts).unwrap();
+        drop(algo.fit_warm_opts(&extended, &cold_model, &opts));
     });
 
     assert!(
         warm_sweeps < cold_sweeps && warm_sweeps * 4 <= cold_sweeps * 3,
         "warm start took {warm_sweeps} sweeps vs cold {cold_sweeps} (target ≤ 75% and strictly fewer)"
     );
+    Ok(())
 }

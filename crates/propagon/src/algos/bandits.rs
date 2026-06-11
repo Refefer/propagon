@@ -47,9 +47,27 @@ pub enum BanditPolicy {
     ThompsonGaussian { prior_mean: f64, prior_weight: f64 },
 }
 
+impl BanditPolicy {
+    /// Canonical per-policy parameter values (the single source the CLI and
+    /// `Default` both draw from).
+    pub const DEFAULT_EPSILON: f64 = 0.1;
+    /// Classic UCB1 exploration constant (Auer et al. 2002).
+    pub const DEFAULT_EXPLORATION: f64 = 2.0;
+    /// Uniform Beta prior.
+    pub const DEFAULT_PRIOR_ALPHA: f64 = 1.0;
+    /// Uniform Beta prior.
+    pub const DEFAULT_PRIOR_BETA: f64 = 1.0;
+    /// Zero-mean Gaussian prior.
+    pub const DEFAULT_PRIOR_MEAN: f64 = 0.0;
+    /// One pseudo-observation of the prior mean.
+    pub const DEFAULT_PRIOR_WEIGHT: f64 = 1.0;
+}
+
 impl Default for BanditPolicy {
     fn default() -> Self {
-        BanditPolicy::Ucb1 { exploration: 2.0 }
+        BanditPolicy::Ucb1 {
+            exploration: Self::DEFAULT_EXPLORATION,
+        }
     }
 }
 

@@ -60,7 +60,7 @@ pub struct Lsr {
 impl Default for Lsr {
     fn default() -> Self {
         Self {
-            steps: 10,
+            steps: Estimator::PowerMethod.default_steps(),
             estimator: Estimator::PowerMethod,
             seed: 2020,
         }
