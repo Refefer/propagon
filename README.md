@@ -27,7 +27,7 @@ Input files are plain text. Tournament rows are `winner loser [weight]`; graph r
 
 ```bash
 # Rank the 2018 MLB season three ways (data ships in the repo):
-cd example/tournament
+cd examples/tournament
 propagon tournament glicko2             baseball.2018   # ratings + uncertainty
 propagon tournament bradley-terry-model baseball.2018   # maximum-likelihood strengths
 propagon tournament elo                 baseball.2018   # classic online ratings
@@ -41,7 +41,7 @@ propagon graph page-rank links.txt
 propagon bandit thompson-beta --select 1 rewards.txt    # which arm to play next
 ```
 
-`./example/tournament/run.sh` runs every tournament algorithm against the bundled season. Cross-cutting flags everywhere: `--threads N`, `--format tsv|jsonl`, `--save-state`, `--load-state`.
+`./examples/tournament/run.sh` runs every tournament algorithm against the bundled season. Cross-cutting flags everywhere: `--threads N`, `--format tsv|jsonl`, `--save-state`, `--load-state`.
 
 ## Sixty-second tour (library)
 

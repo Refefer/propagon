@@ -25,7 +25,7 @@ fn repo_path(rel: &str) -> PathBuf {
 /// Loads the example edge file the way the CLI will: whitespace-separated
 /// `winner loser [weight]`, blank lines as period boundaries.
 fn baseball() -> Result<PairwiseDataset, Box<dyn std::error::Error>> {
-    let text = std::fs::read_to_string(repo_path("example/tournament/baseball.2018.edges"))?;
+    let text = std::fs::read_to_string(repo_path("examples/tournament/baseball.2018.edges"))?;
     let mut d = PairwiseDataset::new();
 
     for line in text.lines() {

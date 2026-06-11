@@ -26,7 +26,7 @@ propagon/
 │  └─ propagon-cli/            # bin "propagon": clap wiring, file parsing, emitters
 │     └─ tests/golden.rs + golden/   # captured v1 outputs + harness
 ├─ docs/                       # algorithms survey, PRD
-├─ example/tournament/         # bundled 2018 MLB data + run.sh demo
+├─ examples/tournament/         # bundled 2018 MLB data + run.sh demo
 └─ scripts/capture_golden.sh   # provenance of the golden files (v1 binary, run once)
 ```
 

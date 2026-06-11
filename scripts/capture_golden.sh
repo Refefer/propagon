@@ -15,7 +15,7 @@
 set -euo pipefail
 
 V1_BIN="${1:?usage: capture_golden.sh <v1-binary>}"
-EDGES="example/tournament/baseball.2018.edges"
+EDGES="examples/tournament/baseball.2018.edges"
 OUT="crates/propagon-cli/tests/golden"
 
 run() { # run <outfile> <args...>

@@ -27,7 +27,7 @@ fn repo(rel: &str) -> PathBuf {
         .join(rel)
 }
 
-const EDGES: &str = "example/tournament/baseball.2018.edges";
+const EDGES: &str = "examples/tournament/baseball.2018.edges";
 
 /// Runs `propagon <args...> <example-edges-path>` and returns stdout.
 fn run(args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
