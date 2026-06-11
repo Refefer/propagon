@@ -7,7 +7,10 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use propagon::{Error, GraphDataset, PairwiseDataset, RankingsDataset, Result, RewardsDataset};
+use propagon::{
+    AnnotatedPairsDataset, Error, GraphDataset, PairwiseDataset, RankingsDataset, Result,
+    RewardsDataset,
+};
 
 fn rows(path: &Path) -> Result<impl Iterator<Item = std::io::Result<String>>> {
     let f = File::open(path)
@@ -96,6 +99,37 @@ pub fn read_rankings(path: &Path) -> Result<RankingsDataset> {
 
         ds.push_ranking(line.split_whitespace())
             .map_err(|e| Error::parse(lineno + 1, format!("{e}: {line:?}")))?;
+    }
+    if ds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(ds)
+}
+
+/// Reads annotator-tagged votes: `annotator winner loser [weight]` rows.
+pub fn read_annotated(path: &Path) -> Result<AnnotatedPairsDataset> {
+    let mut ds = AnnotatedPairsDataset::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let mut it = line.split_whitespace();
+        let (Some(annotator), Some(winner), Some(loser)) = (it.next(), it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'annotator winner loser [weight]': {line:?}"),
+            ));
+        };
+        let x = match it.next() {
+            None => 1.0,
+            Some(t) => t
+                .parse::<f32>()
+                .map_err(|e| Error::parse(lineno + 1, format!("bad weight {t:?}: {e}")))?,
+        };
+        ds.push(annotator, winner, loser, x);
     }
     if ds.is_empty() {
         return Err(Error::EmptyDataset);

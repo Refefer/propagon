@@ -5,7 +5,8 @@
 use std::io::Write;
 
 use propagon::algos::{
-    BayesBtModel, BiRankModel, BtmMmModel, Glicko2Model, PlackettLuceModel, SectionKind,
+    BayesBtModel, BiRankModel, BtmMmModel, CrowdBtModel, Glicko2Model, PlackettLuceModel,
+    SectionKind,
 };
 use propagon::{RankModel, Result};
 
@@ -79,6 +80,24 @@ pub fn bayes_bt(out: &mut impl Write, model: &BayesBtModel) -> Result<()> {
     rows.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
     for (name, mean, lo, hi) in rows {
         writeln!(out, "{name}: {mean:.6} {lo:.6} {hi:.6}")?;
+    }
+    Ok(())
+}
+
+/// Crowd-BT: entity log-strengths, blank line, then annotator
+/// reliabilities, each sorted descending.
+pub fn crowd_bt(out: &mut impl Write, model: &CrowdBtModel) -> Result<()> {
+    let mut entities: Vec<_> = model.scores().collect();
+    entities.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+    for (name, s) in entities {
+        writeln!(out, "{name}: {s}")?;
+    }
+
+    writeln!(out)?;
+    let mut annotators: Vec<_> = model.annotators().collect();
+    annotators.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+    for (name, eta) in annotators {
+        writeln!(out, "{name}: {eta:.4}")?;
     }
     Ok(())
 }

@@ -430,3 +430,127 @@ mod tests {
         ));
     }
 }
+
+// ---------------------------------------------------------------- annotated
+
+#[derive(Serialize, Deserialize)]
+struct AnnotatedMeta {
+    annotators: usize,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AnnotatorVocabLine {
+    annotators: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AnnotatedChunk {
+    a: Vec<u32>,
+    w: Vec<u32>,
+    l: Vec<u32>,
+    x: Vec<f32>,
+}
+
+impl super::AnnotatedPairsDataset {
+    /// Serializes votes: entity vocab, then annotator vocab, then chunks.
+    pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
+        let meta = AnnotatedMeta {
+            annotators: self.n_annotators(),
+        };
+        write_header(
+            &mut w,
+            "annotated-pairs",
+            serde_json::to_value(meta)?,
+            self.n_entities(),
+        )?;
+        write_vocab(&mut w, self.entities())?;
+
+        let names: Vec<&str> = self.annotators().names().collect();
+        for chunk in names.chunks(CHUNK) {
+            let line = AnnotatorVocabLine {
+                annotators: chunk.iter().map(|s| s.to_string()).collect(),
+            };
+            serde_json::to_writer(&mut w, &line)?;
+            w.write_all(b"\n")?;
+        }
+
+        let rows: Vec<(u32, u32, u32, f32)> = self.rows().collect();
+        for chunk in rows.chunks(CHUNK) {
+            let line = AnnotatedChunk {
+                a: chunk.iter().map(|r| r.0).collect(),
+                w: chunk.iter().map(|r| r.1).collect(),
+                l: chunk.iter().map(|r| r.2).collect(),
+                x: chunk.iter().map(|r| r.3).collect(),
+            };
+            serde_json::to_writer(&mut w, &line)?;
+            w.write_all(b"\n")?;
+        }
+        Ok(())
+    }
+
+    /// Loads a dataset written by `save_jsonl`. The annotator vocab is a
+    /// second phase after the entity vocab, sized by the header meta.
+    pub fn load_jsonl<R: BufRead>(r: R) -> Result<Self> {
+        let mut reader = read_dataset_prefix(r, "annotated-pairs")?;
+        let meta: AnnotatedMeta = serde_json::from_value(reader.header.params.clone())
+            .map_err(|e| Error::State(format!("bad annotated meta: {e}")))?;
+
+        // Phase 2: annotator vocab (the prefix reader stashed the first
+        // non-entity-vocab line as pending).
+        let mut annotators = Interner::new();
+        while annotators.len() < meta.annotators {
+            let line = match reader.pending.take() {
+                Some(line) => line,
+                None => loop {
+                    match reader.lines.next() {
+                        Some(line) => {
+                            let line = line?;
+                            if !line.trim().is_empty() {
+                                break line;
+                            }
+                        }
+                        None => {
+                            return Err(Error::State(format!(
+                                "annotator vocab holds {} names but header declares {}",
+                                annotators.len(),
+                                meta.annotators
+                            )));
+                        }
+                    }
+                },
+            };
+
+            let v: AnnotatorVocabLine = serde_json::from_str(&line)
+                .map_err(|e| Error::State(format!("bad annotator vocab: {e}")))?;
+            for name in &v.annotators {
+                annotators.intern(name);
+            }
+        }
+
+        let n_entities = reader.interner.len() as u32;
+        let n_annotators = annotators.len() as u32;
+        let mut out = super::AnnotatedPairsDataset::new();
+
+        let (_, entities) = reader.rows(|chunk: AnnotatedChunk| {
+            if chunk.a.len() != chunk.w.len()
+                || chunk.a.len() != chunk.l.len()
+                || chunk.a.len() != chunk.x.len()
+            {
+                return Err(Error::State("annotated chunk column mismatch".into()));
+            }
+            for i in 0..chunk.a.len() {
+                if chunk.a[i] >= n_annotators
+                    || chunk.w[i] >= n_entities
+                    || chunk.l[i] >= n_entities
+                {
+                    return Err(Error::State("annotated chunk id out of range".into()));
+                }
+                out.push_ids(chunk.a[i], chunk.w[i], chunk.l[i], chunk.x[i]);
+            }
+            Ok(())
+        })?;
+
+        out.set_interners(entities, annotators);
+        Ok(out)
+    }
+}

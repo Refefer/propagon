@@ -25,9 +25,9 @@ use std::sync::Mutex;
 use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use propagon::algos::{
     Bandit, BanditModel, BanditPolicy, BayesianBradleyTerry, BiRank, Borda, BradleyTerryLR,
-    BradleyTerryMM, Colley, Confidence, Copeland, Elo, EsRum, Estimator, Glicko2, HodgeFlow,
-    HodgeRank, Keener, Kemeny, KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4, PageRank, PlackettLuce,
-    RankCentrality, RumDistribution, Sink, WinRate, extract_components,
+    BradleyTerryMM, Colley, Confidence, Copeland, CrowdBt, Elo, EsRum, Estimator, Glicko2,
+    HodgeFlow, HodgeRank, Keener, Kemeny, KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4, PageRank,
+    PlackettLuce, RankCentrality, RumDistribution, Sink, WinRate, extract_components,
 };
 use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
 
@@ -149,6 +149,7 @@ fn cli() -> Command {
         )
         .subcommand(tournament_cmd())
         .subcommand(rankings_cmd())
+        .subcommand(crowd_cmd())
         .subcommand(graph_cmd())
         .subcommand(bandit_cmd())
 }
@@ -392,6 +393,32 @@ fn rankings_cmd() -> Command {
         ))
 }
 
+fn crowd_cmd() -> Command {
+    Command::new("crowd")
+        .about("Rank from annotator-tagged votes: 'annotator winner loser [weight]' rows")
+        .subcommand_required(true)
+        .subcommand(with_path(
+            Command::new("bradley-terry")
+                .visible_alias("crowd-bt")
+                .about("Joint item ranking and annotator-reliability estimation")
+                .arg(opt::<f64>("lambda", "Virtual-node regularization weight"))
+                .arg(opt::<f64>(
+                    "eta-prior-alpha",
+                    "Beta prior alpha on reliability",
+                ))
+                .arg(opt::<f64>(
+                    "eta-prior-beta",
+                    "Beta prior beta on reliability",
+                ))
+                .arg(opt::<usize>("iterations", "Outer EM iteration cap"))
+                .arg(opt::<f64>(
+                    "tolerance",
+                    "Relative log-likelihood stopping rule",
+                ))
+                .arg(opt::<usize>("inner-sweeps", "MM sweeps per M-step")),
+        ))
+}
+
 fn graph_cmd() -> Command {
     Command::new("graph")
         .about("Rank nodes by graph structure: 'src dst [weight]' edges")
@@ -628,6 +655,7 @@ fn run() -> Result<()> {
     match group {
         "tournament" => run_tournament(leaf, sm),
         "rankings" => run_rankings(leaf, sm),
+        "crowd" => run_crowd(leaf, sm),
         "graph" => run_graph(leaf, sm),
         "bandit" => run_bandit(leaf, sm),
         other => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
@@ -901,6 +929,34 @@ fn run_rankings(algo: &str, sm: &ArgMatches) -> Result<()> {
         }
         other => Err(Error::InvalidInput(format!(
             "unknown rankings algorithm {other:?}"
+        ))),
+    }
+}
+
+fn run_crowd(algo: &str, sm: &ArgMatches) -> Result<()> {
+    let ctx = Ctx::from_matches(sm)?;
+    match algo {
+        "bradley-terry" => {
+            ctx.reject_load_state(algo)?;
+            let mut cb = CrowdBt::default();
+            set(sm, "lambda", &mut cb.lambda);
+            set(sm, "eta-prior-alpha", &mut cb.eta_prior_alpha);
+            set(sm, "eta-prior-beta", &mut cb.eta_prior_beta);
+            set(sm, "iterations", &mut cb.iterations);
+            set(sm, "tolerance", &mut cb.tolerance);
+            set(sm, "inner-sweeps", &mut cb.inner_sweeps);
+
+            let model = cb.fit_opts(&io::read_annotated(ctx.path)?, &ctx.opts())?;
+            ctx.save(&model)?;
+            let mut out = std::io::stdout().lock();
+
+            match ctx.format.as_str() {
+                "jsonl" => emit::jsonl(&mut out, &model),
+                _ => emit::crowd_bt(&mut out, &model),
+            }
+        }
+        other => Err(Error::InvalidInput(format!(
+            "unknown crowd algorithm {other:?}"
         ))),
     }
 }

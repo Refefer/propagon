@@ -6,12 +6,14 @@
 //! pre-interned `u32` paths exist for bulk ingestion. Datasets are immutable
 //! during fitting — one dataset feeds many algorithms unchanged.
 
+mod annotated;
 mod graph;
 mod io;
 mod pairwise;
 mod rankings;
 mod rewards;
 
+pub use annotated::AnnotatedPairsDataset;
 pub use graph::{Adjacency, GraphDataset, GraphView};
 pub use pairwise::{PairwiseDataset, Tally};
 pub use rankings::RankingsDataset;
