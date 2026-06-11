@@ -7,6 +7,7 @@
 //! during fitting — one dataset feeds many algorithms unchanged.
 
 mod graph;
+mod io;
 mod pairwise;
 mod rankings;
 mod rewards;

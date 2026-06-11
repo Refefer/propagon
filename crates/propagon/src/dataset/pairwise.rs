@@ -144,6 +144,11 @@ impl PairwiseDataset {
         starts.zip(ends).filter(|(s, e)| e > s).map(|(s, e)| s..e)
     }
 
+    /// Raw period boundaries for serialization.
+    pub(crate) fn period_starts_for_io(&self) -> Vec<usize> {
+        self.period_starts.clone()
+    }
+
     /// Rows of one period (as produced by [`PairwiseDataset::periods`]).
     pub fn period_rows(
         &self,

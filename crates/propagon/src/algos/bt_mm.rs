@@ -486,8 +486,8 @@ fn mm_fit(
             .map(|id| (policy[id] - new_policy[id]).abs())
             .sum::<f64>()
             / ids.len() as f64;
+        progress.update(iter as u64 + 1);
         if iter % 10 == 0 {
-            progress.update(iter as u64);
             progress.message(&format!("error {err:0.3e}"));
         }
         if err < tolerance {

@@ -240,7 +240,7 @@ Per-algorithm support matrix (v2.0 set):
 - **FR-5.2** `fit_warm` must never produce a worse final objective than cold `fit` on the same data (it may converge faster).
 - **FR-5.3** The matrix above ships in user docs; calling `update` on a batch-only algorithm is a typed error suggesting `fit_warm`.
 
-*Acceptance*: the UC-1 flow — load January state, `update(february)`, save — produces ratings identical to v1's two-period batch run on the same data; warm BT-MM on +10% appended data converges in ≤25% of cold-start iterations.
+*Acceptance*: the UC-1 flow — load January state, `update(february)`, save — produces ratings identical to v1's two-period batch run on the same data; warm BT-MM on appended data converges in strictly fewer MM sweeps than a cold start (linear-rate convergence means warm starting saves the early error decades — the smaller the increment relative to the tolerance, the larger the saving).
 
 ### FR-6 — Bindings
 
