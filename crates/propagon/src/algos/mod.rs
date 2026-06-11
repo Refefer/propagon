@@ -8,13 +8,19 @@
 
 mod bandits;
 mod borda;
+mod bt_lr;
+mod bt_mm;
 mod common;
 mod copeland;
 mod elo;
+mod glicko2;
 mod rate;
 
 pub use bandits::{Bandit, BanditModel, BanditPolicy};
 pub use borda::{Borda, BordaModel};
+pub use bt_lr::{BradleyTerryLR, BtmLrModel};
+pub use bt_mm::{BradleyTerryMM, BtmMmModel, Section, SectionKind};
 pub use copeland::{Copeland, CopelandModel};
 pub use elo::{Elo, EloModel};
+pub use glicko2::{Glicko2, Glicko2Model, PlayerState};
 pub use rate::{Confidence, WinRate, WinRateModel};
