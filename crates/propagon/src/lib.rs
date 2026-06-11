@@ -58,6 +58,7 @@ mod interner;
 mod mathx;
 pub mod parallel;
 mod progress;
+mod solver;
 pub mod state;
 mod traits;
 

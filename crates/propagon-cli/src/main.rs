@@ -24,9 +24,10 @@ use std::sync::Mutex;
 
 use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use propagon::algos::{
-    Bandit, BanditModel, BanditPolicy, BiRank, Borda, BradleyTerryLR, BradleyTerryMM, Confidence,
-    Copeland, Elo, EsRum, Estimator, Glicko2, Kemeny, KemenyAlgo, KemenyPasses, Lsr, PageRank,
-    RankCentrality, RumDistribution, Sink, WinRate, extract_components,
+    Bandit, BanditModel, BanditPolicy, BiRank, Borda, BradleyTerryLR, BradleyTerryMM, Colley,
+    Confidence, Copeland, Elo, EsRum, Estimator, Glicko2, HodgeFlow, HodgeRank, Keener, Kemeny,
+    KemenyAlgo, KemenyPasses, Lsr, Massey, PageRank, RankCentrality, RumDistribution, Sink,
+    WinRate, extract_components,
 };
 use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
 
@@ -289,6 +290,43 @@ fn tournament_cmd() -> Command {
         ))
         .subcommand(with_path(
             Command::new("copeland").about("Copeland pairwise-majority scores"),
+        ))
+        .subcommand(with_path(
+            Command::new("massey")
+                .about("Massey least-squares ratings (weight column = margin of victory)")
+                .arg(opt::<usize>("iterations", "Maximum solver iterations"))
+                .arg(opt::<f64>("tolerance", "Relative residual target")),
+        ))
+        .subcommand(with_path(
+            Command::new("colley")
+                .about("Colley bias-free ratings from wins and losses only")
+                .arg(opt::<usize>("iterations", "Maximum solver iterations"))
+                .arg(opt::<f64>("tolerance", "Relative residual target")),
+        ))
+        .subcommand(with_path(
+            Command::new("keener")
+                .about("Keener eigenvector ratings (rows are 'scorer opponent amount')")
+                .arg(flag("no-skew", "Skip Keener's blowout-damping skew"))
+                .arg(flag(
+                    "no-normalize-games",
+                    "Skip the per-game row normalization",
+                ))
+                .arg(opt::<usize>("iterations", "Power-iteration budget"))
+                .arg(opt::<f64>("tolerance", "Early-exit threshold")),
+        ))
+        .subcommand(with_path(
+            Command::new("hodge-rank")
+                .visible_alias("hodge")
+                .about("HodgeRank potentials plus a how-rankable-is-this diagnostic")
+                .arg(
+                    Arg::new("flow")
+                        .long("flow")
+                        .value_parser(["log-odds", "win-rate-delta", "mean-margin"])
+                        .default_value("log-odds")
+                        .help("Pairwise statistic to decompose"),
+                )
+                .arg(opt::<usize>("iterations", "Maximum solver iterations"))
+                .arg(opt::<f64>("tolerance", "Relative residual target")),
         ))
 }
 
@@ -673,6 +711,54 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
         "copeland" => {
             ctx.reject_load_state(algo)?;
             let model = Copeland::default().fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "massey" => {
+            ctx.reject_load_state(algo)?;
+            let mut ms = Massey::default();
+            set(sm, "iterations", &mut ms.iterations);
+            set(sm, "tolerance", &mut ms.tolerance);
+
+            let model = ms.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "colley" => {
+            ctx.reject_load_state(algo)?;
+            let mut cl = Colley::default();
+            set(sm, "iterations", &mut cl.iterations);
+            set(sm, "tolerance", &mut cl.tolerance);
+
+            let model = cl.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "keener" => {
+            ctx.reject_load_state(algo)?;
+            let mut kn = Keener::default();
+            set(sm, "iterations", &mut kn.iterations);
+            set(sm, "tolerance", &mut kn.tolerance);
+            kn.skew = !sm.get_flag("no-skew");
+            kn.normalize_games = !sm.get_flag("no-normalize-games");
+
+            let model = kn.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "hodge-rank" => {
+            ctx.reject_load_state(algo)?;
+            let mut hr = HodgeRank::default();
+            set(sm, "iterations", &mut hr.iterations);
+            set(sm, "tolerance", &mut hr.tolerance);
+
+            hr.flow = match choice(sm, "flow", "log-odds") {
+                "win-rate-delta" => HodgeFlow::WinRateDelta,
+                "mean-margin" => HodgeFlow::MeanMargin,
+                _ => HodgeFlow::LogOdds,
+            };
+
+            let model = hr.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            eprintln!(
+                "inconsistency (cyclic flow share): {:.4}",
+                model.inconsistency()
+            );
             ctx.emit(&model)
         }
         other => Err(Error::InvalidInput(format!(

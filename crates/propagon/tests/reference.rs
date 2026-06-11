@@ -375,3 +375,147 @@ fn thompson_beta_posterior_mean_is_analytic() -> TestResult {
 
     Ok(())
 }
+
+/// The running 5-team example of Langville & Meyer, *Who's #1? The Science
+/// of Rating and Ranking* (2012), ch. 2 (also used for Colley below): the
+/// 2005 ACC season — full scores Duke-Miami 7-52, Duke-UNC 21-24,
+/// Duke-UVA 7-38, Duke-VT 0-45, Miami-UNC 34-16, Miami-UVA 25-17,
+/// Miami-VT 27-7, UNC-UVA 7-5, UNC-VT 3-30, UVA-VT 14-52. Each entry below
+/// is (winner, loser, margin).
+const ACC_2005: [(&str, &str, f32); 10] = [
+    ("Miami", "Duke", 45.0),
+    ("UNC", "Duke", 3.0),
+    ("UVA", "Duke", 31.0),
+    ("VT", "Duke", 45.0),
+    ("Miami", "UNC", 18.0),
+    ("Miami", "UVA", 8.0),
+    ("Miami", "VT", 20.0),
+    ("UNC", "UVA", 2.0),
+    ("VT", "UNC", 27.0),
+    ("VT", "UVA", 38.0),
+];
+
+fn acc_dataset() -> PairwiseDataset {
+    let mut d = PairwiseDataset::new();
+    for (w, l, margin) in ACC_2005 {
+        d.push(w, l, margin);
+    }
+    d
+}
+
+/// Massey ratings published in *Who's #1?* ch. 2 (pp. 11-13): Duke -24.8,
+/// Miami 18.2, UNC -8.0, UVA -3.4, VT 18.0 (mean-zero).
+#[test]
+fn massey_matches_whos_number_one() -> TestResult {
+    use propagon::algos::Massey;
+
+    let model = Massey::default().fit(&acc_dataset())?;
+    let scores: std::collections::HashMap<&str, f64> = model.scores().collect();
+
+    for (team, expected) in [
+        ("Duke", -24.8),
+        ("Miami", 18.2),
+        ("UNC", -8.0),
+        ("UVA", -3.4),
+        ("VT", 18.0),
+    ] {
+        let got = scores.get(team).ok_or("team rated")?;
+        assert!(
+            (got - expected).abs() < 0.05,
+            "{team}: {got:.2} vs {expected}"
+        );
+    }
+
+    Ok(())
+}
+
+/// Colley ratings for the same season: with every pair playing once,
+/// C = 7I - J gives r_i = (b_i + 2.5)/7 analytically — published values
+/// 0.2143, 0.7857, 0.5, 0.3571, 0.6429 (comperank R package documents this
+/// dataset/method pairing; *Who's #1?* ch. 3 is the method source).
+#[test]
+fn colley_matches_whos_number_one() -> TestResult {
+    use propagon::algos::Colley;
+
+    // Colley reads weights as game counts, not margins — re-list each game
+    // with weight 1 (feeding the margin-weighted dataset would tell Colley
+    // that Miami beat Duke 45 times).
+    let mut d = PairwiseDataset::new();
+    for (w, l, _) in ACC_2005 {
+        d.push(w, l, 1.0);
+    }
+
+    let model = Colley::default().fit(&d)?;
+    let scores: std::collections::HashMap<&str, f64> = model.scores().collect();
+
+    for (team, expected) in [
+        ("Duke", 0.2143),
+        ("Miami", 0.7857),
+        ("UNC", 0.5),
+        ("UVA", 0.3571),
+        ("VT", 0.6429),
+    ] {
+        let got = scores.get(team).ok_or("team rated")?;
+        assert!(
+            (got - expected).abs() < 1e-3,
+            "{team}: {got:.4} vs {expected}"
+        );
+    }
+
+    Ok(())
+}
+
+/// Keener ratings for the same 2005 ACC season, against the published
+/// comperank output (`rate_keener(ncaa2005, sum(score1))` →
+/// 0.0671/0.351/0.158/0.161/0.263, and with `skew_fun = NULL` →
+/// 0.0898/0.295/0.165/0.189/0.261):
+/// <https://echasnovski.github.io/comperank/reference/keener.html>.
+/// Method source: Langville & Meyer, *Who's #1?* ch. 4 (Keener 1993).
+/// Input is the full score matrix — both directions of every game.
+#[test]
+fn keener_matches_comperank() -> TestResult {
+    use propagon::algos::Keener;
+
+    // (team, opponent, points scored): full 2005 ACC score matrix.
+    let scores_data: [(&str, &str, f32); 10] = [
+        ("Duke", "Miami", 7.0),
+        ("Duke", "UNC", 21.0),
+        ("Duke", "UVA", 7.0),
+        ("Duke", "VT", 0.0),
+        ("Miami", "UNC", 34.0),
+        ("Miami", "UVA", 25.0),
+        ("Miami", "VT", 27.0),
+        ("UNC", "UVA", 7.0),
+        ("UNC", "VT", 3.0),
+        ("UVA", "VT", 14.0),
+    ];
+    let reverse: [f32; 10] = [52.0, 24.0, 38.0, 45.0, 16.0, 17.0, 7.0, 5.0, 30.0, 52.0];
+
+    let mut d = PairwiseDataset::new();
+    for ((a, b, pts), rev) in scores_data.into_iter().zip(reverse) {
+        d.push(a, b, pts);
+        d.push(b, a, rev);
+    }
+
+    for (skew, expected) in [
+        (true, [0.0671, 0.3506, 0.1585, 0.1605, 0.2634]),
+        (false, [0.0898, 0.2948, 0.1649, 0.1891, 0.2613]),
+    ] {
+        let model = Keener {
+            skew,
+            ..Default::default()
+        }
+        .fit(&d)?;
+        let got: std::collections::HashMap<&str, f64> = model.scores().collect();
+
+        for (team, want) in ["Duke", "Miami", "UNC", "UVA", "VT"].iter().zip(expected) {
+            let s = got.get(team).ok_or("team rated")?;
+            assert!(
+                (s - want).abs() < 1e-3,
+                "skew={skew} {team}: {s:.4} vs {want}"
+            );
+        }
+    }
+
+    Ok(())
+}
