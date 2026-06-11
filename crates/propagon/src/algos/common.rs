@@ -18,7 +18,10 @@ pub(crate) fn score_lines(names: &Interner, scores: &[f64]) -> Vec<ScoreLine> {
     names
         .names()
         .zip(scores)
-        .map(|(id, &s)| ScoreLine { id: id.to_string(), s })
+        .map(|(id, &s)| ScoreLine {
+            id: id.to_string(),
+            s,
+        })
         .collect()
 }
 
@@ -49,7 +52,11 @@ macro_rules! impl_simple_score_model {
             fn load_jsonl<R: std::io::BufRead>(r: R) -> crate::Result<Self> {
                 let (params, lines) = crate::state::load_model(r, $tag)?;
                 let (names, scores) = crate::algos::common::from_score_lines(lines)?;
-                Ok(Self { params, names, scores })
+                Ok(Self {
+                    params,
+                    names,
+                    scores,
+                })
             }
         }
     };

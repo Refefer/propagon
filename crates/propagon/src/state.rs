@@ -39,12 +39,7 @@ pub struct Header {
 }
 
 /// Writes a complete model file: header plus one JSON line per entity.
-pub fn save_model<W, P, L>(
-    mut w: W,
-    algorithm: &str,
-    params: &P,
-    lines: &[L],
-) -> Result<()>
+pub fn save_model<W, P, L>(mut w: W, algorithm: &str, params: &P, lines: &[L]) -> Result<()>
 where
     W: Write,
     P: Serialize,
@@ -82,10 +77,16 @@ where
         .map_err(|e| Error::State(format!("malformed header: {e}")))?;
 
     if header.propagon > SCHEMA_VERSION {
-        return Err(Error::Version { found: header.propagon, supported: SCHEMA_VERSION });
+        return Err(Error::Version {
+            found: header.propagon,
+            supported: SCHEMA_VERSION,
+        });
     }
     if header.kind != "model" {
-        return Err(Error::State(format!("expected a model file, found kind {:?}", header.kind)));
+        return Err(Error::State(format!(
+            "expected a model file, found kind {:?}",
+            header.kind
+        )));
     }
     if header.algorithm != expected_algorithm {
         return Err(Error::AlgorithmMismatch {
@@ -135,8 +136,14 @@ mod tests {
     fn round_trip_is_byte_identical() {
         let params = P { tau: 0.5 };
         let lines = vec![
-            L { id: "a".into(), s: 1.25 },
-            L { id: "b".into(), s: -0.3333333333333333 },
+            L {
+                id: "a".into(),
+                s: 1.25,
+            },
+            L {
+                id: "b".into(),
+                s: -0.3333333333333333,
+            },
         ];
         let mut buf = Vec::new();
         save_model(&mut buf, "test", &params, &lines).unwrap();

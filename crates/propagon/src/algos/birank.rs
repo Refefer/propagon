@@ -30,7 +30,12 @@ pub struct BiRank {
 
 impl Default for BiRank {
     fn default() -> Self {
-        Self { iterations: 10, alpha: 1.0, beta: 1.0, seed: 2019 }
+        Self {
+            iterations: 10,
+            alpha: 1.0,
+            beta: 1.0,
+            seed: 2019,
+        }
     }
 }
 
@@ -78,10 +83,18 @@ impl RankModel for BiRankModel {
     fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
         let mut lines: Vec<SideLine> = Vec::new();
         for (id, s) in self.src_scores() {
-            lines.push(SideLine { id: id.to_string(), s, side: 'u' });
+            lines.push(SideLine {
+                id: id.to_string(),
+                s,
+                side: 'u',
+            });
         }
         for (id, s) in self.dst_scores() {
-            lines.push(SideLine { id: id.to_string(), s, side: 'p' });
+            lines.push(SideLine {
+                id: id.to_string(),
+                s,
+                side: 'p',
+            });
         }
         state::save_model(w, "birank", &self.params, &lines)
     }
@@ -107,7 +120,13 @@ impl RankModel for BiRankModel {
                 }
             }
         }
-        Ok(Self { params, src_names, dst_names, src_scores, dst_scores })
+        Ok(Self {
+            params,
+            src_names,
+            dst_names,
+            src_scores,
+            dst_scores,
+        })
     }
 }
 
@@ -181,16 +200,34 @@ impl Ranker for BiRank {
 
         progress.start("birank sweeps", Some(self.iterations as u64));
         for it in 0..self.iterations {
-            let p_err =
-                sweep(&mut dst_scores, &src_scores, &dst_edges, &d_dst, &d_src, self.alpha);
-            let u_err =
-                sweep(&mut src_scores, &dst_scores, &src_edges, &d_src, &d_dst, self.beta);
+            let p_err = sweep(
+                &mut dst_scores,
+                &src_scores,
+                &dst_edges,
+                &d_dst,
+                &d_src,
+                self.alpha,
+            );
+            let u_err = sweep(
+                &mut src_scores,
+                &dst_scores,
+                &src_edges,
+                &d_src,
+                &d_dst,
+                self.beta,
+            );
             progress.update(it as u64 + 1);
             progress.message(&format!("p err {p_err:0.3e}, u err {u_err:0.3e}"));
         }
         progress.finish();
 
-        Ok(BiRankModel { params: *self, src_names, dst_names, src_scores, dst_scores })
+        Ok(BiRankModel {
+            params: *self,
+            src_names,
+            dst_names,
+            src_scores,
+            dst_scores,
+        })
     }
 }
 
@@ -211,13 +248,11 @@ mod tests {
     #[test]
     fn popular_item_and_active_user_rank_first() {
         let m = BiRank::default().fit(&graph()).unwrap();
-        let dst: Vec<(String, f64)> =
-            m.dst_scores().map(|(n, s)| (n.to_string(), s)).collect();
+        let dst: Vec<(String, f64)> = m.dst_scores().map(|(n, s)| (n.to_string(), s)).collect();
         let best_item = dst.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
         assert_eq!(best_item.0, "A");
 
-        let src: Vec<(String, f64)> =
-            m.src_scores().map(|(n, s)| (n.to_string(), s)).collect();
+        let src: Vec<(String, f64)> = m.src_scores().map(|(n, s)| (n.to_string(), s)).collect();
         let best_user = src.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
         assert_eq!(best_user.0, "user1");
     }

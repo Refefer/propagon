@@ -24,7 +24,10 @@ fn parse_row(line: &str, lineno: usize) -> Result<Option<(&str, &str, f32)>> {
     let a = it.next();
     let b = it.next();
     let (Some(a), Some(b)) = (a, b) else {
-        return Err(Error::parse(lineno, format!("expected at least two fields: {line:?}")));
+        return Err(Error::parse(
+            lineno,
+            format!("expected at least two fields: {line:?}"),
+        ));
     };
     let w = match it.next() {
         None => 1.0,
@@ -53,7 +56,11 @@ pub fn read_pairwise(path: &Path, periods: bool, min_count: usize) -> Result<Pai
     if ds.is_empty() {
         return Err(Error::EmptyDataset);
     }
-    Ok(if min_count > 1 { ds.filter_min_count(min_count) } else { ds })
+    Ok(if min_count > 1 {
+        ds.filter_min_count(min_count)
+    } else {
+        ds
+    })
 }
 
 /// Reads a graph edge file. `swap`: store each row `a b` as the edge
@@ -87,7 +94,10 @@ pub fn read_rewards(path: &Path) -> Result<RewardsDataset> {
         }
         let mut it = line.split_whitespace();
         let (Some(arm), Some(reward)) = (it.next(), it.next()) else {
-            return Err(Error::parse(lineno + 1, format!("expected 'arm reward': {line:?}")));
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'arm reward': {line:?}"),
+            ));
         };
         let r: f32 = reward
             .parse()

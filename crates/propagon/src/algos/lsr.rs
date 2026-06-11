@@ -47,7 +47,11 @@ pub struct Lsr {
 
 impl Default for Lsr {
     fn default() -> Self {
-        Self { steps: 10, estimator: Estimator::PowerMethod, seed: 2020 }
+        Self {
+            steps: 10,
+            estimator: Estimator::PowerMethod,
+            seed: 2020,
+        }
     }
 }
 
@@ -94,7 +98,11 @@ fn build_chain(data: &PairwiseDataset) -> Chain {
             outgoing_cum[i].push((k, cum / d));
         }
     }
-    Chain { degree, outgoing_cum, incoming }
+    Chain {
+        degree,
+        outgoing_cum,
+        incoming,
+    }
 }
 
 /// L2 residual ‖π − πM‖ (v1 `compute_error`).
@@ -105,7 +113,11 @@ fn residual(pi: &[f64], chain: &Chain) -> f64 {
             est[j] += pi[i as usize] * p;
         }
     }
-    pi.iter().zip(&est).map(|(a, b)| (a - b) * (a - b)).sum::<f64>().sqrt()
+    pi.iter()
+        .zip(&est)
+        .map(|(a, b)| (a - b) * (a - b))
+        .sum::<f64>()
+        .sqrt()
 }
 
 /// Shared post-processing: discount degree, move to log scale, center.
@@ -208,7 +220,11 @@ impl Ranker for Lsr {
             Estimator::MonteCarlo => self.monte_carlo(&chain, opts.progress()),
         });
         log::debug!("lsr residual: {err:0.3e}");
-        Ok(LsrModel { params: *self, names: data.interner().clone(), scores })
+        Ok(LsrModel {
+            params: *self,
+            names: data.interner().clone(),
+            scores,
+        })
     }
 
     fn fit_warm_opts(
@@ -236,7 +252,11 @@ impl Ranker for Lsr {
             self.power_method(&chain, Some(pi), opts.progress())
         });
         log::debug!("lsr warm residual: {err:0.3e}");
-        Ok(LsrModel { params: *self, names: data.interner().clone(), scores })
+        Ok(LsrModel {
+            params: *self,
+            names: data.interner().clone(),
+            scores,
+        })
     }
 }
 
@@ -277,7 +297,10 @@ mod tests {
             d.push(w, l, x);
         }
         let chain = build_chain(&d);
-        let lsr = Lsr { steps: 50, ..Default::default() };
+        let lsr = Lsr {
+            steps: 50,
+            ..Default::default()
+        };
         let (err, _) = lsr.power_method(&chain, None, &crate::NoProgress);
         assert!(err < 1e-3, "residual {err}");
     }
@@ -295,8 +318,18 @@ mod tests {
         d.push("worst", "best", 1.0);
 
         for estimator in [Estimator::PowerMethod, Estimator::MonteCarlo] {
-            let steps = if estimator == Estimator::PowerMethod { 50 } else { 5000 };
-            let m = Lsr { estimator, steps, seed: 7 }.fit(&d).unwrap();
+            let steps = if estimator == Estimator::PowerMethod {
+                50
+            } else {
+                5000
+            };
+            let m = Lsr {
+                estimator,
+                steps,
+                seed: 7,
+            }
+            .fit(&d)
+            .unwrap();
             let order: Vec<&str> = m.sorted_scores().iter().map(|e| e.0).collect();
             assert_eq!(order, vec!["best", "mid", "worst"], "{estimator:?}");
         }

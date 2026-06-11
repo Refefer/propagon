@@ -120,7 +120,9 @@ impl RankModel for BtmMmModel {
     /// different scales (see [`SectionKind`]).
     fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
         self.sections.iter().flat_map(|sec| {
-            sec.entries.iter().map(|&(id, s)| (self.names.name(id).expect("id resolves"), s))
+            sec.entries
+                .iter()
+                .map(|&(id, s)| (self.names.name(id).expect("id resolves"), s))
         })
     }
 
@@ -156,16 +158,26 @@ impl RankModel for BtmMmModel {
         }
         // Guarantee the two trailing bookkeeping sections exist.
         ensure_trailing_sections(&mut sections);
-        Ok(Self { params, names, sections })
+        Ok(Self {
+            params,
+            names,
+            sections,
+        })
     }
 }
 
 fn ensure_trailing_sections(sections: &mut Vec<Section>) {
     if !sections.iter().any(|s| s.kind == SectionKind::Undefeated) {
-        sections.push(Section { kind: SectionKind::Undefeated, entries: Vec::new() });
+        sections.push(Section {
+            kind: SectionKind::Undefeated,
+            entries: Vec::new(),
+        });
     }
     if !sections.iter().any(|s| s.kind == SectionKind::Winless) {
-        sections.push(Section { kind: SectionKind::Winless, entries: Vec::new() });
+        sections.push(Section {
+            kind: SectionKind::Winless,
+            entries: Vec::new(),
+        });
     }
 }
 
@@ -204,7 +216,11 @@ impl Ranker for BradleyTerryMM {
     ) -> Result<BtmMmModel> {
         // Seed strengths by name from the previous model's ranked sections.
         let mut warm: HashMap<String, f64> = HashMap::new();
-        for sec in init.sections.iter().filter(|s| s.kind == SectionKind::Ranked) {
+        for sec in init
+            .sections
+            .iter()
+            .filter(|s| s.kind == SectionKind::Ranked)
+        {
             for &(id, s) in &sec.entries {
                 warm.insert(init.names.name(id).expect("id resolves").to_string(), s);
             }
@@ -236,7 +252,12 @@ impl BradleyTerryMM {
         let components = if self.random_subgraph_links > 0 && components.len() > 1 {
             let mut rng = Xoshiro256PlusPlus::seed_from_u64(self.seed);
             for _ in 0..self.random_subgraph_links {
-                link_components(&mut rows, &components, self.random_subgraph_weight, &mut rng);
+                link_components(
+                    &mut rows,
+                    &components,
+                    self.random_subgraph_weight,
+                    &mut rng,
+                );
             }
             vec![components.into_iter().flatten().collect::<Vec<u32>>()]
         } else {
@@ -255,29 +276,39 @@ impl BradleyTerryMM {
                 &component,
                 self.iterations,
                 self.tolerance,
-                |id| {
-                    warm.and_then(|w| {
-                        data.interner().name(id).and_then(|n| w.get(n)).copied()
-                    })
-                },
+                |id| warm.and_then(|w| data.interner().name(id).and_then(|n| w.get(n)).copied()),
                 progress,
             );
-            sections.push(Section { kind: SectionKind::Ranked, entries });
+            sections.push(Section {
+                kind: SectionKind::Ranked,
+                entries,
+            });
         }
 
         // v1's two trailing sections: undefeated (by win count, descending)
         // and winless (by loss count ascending, negated scores).
-        let mut u: Vec<(u32, f64)> =
-            undef.into_iter().map(|(id, c)| (id, c as f64)).collect();
+        let mut u: Vec<(u32, f64)> = undef.into_iter().map(|(id, c)| (id, c as f64)).collect();
         u.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-        sections.push(Section { kind: SectionKind::Undefeated, entries: u });
+        sections.push(Section {
+            kind: SectionKind::Undefeated,
+            entries: u,
+        });
 
-        let mut w: Vec<(u32, f64)> =
-            winless.into_iter().map(|(id, c)| (id, -(c as f64))).collect();
+        let mut w: Vec<(u32, f64)> = winless
+            .into_iter()
+            .map(|(id, c)| (id, -(c as f64)))
+            .collect();
         w.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-        sections.push(Section { kind: SectionKind::Winless, entries: w });
+        sections.push(Section {
+            kind: SectionKind::Winless,
+            entries: w,
+        });
 
-        Ok(BtmMmModel { params: *self, names: data.interner().clone(), sections })
+        Ok(BtmMmModel {
+            params: *self,
+            names: data.interner().clone(),
+            sections,
+        })
     }
 }
 
@@ -341,9 +372,12 @@ fn remove_one_sided(
     (rows, undef, winless)
 }
 
-fn tally(rows: &[Row]) -> (HashMap<u32, (usize, f64)>, HashMap<u32, (usize, f64)>) {
-    let mut wins: HashMap<u32, (usize, f64)> = HashMap::new();
-    let mut losses: HashMap<u32, (usize, f64)> = HashMap::new();
+/// `(count, weight sum)` per entity id.
+type TallyMap = HashMap<u32, (usize, f64)>;
+
+fn tally(rows: &[Row]) -> (TallyMap, TallyMap) {
+    let mut wins: TallyMap = HashMap::new();
+    let mut losses: TallyMap = HashMap::new();
     for &(w, l, s) in rows {
         let e = wins.entry(w).or_default();
         e.0 += 1;
@@ -524,7 +558,11 @@ mod tests {
         let m = BradleyTerryMM::default().fit(&chain()).unwrap();
         let ranked = &m.sections()[0];
         assert_eq!(ranked.kind, SectionKind::Ranked);
-        let names: Vec<&str> = ranked.entries.iter().map(|&(id, _)| m.name(id).unwrap()).collect();
+        let names: Vec<&str> = ranked
+            .entries
+            .iter()
+            .map(|&(id, _)| m.name(id).unwrap())
+            .collect();
         assert_eq!(names, vec!["a", "b", "c"]);
         let total: f64 = ranked.entries.iter().map(|e| e.1).sum();
         assert!((total - 1.0).abs() < 1e-9, "strengths normalize to 1");
@@ -548,17 +586,30 @@ mod tests {
         assert_eq!(undef, vec![("champ".to_string(), 2.0)]);
         // and champ is absent from the ranked section
         let ranked = &m.sections()[0];
-        assert!(ranked.entries.iter().all(|&(id, _)| m.name(id) != Some("champ")));
+        assert!(
+            ranked
+                .entries
+                .iter()
+                .all(|&(id, _)| m.name(id) != Some("champ"))
+        );
     }
 
     #[test]
     fn fake_games_keep_everyone_ranked() {
         let mut d = chain();
         d.push("champ", "a", 1.0);
-        let algo = BradleyTerryMM { create_fake_games: 0.1, ..Default::default() };
+        let algo = BradleyTerryMM {
+            create_fake_games: 0.1,
+            ..Default::default()
+        };
         let m = algo.fit(&d).unwrap();
         let ranked = &m.sections()[0];
-        assert!(ranked.entries.iter().any(|&(id, _)| m.name(id) == Some("champ")));
+        assert!(
+            ranked
+                .entries
+                .iter()
+                .any(|&(id, _)| m.name(id) == Some("champ"))
+        );
     }
 
     #[test]
@@ -569,14 +620,23 @@ mod tests {
         d.push("y", "x", 1.0);
 
         let m = BradleyTerryMM::default().fit(&d).unwrap();
-        let ranked_sections =
-            m.sections().iter().filter(|s| s.kind == SectionKind::Ranked).count();
+        let ranked_sections = m
+            .sections()
+            .iter()
+            .filter(|s| s.kind == SectionKind::Ranked)
+            .count();
         assert_eq!(ranked_sections, 2);
 
-        let algo = BradleyTerryMM { random_subgraph_links: 1, ..Default::default() };
+        let algo = BradleyTerryMM {
+            random_subgraph_links: 1,
+            ..Default::default()
+        };
         let m = algo.fit(&d).unwrap();
-        let ranked_sections =
-            m.sections().iter().filter(|s| s.kind == SectionKind::Ranked).count();
+        let ranked_sections = m
+            .sections()
+            .iter()
+            .filter(|s| s.kind == SectionKind::Ranked)
+            .count();
         assert_eq!(ranked_sections, 1, "linked components fit as one graph");
     }
 
@@ -586,7 +646,11 @@ mod tests {
         let d = chain();
         let cold = algo.fit(&d).unwrap();
         let warm = algo.fit_warm(&d, &cold).unwrap();
-        for (a, b) in cold.sections()[0].entries.iter().zip(&warm.sections()[0].entries) {
+        for (a, b) in cold.sections()[0]
+            .entries
+            .iter()
+            .zip(&warm.sections()[0].entries)
+        {
             assert_eq!(a.0, b.0, "same order");
             assert!((a.1 - b.1).abs() < 1e-6, "{} vs {}", a.1, b.1);
         }

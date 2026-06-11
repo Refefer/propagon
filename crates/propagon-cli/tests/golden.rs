@@ -16,7 +16,9 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn repo(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(rel)
 }
 
 const EDGES: &str = "example/tournament/baseball.2018.edges";
@@ -39,9 +41,13 @@ fn run(args: &[&str]) -> String {
 fn parse(text: &str) -> HashMap<String, Vec<f64>> {
     let mut out = HashMap::new();
     for line in text.lines() {
-        let Some((id, rest)) = line.split_once(": ") else { continue };
-        let cols: Vec<f64> =
-            rest.split_whitespace().map(|t| t.parse().expect("numeric column")).collect();
+        let Some((id, rest)) = line.split_once(": ") else {
+            continue;
+        };
+        let cols: Vec<f64> = rest
+            .split_whitespace()
+            .map(|t| t.parse().expect("numeric column"))
+            .collect();
         if !cols.is_empty() {
             out.insert(id.to_string(), cols);
         }
@@ -50,7 +56,10 @@ fn parse(text: &str) -> HashMap<String, Vec<f64>> {
 }
 
 fn golden(name: &str) -> HashMap<String, Vec<f64>> {
-    parse(&std::fs::read_to_string(repo(&format!("crates/propagon-cli/tests/golden/{name}"))).unwrap())
+    parse(
+        &std::fs::read_to_string(repo(&format!("crates/propagon-cli/tests/golden/{name}")))
+            .unwrap(),
+    )
 }
 
 fn assert_tier_t(args: &[&str], golden_file: &str, tol: f64) {
@@ -59,7 +68,11 @@ fn assert_tier_t(args: &[&str], golden_file: &str, tol: f64) {
     assert_eq!(got.len(), want.len(), "{golden_file}: entity count");
     for (id, want_cols) in &want {
         let got_cols = &got[id];
-        assert_eq!(got_cols.len(), want_cols.len(), "{golden_file} {id}: column count");
+        assert_eq!(
+            got_cols.len(),
+            want_cols.len(),
+            "{golden_file} {id}: column count"
+        );
         for (g, w) in got_cols.iter().zip(want_cols) {
             assert!((g - w).abs() < tol, "{golden_file} {id}: v2 {g} vs v1 {w}");
         }
@@ -73,7 +86,11 @@ fn spearman(a: &HashMap<String, Vec<f64>>, b: &HashMap<String, Vec<f64>>) -> f64
     let rank = |m: &HashMap<String, Vec<f64>>| -> HashMap<String, f64> {
         let mut sorted: Vec<&String> = keys.clone();
         sorted.sort_by(|x, y| m[*y][0].total_cmp(&m[*x][0]));
-        sorted.into_iter().enumerate().map(|(i, k)| (k.clone(), i as f64)).collect()
+        sorted
+            .into_iter()
+            .enumerate()
+            .map(|(i, k)| (k.clone(), i as f64))
+            .collect()
     };
     let ra = rank(a);
     let rb = rank(b);
@@ -84,7 +101,11 @@ fn spearman(a: &HashMap<String, Vec<f64>>, b: &HashMap<String, Vec<f64>>) -> f64
 
 #[test]
 fn rate_matches_golden() {
-    assert_tier_t(&["rate", "--confidence-interval", "0.5"], "rate-090.out", 1e-6);
+    assert_tier_t(
+        &["rate", "--confidence-interval", "0.5"],
+        "rate-090.out",
+        1e-6,
+    );
     assert_tier_t(&["rate"], "rate-095.out", 1e-5);
 }
 
@@ -134,7 +155,10 @@ fn birank_rank_correlates_with_golden() {
     let split = |text: &str| -> (HashMap<String, Vec<f64>>, HashMap<String, Vec<f64>>) {
         let lines: Vec<&str> = text.lines().filter(|l| l.contains(": ")).collect();
         let mid = lines.len() / 2;
-        (parse(&lines[..mid].join("\n")), parse(&lines[mid..].join("\n")))
+        (
+            parse(&lines[..mid].join("\n")),
+            parse(&lines[mid..].join("\n")),
+        )
     };
     let (got_u, got_p) = split(&run(&["birank"]));
     let golden_text =
@@ -167,17 +191,21 @@ fn glicko2_save_load_state_flow() {
             .args(extra)
             .output()
             .expect("binary runs");
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         String::from_utf8(out.stdout).unwrap()
     };
 
     let _ = run_at(&p1, &["glicko2", "--save-state", state.to_str().unwrap()]);
-    let resumed = run_at(
-        &p2,
-        &["glicko2", "--load-state", state.to_str().unwrap()],
-    );
+    let resumed = run_at(&p2, &["glicko2", "--load-state", state.to_str().unwrap()]);
     let continuous = run_at(&both, &["glicko2", "--groups-are-separate"]);
-    assert_eq!(resumed, continuous, "resume must equal continuous two-period run");
+    assert_eq!(
+        resumed, continuous,
+        "resume must equal continuous two-period run"
+    );
 
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -195,7 +223,11 @@ fn dehydrate_hydrate_round_trip() {
         .arg("dehydrate")
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let edges = dir.join("games.edges");
     let scores_out = Command::new(env!("CARGO_BIN_EXE_propagon"))
@@ -249,7 +281,11 @@ fn bandit_subcommand_runs() {
             .args(extra)
             .output()
             .unwrap();
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         String::from_utf8(out.stdout).unwrap()
     };
 
@@ -257,8 +293,12 @@ fn bandit_subcommand_runs() {
     assert_eq!(scores["A"][0], 1.0);
     assert_eq!(scores["B"][0], 0.5);
 
-    let pick1 = run_b(&["bandit", "--policy", "ts-beta", "--seed", "9", "--select", "1"]);
-    let pick2 = run_b(&["bandit", "--policy", "ts-beta", "--seed", "9", "--select", "1"]);
+    let pick1 = run_b(&[
+        "bandit", "--policy", "ts-beta", "--seed", "9", "--select", "1",
+    ]);
+    let pick2 = run_b(&[
+        "bandit", "--policy", "ts-beta", "--seed", "9", "--select", "1",
+    ]);
     assert_eq!(pick1, pick2, "seeded selection is deterministic");
     assert!(["A", "B", "C"].contains(&pick1.trim()));
 

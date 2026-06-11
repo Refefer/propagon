@@ -63,7 +63,10 @@ pub struct Bandit {
 
 impl Default for Bandit {
     fn default() -> Self {
-        Self { policy: BanditPolicy::default(), seed: 42 }
+        Self {
+            policy: BanditPolicy::default(),
+            seed: 42,
+        }
     }
 }
 
@@ -108,7 +111,11 @@ impl BanditModel {
     }
 
     fn mean(&self, i: usize) -> f64 {
-        if self.n[i] == 0 { 0.0 } else { self.sum[i] / self.n[i] as f64 }
+        if self.n[i] == 0 {
+            0.0
+        } else {
+            self.sum[i] / self.n[i] as f64
+        }
     }
 
     fn sample_var(&self, i: usize) -> f64 {
@@ -131,14 +138,18 @@ impl BanditModel {
                 let t = self.total_n().max(1) as f64;
                 self.mean(i) + (exploration * t.ln() / self.n[i] as f64).sqrt()
             }
-            BanditPolicy::ThompsonBeta { prior_alpha, prior_beta } => {
+            BanditPolicy::ThompsonBeta {
+                prior_alpha,
+                prior_beta,
+            } => {
                 let a = prior_alpha + self.sum[i];
                 let b = prior_beta + self.n[i] as f64 - self.sum[i];
                 a / (a + b)
             }
-            BanditPolicy::ThompsonGaussian { prior_mean, prior_weight } => {
-                (prior_weight * prior_mean + self.sum[i]) / (prior_weight + self.n[i] as f64)
-            }
+            BanditPolicy::ThompsonGaussian {
+                prior_mean,
+                prior_weight,
+            } => (prior_weight * prior_mean + self.sum[i]) / (prior_weight + self.n[i] as f64),
         }
     }
 
@@ -162,7 +173,9 @@ impl BanditModel {
             }
             BanditPolicy::EpsilonGreedy { epsilon } => {
                 if !(0.0..=1.0).contains(&epsilon) {
-                    return Err(Error::InvalidInput(format!("epsilon {epsilon} not in [0,1]")));
+                    return Err(Error::InvalidInput(format!(
+                        "epsilon {epsilon} not in [0,1]"
+                    )));
                 }
                 // With prob ε, this round is exploratory: random arm ordering.
                 let explore: f64 = rand::Rng::random(&mut rng);
@@ -172,19 +185,24 @@ impl BanditModel {
                     (0..k).map(|i| self.estimate(i)).collect()
                 }
             }
-            BanditPolicy::ThompsonBeta { prior_alpha, prior_beta } => {
+            BanditPolicy::ThompsonBeta {
+                prior_alpha,
+                prior_beta,
+            } => {
                 let mut v = Vec::with_capacity(k);
                 for i in 0..k {
                     let a = prior_alpha + self.sum[i];
                     let b = prior_beta + self.n[i] as f64 - self.sum[i];
-                    let dist = Beta::new(a, b).map_err(|e| {
-                        Error::Numeric(format!("beta posterior for arm {i}: {e}"))
-                    })?;
+                    let dist = Beta::new(a, b)
+                        .map_err(|e| Error::Numeric(format!("beta posterior for arm {i}: {e}")))?;
                     v.push(dist.sample(&mut rng));
                 }
                 v
             }
-            BanditPolicy::ThompsonGaussian { prior_mean, prior_weight } => {
+            BanditPolicy::ThompsonGaussian {
+                prior_mean,
+                prior_weight,
+            } => {
                 let mut v = Vec::with_capacity(k);
                 for i in 0..k {
                     let w = prior_weight + self.n[i] as f64;
@@ -268,7 +286,10 @@ impl RankModel for BanditModel {
     }
 
     fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
-        self.names.names().enumerate().map(|(i, n)| (n, self.estimate(i)))
+        self.names
+            .names()
+            .enumerate()
+            .map(|(i, n)| (n, self.estimate(i)))
     }
 
     fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
@@ -295,7 +316,10 @@ impl RankModel for BanditModel {
         let (params, lines): (PersistedParams, Vec<ArmLine>) = state::load_model(r, "bandit")?;
         let names = Interner::from_names(lines.iter().map(|l| l.id.as_str()))?;
         Ok(Self {
-            params: Bandit { policy: params.policy, seed: params.seed },
+            params: Bandit {
+                policy: params.policy,
+                seed: params.seed,
+            },
             names,
             n: lines.iter().map(|l| l.n).collect(),
             sum: lines.iter().map(|l| l.sum).collect(),
@@ -392,7 +416,10 @@ mod tests {
     #[test]
     fn thompson_beta_is_seed_deterministic_and_resumable() {
         let rows = &[("A", 1.0), ("A", 1.0), ("B", 0.0), ("B", 1.0)];
-        let policy = BanditPolicy::ThompsonBeta { prior_alpha: 1.0, prior_beta: 1.0 };
+        let policy = BanditPolicy::ThompsonBeta {
+            prior_alpha: 1.0,
+            prior_beta: 1.0,
+        };
 
         let mut m1 = fit(policy, rows);
         let mut m2 = fit(policy, rows);
@@ -415,7 +442,10 @@ mod tests {
     #[test]
     fn thompson_beta_rejects_out_of_range_rewards() {
         let b = Bandit {
-            policy: BanditPolicy::ThompsonBeta { prior_alpha: 1.0, prior_beta: 1.0 },
+            policy: BanditPolicy::ThompsonBeta {
+                prior_alpha: 1.0,
+                prior_beta: 1.0,
+            },
             seed: 1,
         };
         let mut m = b.init();
@@ -424,7 +454,13 @@ mod tests {
 
     #[test]
     fn merge_equals_concatenated_logs() {
-        let b = Bandit { policy: BanditPolicy::ThompsonGaussian { prior_mean: 0.0, prior_weight: 1.0 }, seed: 3 };
+        let b = Bandit {
+            policy: BanditPolicy::ThompsonGaussian {
+                prior_mean: 0.0,
+                prior_weight: 1.0,
+            },
+            seed: 3,
+        };
         let log1 = &[("A", 1.0), ("B", 3.0)];
         let log2 = &[("B", 5.0), ("C", 2.0), ("A", 0.0)];
 
@@ -443,7 +479,10 @@ mod tests {
         split_a.save_jsonl(&mut buf1).unwrap();
         let mut buf2 = Vec::new();
         joint.save_jsonl(&mut buf2).unwrap();
-        assert_eq!(buf1, buf2, "merged state file == concatenated-log state file");
+        assert_eq!(
+            buf1, buf2,
+            "merged state file == concatenated-log state file"
+        );
     }
 
     #[test]

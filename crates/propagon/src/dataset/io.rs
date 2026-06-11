@@ -50,7 +50,9 @@ fn write_header<W: Write>(
 fn write_vocab<W: Write>(w: &mut W, interner: &Interner) -> Result<()> {
     let names: Vec<&str> = interner.names().collect();
     for chunk in names.chunks(CHUNK) {
-        let line = VocabLine { vocab: chunk.iter().map(|s| s.to_string()).collect() };
+        let line = VocabLine {
+            vocab: chunk.iter().map(|s| s.to_string()).collect(),
+        };
         serde_json::to_writer(&mut *w, &line)?;
         w.write_all(b"\n")?;
     }
@@ -67,15 +69,22 @@ struct DatasetReader<R: BufRead> {
 
 fn read_dataset_prefix<R: BufRead>(r: R, schema: &str) -> Result<DatasetReader<R>> {
     let mut lines = r.lines();
-    let header_line =
-        lines.next().ok_or_else(|| Error::State("empty dataset file".into()))??;
+    let header_line = lines
+        .next()
+        .ok_or_else(|| Error::State("empty dataset file".into()))??;
     let header: Header = serde_json::from_str(&header_line)
         .map_err(|e| Error::State(format!("malformed header: {e}")))?;
     if header.propagon > SCHEMA_VERSION {
-        return Err(Error::Version { found: header.propagon, supported: SCHEMA_VERSION });
+        return Err(Error::Version {
+            found: header.propagon,
+            supported: SCHEMA_VERSION,
+        });
     }
     if header.kind != "dataset" {
-        return Err(Error::State(format!("expected a dataset file, found kind {:?}", header.kind)));
+        return Err(Error::State(format!(
+            "expected a dataset file, found kind {:?}",
+            header.kind
+        )));
     }
     if header.algorithm != schema {
         return Err(Error::AlgorithmMismatch {
@@ -110,7 +119,12 @@ fn read_dataset_prefix<R: BufRead>(r: R, schema: &str) -> Result<DatasetReader<R
             header.entities
         )));
     }
-    Ok(DatasetReader { lines, header, interner, pending })
+    Ok(DatasetReader {
+        lines,
+        header,
+        interner,
+        pending,
+    })
 }
 
 impl<R: BufRead> DatasetReader<R> {
@@ -154,8 +168,15 @@ struct PairwiseChunk {
 impl PairwiseDataset {
     /// Serializes the dataset (vocab + columnar row chunks + period marks).
     pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
-        let meta = PairwiseMeta { periods: self.period_starts_for_io() };
-        write_header(&mut w, "pairwise", serde_json::to_value(meta)?, self.n_entities())?;
+        let meta = PairwiseMeta {
+            periods: self.period_starts_for_io(),
+        };
+        write_header(
+            &mut w,
+            "pairwise",
+            serde_json::to_value(meta)?,
+            self.n_entities(),
+        )?;
         write_vocab(&mut w, self.interner())?;
         let rows: Vec<(u32, u32, f32)> = self.rows().collect();
         for chunk in rows.chunks(CHUNK) {
@@ -300,7 +321,12 @@ struct RankingsChunk {
 
 impl RankingsDataset {
     pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
-        write_header(&mut w, "rankings", serde_json::Value::Null, self.n_entities())?;
+        write_header(
+            &mut w,
+            "rankings",
+            serde_json::Value::Null,
+            self.n_entities(),
+        )?;
         write_vocab(&mut w, self.interner())?;
         let all: Vec<Vec<u32>> = self.rankings().map(|r| r.to_vec()).collect();
         for chunk in all.chunks(1024) {

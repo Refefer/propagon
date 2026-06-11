@@ -26,7 +26,11 @@ pub struct Elo {
 
 impl Default for Elo {
     fn default() -> Self {
-        Self { k: 32.0, initial_rating: 1500.0, scale: 400.0 }
+        Self {
+            k: 32.0,
+            initial_rating: 1500.0,
+            scale: 400.0,
+        }
     }
 }
 
@@ -55,7 +59,11 @@ impl OnlineRanker for Elo {
     type Model = EloModel;
 
     fn init(&self) -> EloModel {
-        EloModel { params: *self, names: Interner::new(), scores: Vec::new() }
+        EloModel {
+            params: *self,
+            names: Interner::new(),
+            scores: Vec::new(),
+        }
     }
 
     fn update_opts(

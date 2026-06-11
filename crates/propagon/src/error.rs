@@ -45,6 +45,9 @@ pub enum Error {
 impl Error {
     /// Helper for parse failures with positional context.
     pub fn parse(line: usize, msg: impl Into<String>) -> Self {
-        Error::Parse { line, msg: msg.into() }
+        Error::Parse {
+            line,
+            msg: msg.into(),
+        }
     }
 }

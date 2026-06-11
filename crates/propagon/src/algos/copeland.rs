@@ -52,7 +52,11 @@ impl Ranker for Copeland {
                 scores[b as usize] += 0.5;
             }
         }
-        Ok(CopelandModel { params: *self, names: data.interner().clone(), scores })
+        Ok(CopelandModel {
+            params: *self,
+            names: data.interner().clone(),
+            scores,
+        })
     }
 }
 

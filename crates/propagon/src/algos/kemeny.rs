@@ -40,7 +40,12 @@ pub struct Kemeny {
 
 impl Default for Kemeny {
     fn default() -> Self {
-        Self { passes: 0, min_obs: 1, algo: KemenyAlgo::Insertion, seed: 2020 }
+        Self {
+            passes: 0,
+            min_obs: 1,
+            algo: KemenyAlgo::Insertion,
+            seed: 2020,
+        }
     }
 }
 
@@ -62,7 +67,9 @@ pub struct KemenyModel {
 impl KemenyModel {
     /// The consensus ranking, best first.
     pub fn order(&self) -> impl Iterator<Item = &str> {
-        self.order.iter().map(|&id| self.names.name(id).expect("id resolves"))
+        self.order
+            .iter()
+            .map(|&id| self.names.name(id).expect("id resolves"))
     }
 }
 
@@ -96,10 +103,14 @@ impl RankModel for KemenyModel {
 
     fn load_jsonl<R: std::io::BufRead>(r: R) -> Result<Self> {
         let (params, mut lines): (Kemeny, Vec<RankLine>) = state::load_model(r, "kemeny")?;
-        lines.sort_by(|a, b| b.rank.cmp(&a.rank));
+        lines.sort_by_key(|l| std::cmp::Reverse(l.rank));
         let mut names = Interner::new();
         let order = lines.iter().map(|l| names.intern(&l.id)).collect();
-        Ok(Self { params, names, order })
+        Ok(Self {
+            params,
+            names,
+            order,
+        })
     }
 }
 
@@ -138,11 +149,7 @@ impl Kemeny {
     }
 
     /// v1 `insertion_kem`: repeated best-position insertion passes.
-    fn insertion(
-        &self,
-        graph: &PrefGraph,
-        progress: &dyn crate::Progress,
-    ) -> Vec<usize> {
+    fn insertion(&self, graph: &PrefGraph, progress: &dyn crate::Progress) -> Vec<usize> {
         let lookup: Vec<HashMap<usize, (usize, usize)>> = graph
             .iter()
             .map(|comps| comps.iter().map(|&(o, wn)| (o, wn)).collect())
@@ -169,8 +176,7 @@ impl Kemeny {
                 .iter()
                 .enumerate()
                 .map(|(idx, comps)| {
-                    let majorities =
-                        comps.iter().filter(|(_, (w, n))| *w * 2 > *n).count();
+                    let majorities = comps.iter().filter(|(_, (w, n))| *w * 2 > *n).count();
                     (idx, majorities)
                 })
                 .collect();
@@ -266,10 +272,18 @@ impl Fitness for KemenyFit<'_> {
                             0.0
                         } else if w_score > l_score {
                             wins as f32
-                                - if wins * 2 < n { (w_score - l_score).abs() } else { 0.0 }
+                                - if wins * 2 < n {
+                                    (w_score - l_score).abs()
+                                } else {
+                                    0.0
+                                }
                         } else {
                             (n - wins) as f32
-                                - if wins * 2 > n { (w_score - l_score).abs() } else { 0.0 }
+                                - if wins * 2 > n {
+                                    (w_score - l_score).abs()
+                                } else {
+                                    0.0
+                                }
                         }
                     })
                     .sum::<f32>()
@@ -297,13 +311,15 @@ impl Ranker for Kemeny {
         // min_obs filter (v1: total games per entity).
         let order: Vec<u32> = order_idx
             .into_iter()
-            .filter(|&idx| {
-                graph[idx].iter().map(|(_, (_, n))| n).sum::<usize>() >= self.min_obs
-            })
+            .filter(|&idx| graph[idx].iter().map(|(_, (_, n))| n).sum::<usize>() >= self.min_obs)
             .map(|idx| idx as u32)
             .collect();
 
-        Ok(KemenyModel { params: *self, names: data.interner().clone(), order })
+        Ok(KemenyModel {
+            params: *self,
+            names: data.interner().clone(),
+            order,
+        })
     }
 }
 
@@ -318,7 +334,12 @@ mod tests {
         d.push("1", "0", 1.0);
         d.push("2", "1", 1.0);
         d.push("3", "2", 1.0);
-        let m = Kemeny { passes: 1, ..Default::default() }.fit(&d).unwrap();
+        let m = Kemeny {
+            passes: 1,
+            ..Default::default()
+        }
+        .fit(&d)
+        .unwrap();
         let order: Vec<&str> = m.order().collect();
         assert_eq!(order, vec!["3", "2", "1", "0"]);
     }
@@ -331,7 +352,12 @@ mod tests {
         d.push("0", "1", 2.0);
         d.push("2", "1", 1.0);
         d.push("3", "2", 1.0);
-        let m = Kemeny { passes: 10, ..Default::default() }.fit(&d).unwrap();
+        let m = Kemeny {
+            passes: 10,
+            ..Default::default()
+        }
+        .fit(&d)
+        .unwrap();
         let order: Vec<&str> = m.order().collect();
         assert_eq!(order, vec!["0", "3", "2", "1"]);
     }
@@ -344,9 +370,13 @@ mod tests {
             d.push("mid", "low", 1.0);
             d.push("best", "low", 1.0);
         }
-        let m = Kemeny { algo: KemenyAlgo::DiffEvo, passes: 20_000, ..Default::default() }
-            .fit(&d)
-            .unwrap();
+        let m = Kemeny {
+            algo: KemenyAlgo::DiffEvo,
+            passes: 20_000,
+            ..Default::default()
+        }
+        .fit(&d)
+        .unwrap();
         let order: Vec<&str> = m.order().collect();
         assert_eq!(order, vec!["best", "mid", "low"]);
     }
@@ -360,7 +390,10 @@ mod tests {
         let mut buf = Vec::new();
         m.save_jsonl(&mut buf).unwrap();
         let m2 = KemenyModel::load_jsonl(buf.as_slice()).unwrap();
-        assert_eq!(m.order().collect::<Vec<_>>(), m2.order().collect::<Vec<_>>());
+        assert_eq!(
+            m.order().collect::<Vec<_>>(),
+            m2.order().collect::<Vec<_>>()
+        );
         let mut buf2 = Vec::new();
         m2.save_jsonl(&mut buf2).unwrap();
         assert_eq!(buf, buf2);

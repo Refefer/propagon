@@ -10,7 +10,9 @@ use propagon::algos::{BradleyTerryMM, Confidence, Glicko2, Kemeny, Lsr, SectionK
 use propagon::{OnlineRanker, PairwiseDataset, RankModel, Ranker};
 
 fn repo_path(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(rel)
 }
 
 /// Loads the example edge file the way the CLI will: whitespace-separated
@@ -42,7 +44,9 @@ fn golden(name: &str) -> HashMap<String, Vec<f64>> {
     .expect("golden file present");
     let mut out = HashMap::new();
     for line in text.lines() {
-        let Some((id, rest)) = line.split_once(": ") else { continue };
+        let Some((id, rest)) = line.split_once(": ") else {
+            continue;
+        };
         let cols: Vec<f64> = rest
             .split_whitespace()
             .map(|t| t.parse().expect("numeric golden column"))
@@ -83,11 +87,28 @@ fn glicko2_matches_v1_golden() {
     for (name, p) in model.players() {
         let cols = &want[name]; // mu, rd, lower, upper (4dp in golden)
         let mu = model.mu(p);
-        assert!((mu - cols[0]).abs() < 2e-3, "{name} mu: {mu} vs {}", cols[0]);
-        assert!((p.rd - cols[1]).abs() < 2e-3, "{name} rd: {} vs {}", p.rd, cols[1]);
+        assert!(
+            (mu - cols[0]).abs() < 2e-3,
+            "{name} mu: {mu} vs {}",
+            cols[0]
+        );
+        assert!(
+            (p.rd - cols[1]).abs() < 2e-3,
+            "{name} rd: {} vs {}",
+            p.rd,
+            cols[1]
+        );
         let (lo, hi) = p.bounds();
-        assert!((lo - cols[2]).abs() < 5e-3, "{name} lower: {lo} vs {}", cols[2]);
-        assert!((hi - cols[3]).abs() < 5e-3, "{name} upper: {hi} vs {}", cols[3]);
+        assert!(
+            (lo - cols[2]).abs() < 5e-3,
+            "{name} lower: {lo} vs {}",
+            cols[2]
+        );
+        assert!(
+            (hi - cols[3]).abs() < 5e-3,
+            "{name} upper: {hi} vs {}",
+            cols[3]
+        );
         checked += 1;
     }
     assert_eq!(checked, want.len());
@@ -99,9 +120,10 @@ fn glicko2_matches_v1_golden() {
 /// values; `rate-095.out` holds genuine Wilson P95 values.
 #[test]
 fn rate_matches_v1_golden() {
-    for (confidence, file, tol) in
-        [(Confidence::P50, "rate-090.out", 1e-6), (Confidence::P95, "rate-095.out", 1e-5)]
-    {
+    for (confidence, file, tol) in [
+        (Confidence::P50, "rate-090.out", 1e-6),
+        (Confidence::P95, "rate-095.out", 1e-5),
+    ] {
         let algo = WinRate { confidence };
         let mut model = algo.init();
         algo.update(&mut model, &baseball()).unwrap();
@@ -122,7 +144,12 @@ fn rate_matches_v1_golden() {
 
 #[test]
 fn kemeny_insertion_matches_v1_golden() {
-    let model = Kemeny { passes: 5, ..Default::default() }.fit(&baseball()).unwrap();
+    let model = Kemeny {
+        passes: 5,
+        ..Default::default()
+    }
+    .fit(&baseball())
+    .unwrap();
     let want = golden("kemeny.out");
     let mut checked = 0;
     for (name, rank) in model.scores() {
@@ -134,7 +161,12 @@ fn kemeny_insertion_matches_v1_golden() {
 
 #[test]
 fn lsr_power_method_matches_v1_golden() {
-    let model = Lsr { steps: 20, ..Default::default() }.fit(&baseball()).unwrap();
+    let model = Lsr {
+        steps: 20,
+        ..Default::default()
+    }
+    .fit(&baseball())
+    .unwrap();
     let want = golden("lsr.out");
     let mut checked = 0;
     for (name, score) in model.scores() {
@@ -150,7 +182,9 @@ fn lsr_power_method_matches_v1_golden() {
 
 #[test]
 fn btm_lr_matches_v1_golden() {
-    let model = propagon::algos::BradleyTerryLR::default().fit(&baseball()).unwrap();
+    let model = propagon::algos::BradleyTerryLR::default()
+        .fit(&baseball())
+        .unwrap();
     let want = golden("btm-lr.out");
 
     // v1 accumulated in f32 with nondeterministic-order parallel reductions;

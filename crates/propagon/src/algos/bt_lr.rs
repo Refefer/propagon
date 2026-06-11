@@ -29,7 +29,12 @@ pub struct BradleyTerryLR {
 
 impl Default for BradleyTerryLR {
     fn default() -> Self {
-        Self { passes: 10, alpha: 1.0, decay: 1e-5, thrifty: false }
+        Self {
+            passes: 10,
+            alpha: 1.0,
+            decay: 1e-5,
+            thrifty: false,
+        }
     }
 }
 
@@ -58,7 +63,11 @@ impl Ranker for BradleyTerryLR {
         }
         let mut scores = vec![0.0f64; data.n_entities()];
         self.run(data, &mut scores, opts);
-        Ok(BtmLrModel { params: *self, names: data.interner().clone(), scores })
+        Ok(BtmLrModel {
+            params: *self,
+            names: data.interner().clone(),
+            scores,
+        })
     }
 
     fn fit_warm_opts(
@@ -77,7 +86,11 @@ impl Ranker for BradleyTerryLR {
             }
         }
         self.run(data, &mut scores, opts);
-        Ok(BtmLrModel { params: *self, names: data.interner().clone(), scores })
+        Ok(BtmLrModel {
+            params: *self,
+            names: data.interner().clone(),
+            scores,
+        })
     }
 }
 
@@ -159,7 +172,12 @@ mod tests {
         let order: Vec<&str> = batch.sorted_scores().iter().map(|e| e.0).collect();
         assert_eq!(order, vec!["a", "b", "c"]);
 
-        let thrifty = BradleyTerryLR { thrifty: true, ..Default::default() }.fit(&data()).unwrap();
+        let thrifty = BradleyTerryLR {
+            thrifty: true,
+            ..Default::default()
+        }
+        .fit(&data())
+        .unwrap();
         let order: Vec<&str> = thrifty.sorted_scores().iter().map(|e| e.0).collect();
         assert_eq!(order, vec!["a", "b", "c"]);
     }
@@ -171,7 +189,10 @@ mod tests {
 
         // Warm-started single pass should already be ordered correctly,
         // because it begins from the converged scores.
-        let one_pass = BradleyTerryLR { passes: 1, ..Default::default() };
+        let one_pass = BradleyTerryLR {
+            passes: 1,
+            ..Default::default()
+        };
         let warm = one_pass.fit_warm(&data(), &first).unwrap();
         let order: Vec<&str> = warm.sorted_scores().iter().map(|e| e.0).collect();
         assert_eq!(order, vec!["a", "b", "c"]);
@@ -179,7 +200,10 @@ mod tests {
         let warm_top = warm.sorted_scores()[0].1;
         let cold = one_pass.fit(&data()).unwrap();
         let cold_top = cold.sorted_scores()[0].1;
-        assert!(warm_top > cold_top, "warm start retains accumulated strength");
+        assert!(
+            warm_top > cold_top,
+            "warm start retains accumulated strength"
+        );
     }
 
     #[test]

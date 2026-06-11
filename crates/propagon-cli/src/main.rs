@@ -19,9 +19,7 @@ use propagon::algos::{
     Copeland, Elo, EsRum, Estimator, Glicko2, Kemeny, KemenyAlgo, Lsr, PageRank, RankCentrality,
     RumDistribution, Sink, WinRate, extract_components,
 };
-use propagon::{
-    Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result,
-};
+use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
 
 fn main() {
     if let Err(e) = run() {
@@ -45,10 +43,8 @@ impl Progress for CliProgress {
             None => indicatif::ProgressBar::new_spinner(),
         };
         pb.set_style(
-            indicatif::ProgressStyle::with_template(
-                "[{msg}] {wide_bar} {pos}/{len} {eta_precise}",
-            )
-            .expect("static template"),
+            indicatif::ProgressStyle::with_template("[{msg}] {wide_bar} {pos}/{len} {eta_precise}")
+                .expect("static template"),
         );
         pb.set_message(phase.to_string());
         pb.enable_steady_tick(std::time::Duration::from_millis(200));
@@ -77,7 +73,10 @@ impl Progress for CliProgress {
 // ---------------------------------------------------------------- cli
 
 fn flag(name: &'static str, help: &'static str) -> Arg {
-    Arg::new(name).long(name).help(help).action(ArgAction::SetTrue)
+    Arg::new(name)
+        .long(name)
+        .help(help)
+        .action(ArgAction::SetTrue)
 }
 
 fn opt<T: Clone + Send + Sync + std::str::FromStr + 'static>(
@@ -87,7 +86,10 @@ fn opt<T: Clone + Send + Sync + std::str::FromStr + 'static>(
 where
     <T as std::str::FromStr>::Err: std::error::Error + Send + Sync + 'static,
 {
-    Arg::new(name).long(name).help(help).value_parser(value_parser!(T))
+    Arg::new(name)
+        .long(name)
+        .help(help)
+        .value_parser(value_parser!(T))
 }
 
 fn cli() -> Command {
@@ -97,12 +99,18 @@ fn cli() -> Command {
         .subcommand_required(true)
         .arg(Arg::new("path").required(true).help("Input data file"))
         .arg(
-            opt::<usize>("min-count", "Iteratively drop edges whose endpoints appear in fewer rows")
-                .global(true),
+            opt::<usize>(
+                "min-count",
+                "Iteratively drop edges whose endpoints appear in fewer rows",
+            )
+            .global(true),
         )
         .arg(
-            flag("groups-are-separate", "Treat blank-line-separated batches as separate periods")
-                .global(true),
+            flag(
+                "groups-are-separate",
+                "Treat blank-line-separated batches as separate periods",
+            )
+            .global(true),
         )
         .arg(opt::<usize>("threads", "Worker threads (default: all cores)").global(true))
         .arg(
@@ -113,21 +121,23 @@ fn cli() -> Command {
                 .help("Output format: v1-style tsv or model-state jsonl")
                 .global(true),
         )
+        .arg(opt::<PathBuf>("save-state", "Write the fitted model state to this file").global(true))
         .arg(
-            opt::<PathBuf>("save-state", "Write the fitted model state to this file")
-                .global(true),
-        )
-        .arg(
-            opt::<PathBuf>("load-state", "Resume from a saved model state (update or warm start)")
-                .global(true),
+            opt::<PathBuf>(
+                "load-state",
+                "Resume from a saved model state (update or warm start)",
+            )
+            .global(true),
         )
         .subcommand(
-            Command::new("rate").about("Win rates with Wilson intervals").arg(
-                Arg::new("confidence-interval")
-                    .long("confidence-interval")
-                    .value_parser(["0.95", "0.9", "0.90", "0.5"])
-                    .default_value("0.95"),
-            ),
+            Command::new("rate")
+                .about("Win rates with Wilson intervals")
+                .arg(
+                    Arg::new("confidence-interval")
+                        .long("confidence-interval")
+                        .value_parser(["0.95", "0.9", "0.90", "0.5"])
+                        .default_value("0.95"),
+                ),
         )
         .subcommand(
             Command::new("glicko2")
@@ -146,13 +156,28 @@ fn cli() -> Command {
         .subcommand(
             Command::new("btm-mm")
                 .about("Bradley-Terry via minorization-maximization")
-                .arg(opt::<usize>("min-graph-size", "Skip components smaller than this"))
+                .arg(opt::<usize>(
+                    "min-graph-size",
+                    "Skip components smaller than this",
+                ))
                 .arg(opt::<usize>("iterations", "Maximum MM sweeps"))
                 .arg(opt::<f64>("tol", "Convergence tolerance").alias("tolerance"))
-                .arg(flag("remove-total-losers", "Also remove never-won entities"))
-                .arg(opt::<f64>("create-fake-games", "Patch one-sided entities with fake games of this weight"))
-                .arg(opt::<usize>("random-subgraph-links", "Random links between components"))
-                .arg(opt::<f64>("random-subgraph-weight", "Weight of those links"))
+                .arg(flag(
+                    "remove-total-losers",
+                    "Also remove never-won entities",
+                ))
+                .arg(opt::<f64>(
+                    "create-fake-games",
+                    "Patch one-sided entities with fake games of this weight",
+                ))
+                .arg(opt::<usize>(
+                    "random-subgraph-links",
+                    "Random links between components",
+                ))
+                .arg(opt::<f64>(
+                    "random-subgraph-weight",
+                    "Weight of those links",
+                ))
                 .arg(opt::<u64>("seed", "Seed for random component links")),
         )
         .subcommand(
@@ -161,7 +186,10 @@ fn cli() -> Command {
                 .arg(opt::<usize>("passes", "ES iterations"))
                 .arg(opt::<f64>("alpha", "Initial perturbation scale"))
                 .arg(opt::<f64>("gamma", "L2 regularization"))
-                .arg(opt::<usize>("min-obs", "Minimum comparisons per entity").alias("min-observations"))
+                .arg(
+                    opt::<usize>("min-obs", "Minimum comparisons per entity")
+                        .alias("min-observations"),
+                )
                 .arg(opt::<usize>("prior", "Pseudo-count smoothing"))
                 .arg(flag("fixed", "Pin all variances to 1 (Thurstone-style)"))
                 .arg(opt::<u64>("seed", "Random seed")),
@@ -169,7 +197,10 @@ fn cli() -> Command {
         .subcommand(
             Command::new("kemeny")
                 .about("Kemeny-optimal consensus ranking")
-                .arg(opt::<usize>("passes", "Insertion passes / DE evaluations (0 = auto)"))
+                .arg(opt::<usize>(
+                    "passes",
+                    "Insertion passes / DE evaluations (0 = auto)",
+                ))
                 .arg(opt::<usize>("min-obs", "Minimum comparisons per entity"))
                 .arg(
                     Arg::new("algo")
@@ -182,7 +213,10 @@ fn cli() -> Command {
         .subcommand(
             Command::new("lsr")
                 .about("Luce spectral ranking (Plackett-Luce)")
-                .arg(opt::<usize>("steps", "Power passes / walk steps (0 = auto)"))
+                .arg(opt::<usize>(
+                    "steps",
+                    "Power passes / walk steps (0 = auto)",
+                ))
                 .arg(
                     Arg::new("estimator")
                         .long("estimator")
@@ -238,23 +272,41 @@ fn cli() -> Command {
                 .arg(
                     Arg::new("policy")
                         .long("policy")
-                        .value_parser(["greedy", "epsilon-greedy", "ucb1", "ts-beta", "ts-gaussian"])
+                        .value_parser([
+                            "greedy",
+                            "epsilon-greedy",
+                            "ucb1",
+                            "ts-beta",
+                            "ts-gaussian",
+                        ])
                         .default_value("ucb1"),
                 )
                 .arg(opt::<f64>("epsilon", "Exploration rate (epsilon-greedy)"))
                 .arg(opt::<f64>("exploration", "UCB exploration constant"))
                 .arg(opt::<f64>("prior-alpha", "Beta prior alpha (ts-beta)"))
                 .arg(opt::<f64>("prior-beta", "Beta prior beta (ts-beta)"))
-                .arg(opt::<f64>("prior-mean", "Gaussian prior mean (ts-gaussian)"))
-                .arg(opt::<f64>("prior-weight", "Gaussian prior pseudo-observations"))
+                .arg(opt::<f64>(
+                    "prior-mean",
+                    "Gaussian prior mean (ts-gaussian)",
+                ))
+                .arg(opt::<f64>(
+                    "prior-weight",
+                    "Gaussian prior pseudo-observations",
+                ))
                 .arg(opt::<u64>("seed", "Policy randomness seed"))
-                .arg(opt::<usize>("select", "Print the next N arms to play instead of scores")),
+                .arg(opt::<usize>(
+                    "select",
+                    "Print the next N arms to play instead of scores",
+                )),
         )
         .subcommand(
             Command::new("dehydrate")
                 .about("[deprecated] Map string ids to dense integers (v2 reads strings natively)")
                 .arg(opt::<String>("delim", "Field delimiter (default: tab)"))
-                .arg(opt::<PathBuf>("features", "Optional features file to remap")),
+                .arg(opt::<PathBuf>(
+                    "features",
+                    "Optional features file to remap",
+                )),
         )
         .subcommand(
             Command::new("hydrate")
@@ -363,8 +415,16 @@ fn run() -> Result<()> {
     };
 
     let ctx = Ctx {
-        path: Path::new(matches.get_one::<String>("path").expect("required").as_str()),
-        format: sm.get_one::<String>("format").cloned().unwrap_or_else(|| "tsv".into()),
+        path: Path::new(
+            matches
+                .get_one::<String>("path")
+                .expect("required")
+                .as_str(),
+        ),
+        format: sm
+            .get_one::<String>("format")
+            .cloned()
+            .unwrap_or_else(|| "tsv".into()),
         save_state: sm.get_one::<PathBuf>("save-state").cloned(),
         load_state: sm.get_one::<PathBuf>("load-state").cloned(),
         min_count: get_or(sm, "min-count", 1usize),
@@ -375,7 +435,11 @@ fn run() -> Result<()> {
 
     match sub {
         "rate" => {
-            let confidence = match sm.get_one::<String>("confidence-interval").unwrap().as_str() {
+            let confidence = match sm
+                .get_one::<String>("confidence-interval")
+                .unwrap()
+                .as_str()
+            {
                 "0.95" => Confidence::P95,
                 "0.9" | "0.90" => Confidence::P90,
                 _ => Confidence::P50,
@@ -385,7 +449,10 @@ fn run() -> Result<()> {
             ctx.emit(&model)
         }
         "glicko2" => {
-            let algo = Glicko2 { tau: get_or(sm, "tau", 0.5), ..Default::default() };
+            let algo = Glicko2 {
+                tau: get_or(sm, "tau", 0.5),
+                ..Default::default()
+            };
             let model = update_maybe_loaded(&algo, &ctx.pairwise()?, &ctx)?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
@@ -475,7 +542,11 @@ fn run() -> Result<()> {
                 }
                 n => n,
             };
-            let algo = Lsr { steps, estimator, seed: get_or(sm, "seed", 2020) };
+            let algo = Lsr {
+                steps,
+                estimator,
+                seed: get_or(sm, "seed", 2020),
+            };
             let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
             ctx.emit(&model)
         }
@@ -561,9 +632,9 @@ fn run() -> Result<()> {
         "bandit" => {
             let policy = match sm.get_one::<String>("policy").unwrap().as_str() {
                 "greedy" => BanditPolicy::Greedy,
-                "epsilon-greedy" => {
-                    BanditPolicy::EpsilonGreedy { epsilon: get_or(sm, "epsilon", 0.1) }
-                }
+                "epsilon-greedy" => BanditPolicy::EpsilonGreedy {
+                    epsilon: get_or(sm, "epsilon", 0.1),
+                },
                 "ts-beta" => BanditPolicy::ThompsonBeta {
                     prior_alpha: get_or(sm, "prior-alpha", 1.0),
                     prior_beta: get_or(sm, "prior-beta", 1.0),
@@ -572,9 +643,14 @@ fn run() -> Result<()> {
                     prior_mean: get_or(sm, "prior-mean", 0.0),
                     prior_weight: get_or(sm, "prior-weight", 1.0),
                 },
-                _ => BanditPolicy::Ucb1 { exploration: get_or(sm, "exploration", 2.0) },
+                _ => BanditPolicy::Ucb1 {
+                    exploration: get_or(sm, "exploration", 2.0),
+                },
             };
-            let algo = Bandit { policy, seed: get_or(sm, "seed", 42) };
+            let algo = Bandit {
+                policy,
+                seed: get_or(sm, "seed", 42),
+            };
             let data = io::read_rewards(ctx.path)?;
             let mut model: BanditModel = match &ctx.load_state {
                 Some(p) => BanditModel::load_from_path(p)?,
@@ -632,7 +708,10 @@ fn dehydrate(path: &Path, delim: &str, features: Option<&PathBuf>) -> Result<()>
         }
         let mut it = line.split(delim);
         let (Some(a), Some(b)) = (it.next(), it.next()) else {
-            return Err(Error::parse(lineno + 1, format!("expected two fields: {line:?}")));
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected two fields: {line:?}"),
+            ));
         };
         let w = it.next().unwrap_or("1").to_string();
         let a = interner.intern(a.trim());
@@ -653,8 +732,7 @@ fn dehydrate(path: &Path, delim: &str, features: Option<&PathBuf>) -> Result<()>
         writeln!(edges_f, "{a} {b} {w}")?;
     }
     if let Some(fpath) = features {
-        let mut out =
-            std::io::BufWriter::new(std::fs::File::create(format!("{base}.features"))?);
+        let mut out = std::io::BufWriter::new(std::fs::File::create(format!("{base}.features"))?);
         for line in std::fs::read_to_string(fpath)?.lines() {
             if let Some((name, rest)) = line.split_once(delim)
                 && let Some(id) = interner.get(name.trim())

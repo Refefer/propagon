@@ -94,7 +94,10 @@ pub struct EsRumModel {
 impl EsRumModel {
     /// `(name, μ, σ)` rows.
     pub fn distributions(&self) -> impl Iterator<Item = (&str, f64, f64)> {
-        self.names.names().zip(self.entries.iter()).map(|(n, e)| (n, e[0], e[1]))
+        self.names
+            .names()
+            .zip(self.entries.iter())
+            .map(|(n, e)| (n, e[0], e[1]))
     }
 }
 
@@ -111,7 +114,11 @@ impl RankModel for EsRumModel {
     fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
         let lines: Vec<RumLine> = self
             .distributions()
-            .map(|(id, mu, sigma)| RumLine { id: id.to_string(), mu, sigma })
+            .map(|(id, mu, sigma)| RumLine {
+                id: id.to_string(),
+                mu,
+                sigma,
+            })
             .collect();
         state::save_model(w, "es-rum", &self.params, &lines)
     }
@@ -120,7 +127,11 @@ impl RankModel for EsRumModel {
         let (params, lines): (EsRum, Vec<RumLine>) = state::load_model(r, "es-rum")?;
         let names = Interner::from_names(lines.iter().map(|l| l.id.as_str()))?;
         let entries = lines.iter().map(|l| [l.mu, l.sigma]).collect();
-        Ok(Self { params, names, entries })
+        Ok(Self {
+            params,
+            names,
+            entries,
+        })
     }
 }
 
@@ -170,8 +181,10 @@ impl EsRum {
 
         let mut policy = vec![[0.0, 0.0]; graph.len()];
         for (rank, (idx, _)) in rates.into_iter().enumerate() {
-            policy[idx] =
-                [mathx::norm_ppf((rank + 1) as f64 / (policy.len() + 2) as f64), 1e-5];
+            policy[idx] = [
+                mathx::norm_ppf((rank + 1) as f64 / (policy.len() + 2) as f64),
+                1e-5,
+            ];
         }
         policy
     }
@@ -369,13 +382,20 @@ impl Ranker for EsRum {
         }
 
         let min_mu = entries.iter().map(|e| e[0]).fold(f64::INFINITY, f64::min);
-        let max_sigma = entries.iter().map(|e| e[1]).fold(f64::NEG_INFINITY, f64::max);
+        let max_sigma = entries
+            .iter()
+            .map(|e| e[1])
+            .fold(f64::NEG_INFINITY, f64::max);
         for e in &mut entries {
             e[0] = (e[0] - min_mu) / max_sigma;
             e[1] /= max_sigma;
         }
 
-        Ok(EsRumModel { params: *self, names, entries })
+        Ok(EsRumModel {
+            params: *self,
+            names,
+            entries,
+        })
     }
 }
 
@@ -399,7 +419,10 @@ mod tests {
 
     #[test]
     fn recovers_order_and_is_seed_deterministic() {
-        let algo = EsRum { passes: 30, ..Default::default() };
+        let algo = EsRum {
+            passes: 30,
+            ..Default::default()
+        };
         let m1 = algo.fit(&data()).unwrap();
         let order: Vec<&str> = m1.sorted_scores().iter().map(|e| e.0).collect();
         assert_eq!(order, vec!["a", "b", "c"]);
@@ -412,16 +435,35 @@ mod tests {
 
     #[test]
     fn normalization_pins_scale() {
-        let m = EsRum { passes: 20, ..Default::default() }.fit(&data()).unwrap();
-        let min_mu = m.distributions().map(|(_, mu, _)| mu).fold(f64::INFINITY, f64::min);
-        let max_sigma = m.distributions().map(|(_, _, s)| s).fold(f64::NEG_INFINITY, f64::max);
+        let m = EsRum {
+            passes: 20,
+            ..Default::default()
+        }
+        .fit(&data())
+        .unwrap();
+        let min_mu = m
+            .distributions()
+            .map(|(_, mu, _)| mu)
+            .fold(f64::INFINITY, f64::min);
+        let max_sigma = m
+            .distributions()
+            .map(|(_, _, s)| s)
+            .fold(f64::NEG_INFINITY, f64::max);
         assert!(min_mu.abs() < 1e-12, "min μ normalized to 0, got {min_mu}");
-        assert!((max_sigma - 1.0).abs() < 1e-12, "max σ normalized to 1, got {max_sigma}");
+        assert!(
+            (max_sigma - 1.0).abs() < 1e-12,
+            "max σ normalized to 1, got {max_sigma}"
+        );
     }
 
     #[test]
     fn round_trip() {
-        let m = EsRum { passes: 5, ..Default::default() }.fit(&data()).unwrap();
+        let m = EsRum {
+            passes: 5,
+            ..Default::default()
+        }
+        .fit(&data())
+        .unwrap();
         let mut buf = Vec::new();
         m.save_jsonl(&mut buf).unwrap();
         let m2 = EsRumModel::load_jsonl(buf.as_slice()).unwrap();

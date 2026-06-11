@@ -37,7 +37,12 @@ pub struct Glicko2 {
 
 impl Default for Glicko2 {
     fn default() -> Self {
-        Self { tau: 0.5, rating: 1500.0, rd: 350.0, sigma: 0.06 }
+        Self {
+            tau: 0.5,
+            rating: 1500.0,
+            rd: 350.0,
+            sigma: 0.06,
+        }
     }
 }
 
@@ -174,7 +179,12 @@ impl RankModel for Glicko2Model {
     fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
         let lines: Vec<PlayerLine> = self
             .players()
-            .map(|(id, p)| PlayerLine { id: id.to_string(), r: p.r, rd: p.rd, sigma: p.sigma })
+            .map(|(id, p)| PlayerLine {
+                id: id.to_string(),
+                r: p.r,
+                rd: p.rd,
+                sigma: p.sigma,
+            })
             .collect();
         state::save_model(w, "glicko2", &self.params, &lines)
     }
@@ -182,9 +192,19 @@ impl RankModel for Glicko2Model {
     fn load_jsonl<R: std::io::BufRead>(r: R) -> Result<Self> {
         let (params, lines): (Glicko2, Vec<PlayerLine>) = state::load_model(r, "glicko2")?;
         let names = Interner::from_names(lines.iter().map(|l| l.id.as_str()))?;
-        let players =
-            lines.iter().map(|l| PlayerState { r: l.r, rd: l.rd, sigma: l.sigma }).collect();
-        Ok(Self { params, names, players })
+        let players = lines
+            .iter()
+            .map(|l| PlayerState {
+                r: l.r,
+                rd: l.rd,
+                sigma: l.sigma,
+            })
+            .collect();
+        Ok(Self {
+            params,
+            names,
+            players,
+        })
     }
 }
 
@@ -193,7 +213,11 @@ impl OnlineRanker for Glicko2 {
     type Model = Glicko2Model;
 
     fn init(&self) -> Glicko2Model {
-        Glicko2Model { params: *self, names: Interner::new(), players: Vec::new() }
+        Glicko2Model {
+            params: *self,
+            names: Interner::new(),
+            players: Vec::new(),
+        }
     }
 
     fn update_opts(
@@ -260,7 +284,9 @@ fn compute_volatility(phi: f64, sigma: f64, delta: f64, v: f64, tau: f64) -> Res
             k += 1.0;
         }
         if !found {
-            return Err(Error::Numeric("glicko2 volatility bracket not found".into()));
+            return Err(Error::Numeric(
+                "glicko2 volatility bracket not found".into(),
+            ));
         }
         a - k * tau
     };
@@ -284,7 +310,9 @@ fn compute_volatility(phi: f64, sigma: f64, delta: f64, v: f64, tau: f64) -> Res
     }
 
     if lo.is_nan() || hi.is_nan() {
-        return Err(Error::Numeric("glicko2 volatility root finder diverged".into()));
+        return Err(Error::Numeric(
+            "glicko2 volatility root finder diverged".into(),
+        ));
     }
     Ok((lo / 2.0).exp())
 }
@@ -298,10 +326,38 @@ mod tests {
     fn glickman_reference_example() {
         let algo = Glicko2::default();
         let mut model = algo.init();
-        model.set_player("1", PlayerState { r: 1500.0, rd: 200.0, sigma: 0.06 });
-        model.set_player("2", PlayerState { r: 1400.0, rd: 30.0, sigma: 0.06 });
-        model.set_player("3", PlayerState { r: 1550.0, rd: 100.0, sigma: 0.06 });
-        model.set_player("4", PlayerState { r: 1700.0, rd: 300.0, sigma: 0.06 });
+        model.set_player(
+            "1",
+            PlayerState {
+                r: 1500.0,
+                rd: 200.0,
+                sigma: 0.06,
+            },
+        );
+        model.set_player(
+            "2",
+            PlayerState {
+                r: 1400.0,
+                rd: 30.0,
+                sigma: 0.06,
+            },
+        );
+        model.set_player(
+            "3",
+            PlayerState {
+                r: 1550.0,
+                rd: 100.0,
+                sigma: 0.06,
+            },
+        );
+        model.set_player(
+            "4",
+            PlayerState {
+                r: 1700.0,
+                rd: 300.0,
+                sigma: 0.06,
+            },
+        );
 
         let mut d = PairwiseDataset::new();
         d.push("1", "2", 1.0);
@@ -322,11 +378,19 @@ mod tests {
         let mut model = algo.init();
         model.set_player(
             "low",
-            PlayerState { r: 1078.224870320442, rd: 231.8396899251802, sigma: 0.0599557629529191 },
+            PlayerState {
+                r: 1078.224870320442,
+                rd: 231.8396899251802,
+                sigma: 0.0599557629529191,
+            },
         );
         model.set_player(
             "high",
-            PlayerState { r: 1922.738120392382, rd: 136.9997727497604, sigma: 0.06095741696613419 },
+            PlayerState {
+                r: 1922.738120392382,
+                rd: 136.9997727497604,
+                sigma: 0.06095741696613419,
+            },
         );
         let mut d = PairwiseDataset::new();
         d.push("low", "high", 1.0);
@@ -339,7 +403,10 @@ mod tests {
     /// FR-5 acceptance: saved state + new period == both periods in one go.
     #[test]
     fn resume_equals_continuous() {
-        let algo = Glicko2 { tau: 0.5, ..Default::default() };
+        let algo = Glicko2 {
+            tau: 0.5,
+            ..Default::default()
+        };
 
         // Two periods in one dataset.
         let mut both = PairwiseDataset::new();
@@ -380,10 +447,16 @@ mod tests {
     #[test]
     fn param_mismatch_is_rejected() {
         let a = Glicko2::default();
-        let b = Glicko2 { tau: 1.0, ..Default::default() };
+        let b = Glicko2 {
+            tau: 1.0,
+            ..Default::default()
+        };
         let mut model = a.init();
         let mut d = PairwiseDataset::new();
         d.push("x", "y", 1.0);
-        assert!(matches!(b.update(&mut model, &d), Err(Error::ParamMismatch(_))));
+        assert!(matches!(
+            b.update(&mut model, &d),
+            Err(Error::ParamMismatch(_))
+        ));
     }
 }

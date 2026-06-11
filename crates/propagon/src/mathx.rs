@@ -11,7 +11,11 @@ pub fn norm_cdf(x: f64) -> f64 {
         * (0.254829592
             + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
     let erf = 1.0 - poly * (-(x * x) / 2.0).exp();
-    if x >= 0.0 { 0.5 * (1.0 + erf) } else { 0.5 * (1.0 - erf) }
+    if x >= 0.0 {
+        0.5 * (1.0 + erf)
+    } else {
+        0.5 * (1.0 - erf)
+    }
 }
 
 /// Standard normal quantile (inverse CDF) via Acklam's rational
@@ -23,7 +27,7 @@ pub fn norm_ppf(p: f64) -> f64 {
         -3.969683028665376e+01,
         2.209460984245205e+02,
         -2.759285104469687e+02,
-        1.383577518672690e+02,
+        1.38357751867269e+02,
         -3.066479806614716e+01,
         2.506628277459239e+00,
     ];
@@ -79,7 +83,11 @@ mod tests {
             (1.959963984540054, 0.975),
             (-2.5, 0.006209665325776132),
         ] {
-            assert!((norm_cdf(x) - want).abs() < 2e-7, "cdf({x}) = {} vs {want}", norm_cdf(x));
+            assert!(
+                (norm_cdf(x) - want).abs() < 2e-7,
+                "cdf({x}) = {} vs {want}",
+                norm_cdf(x)
+            );
         }
     }
 
@@ -87,7 +95,11 @@ mod tests {
     fn ppf_inverts_cdf() {
         for p in [0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975, 0.999] {
             let x = norm_ppf(p);
-            assert!((norm_cdf(x) - p).abs() < 1e-6, "round trip at {p}: {}", norm_cdf(x));
+            assert!(
+                (norm_cdf(x) - p).abs() < 1e-6,
+                "round trip at {p}: {}",
+                norm_cdf(x)
+            );
         }
         assert!((norm_ppf(0.975) - 1.959964).abs() < 1e-5);
     }

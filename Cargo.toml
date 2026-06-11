@@ -6,7 +6,8 @@ members = ["crates/*"]
 version = "2.0.0-alpha.1"
 authors = ["Andrew Stanton <refefer@gmail.com>"]
 edition = "2024"
-rust-version = "1.85"
+# let-chains (used in dataset and CLI code) stabilized in 1.88
+rust-version = "1.88"
 
 [workspace.dependencies]
 propagon = { path = "crates/propagon", version = "2.0.0-alpha.1" }

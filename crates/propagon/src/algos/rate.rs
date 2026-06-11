@@ -89,7 +89,10 @@ impl RankModel for WinRateModel {
     }
 
     fn scores(&self) -> impl Iterator<Item = (&str, f64)> {
-        self.names.names().enumerate().map(|(i, n)| (n, self.statistic(i)))
+        self.names
+            .names()
+            .enumerate()
+            .map(|(i, n)| (n, self.statistic(i)))
     }
 
     fn save_jsonl<W: std::io::Write>(&self, w: W) -> Result<()> {
@@ -97,7 +100,11 @@ impl RankModel for WinRateModel {
             .names
             .names()
             .enumerate()
-            .map(|(i, id)| TallyLine { id: id.to_string(), wins: self.wins[i], losses: self.losses[i] })
+            .map(|(i, id)| TallyLine {
+                id: id.to_string(),
+                wins: self.wins[i],
+                losses: self.losses[i],
+            })
             .collect();
         state::save_model(w, "rate", &self.params, &lines)
     }
@@ -119,7 +126,12 @@ impl OnlineRanker for WinRate {
     type Model = WinRateModel;
 
     fn init(&self) -> WinRateModel {
-        WinRateModel { params: *self, names: Interner::new(), wins: Vec::new(), losses: Vec::new() }
+        WinRateModel {
+            params: *self,
+            names: Interner::new(),
+            wins: Vec::new(),
+            losses: Vec::new(),
+        }
     }
 
     fn update_opts(
@@ -203,8 +215,16 @@ mod tests {
         }
         algo.update(&mut twice, &both).unwrap();
 
-        let a: Vec<_> = once.sorted_scores().into_iter().map(|(n, s)| (n.to_string(), s)).collect();
-        let b: Vec<_> = twice.sorted_scores().into_iter().map(|(n, s)| (n.to_string(), s)).collect();
+        let a: Vec<_> = once
+            .sorted_scores()
+            .into_iter()
+            .map(|(n, s)| (n.to_string(), s))
+            .collect();
+        let b: Vec<_> = twice
+            .sorted_scores()
+            .into_iter()
+            .map(|(n, s)| (n.to_string(), s))
+            .collect();
         assert_eq!(a, b);
     }
 

@@ -28,7 +28,10 @@ pub struct RankCentrality {
 
 impl Default for RankCentrality {
     fn default() -> Self {
-        Self { iterations: 200, tolerance: 1e-10 }
+        Self {
+            iterations: 200,
+            tolerance: 1e-10,
+        }
     }
 }
 
@@ -46,7 +49,11 @@ impl Ranker for RankCentrality {
     type Data = PairwiseDataset;
     type Model = RankCentralityModel;
 
-    fn fit_opts(&self, data: &PairwiseDataset, opts: &FitOptions<'_>) -> Result<RankCentralityModel> {
+    fn fit_opts(
+        &self,
+        data: &PairwiseDataset,
+        opts: &FitOptions<'_>,
+    ) -> Result<RankCentralityModel> {
         if data.is_empty() {
             return Err(Error::EmptyDataset);
         }
@@ -125,7 +132,11 @@ impl Ranker for RankCentrality {
             pi
         });
 
-        Ok(RankCentralityModel { params: *self, names: data.interner().clone(), scores })
+        Ok(RankCentralityModel {
+            params: *self,
+            names: data.interner().clone(),
+            scores,
+        })
     }
 }
 
@@ -149,7 +160,10 @@ mod tests {
         assert_eq!(order, vec!["a", "b", "c"]);
 
         let total: f64 = m.scores().map(|(_, s)| s).sum();
-        assert!((total - 1.0).abs() < 1e-9, "stationary distribution sums to 1");
+        assert!(
+            (total - 1.0).abs() < 1e-9,
+            "stationary distribution sums to 1"
+        );
     }
 
     #[test]
@@ -161,6 +175,10 @@ mod tests {
         d.push("b", "a", 1.0);
         let m = RankCentrality::default().fit(&d).unwrap();
         let s: std::collections::HashMap<_, _> = m.scores().collect();
-        assert!((s["a"] / s["b"] - 3.0).abs() < 1e-6, "ratio {}", s["a"] / s["b"]);
+        assert!(
+            (s["a"] / s["b"] - 3.0).abs() < 1e-6,
+            "ratio {}",
+            s["a"] / s["b"]
+        );
     }
 }

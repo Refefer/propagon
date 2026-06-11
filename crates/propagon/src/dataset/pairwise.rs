@@ -140,7 +140,11 @@ impl PairwiseDataset {
     pub fn periods(&self) -> impl Iterator<Item = std::ops::Range<usize>> + '_ {
         let len = self.len();
         let starts = std::iter::once(0).chain(self.period_starts.iter().copied());
-        let ends = self.period_starts.iter().copied().chain(std::iter::once(len));
+        let ends = self
+            .period_starts
+            .iter()
+            .copied()
+            .chain(std::iter::once(len));
         starts.zip(ends).filter(|(s, e)| e > s).map(|(s, e)| s..e)
     }
 
@@ -207,7 +211,10 @@ impl PairwiseDataset {
             }
         }
 
-        let mut out = Self { interner: self.interner.clone(), ..Self::default() };
+        let mut out = Self {
+            interner: self.interner.clone(),
+            ..Self::default()
+        };
         let mut boundaries = self.period_starts.iter().copied().peekable();
         for (i, (w, l, x)) in self.rows().enumerate() {
             if boundaries.peek() == Some(&i) {

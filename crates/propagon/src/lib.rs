@@ -19,15 +19,28 @@
 //!    [`save_jsonl`](RankModel::save_jsonl) and resume later.
 //!
 //! ```
-//! use propagon::PairwiseDataset;
+//! use propagon::algos::Glicko2;
+//! use propagon::{OnlineRanker, PairwiseDataset, RankModel};
 //!
-//! let mut ds = PairwiseDataset::new();
-//! ds.push("ARI", "COL", 1.0);
-//! ds.push("COL", "NYM", 1.0);
-//! ds.push("ARI", "NYM", 1.0);
+//! // One dataset, string ids interned for you.
+//! let mut week1 = PairwiseDataset::new();
+//! week1.push("ARI", "COL", 1.0);
+//! week1.push("ARI", "NYM", 1.0);
+//! week1.push("COL", "NYM", 1.0);
 //!
-//! assert_eq!(ds.n_entities(), 3);
-//! assert_eq!(ds.len(), 3);
+//! // Incremental fitting: state persists, history is never replayed.
+//! let glicko = Glicko2::default();
+//! let mut ratings = glicko.init();
+//! glicko.update(&mut ratings, &week1).unwrap();
+//!
+//! let top = ratings.sorted_scores()[0].0.to_string();
+//! assert_eq!(top, "ARI");
+//!
+//! // Human-readable, resumable state (FR-4/FR-5).
+//! let mut state = Vec::new();
+//! ratings.save_jsonl(&mut state).unwrap();
+//! let restored = propagon::algos::Glicko2Model::load_jsonl(state.as_slice()).unwrap();
+//! assert_eq!(restored.sorted_scores()[0].0, "ARI");
 //! ```
 //!
 //! ## Features

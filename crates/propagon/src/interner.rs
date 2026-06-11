@@ -70,7 +70,9 @@ impl Interner {
             let before = out.names.len();
             out.intern(name);
             if out.names.len() == before {
-                return Err(crate::Error::State(format!("duplicate name in vocab: {name:?}")));
+                return Err(crate::Error::State(format!(
+                    "duplicate name in vocab: {name:?}"
+                )));
             }
         }
         Ok(out)

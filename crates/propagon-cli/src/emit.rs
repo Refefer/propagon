@@ -26,7 +26,14 @@ pub fn glicko2(out: &mut impl Write, model: &Glicko2Model, use_mu: bool) -> Resu
             writeln!(out, "{name}: {}", model.mu(p))?;
         } else {
             let (lo, hi) = p.bounds();
-            writeln!(out, "{name}: {:.4}\t{:.4}\t{:.4}\t{:.4}", model.mu(p), p.rd, lo, hi)?;
+            writeln!(
+                out,
+                "{name}: {:.4}\t{:.4}\t{:.4}\t{:.4}",
+                model.mu(p),
+                p.rd,
+                lo,
+                hi
+            )?;
         }
     }
     Ok(())

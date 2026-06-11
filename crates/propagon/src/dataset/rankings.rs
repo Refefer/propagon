@@ -17,7 +17,11 @@ pub struct RankingsDataset {
 
 impl Default for RankingsDataset {
     fn default() -> Self {
-        Self { interner: Interner::new(), items: Vec::new(), offsets: vec![0] }
+        Self {
+            interner: Interner::new(),
+            items: Vec::new(),
+            offsets: vec![0],
+        }
     }
 }
 
@@ -34,7 +38,9 @@ impl RankingsDataset {
     {
         let names: Vec<&str> = ranking.into_iter().collect();
         if names.len() < 2 {
-            return Err(Error::InvalidInput("a ranking needs at least two items".into()));
+            return Err(Error::InvalidInput(
+                "a ranking needs at least two items".into(),
+            ));
         }
         for name in names {
             let id = self.interner.intern(name);

@@ -155,7 +155,11 @@ impl DifferentialEvolution {
                     if idx != best_idx && unit.sample(&mut local) < self.m {
                         // Random perturbation around the best candidate.
                         let orig_mag = l2norm(
-                            &orig_x.iter().zip(best).map(|(a, b)| a - b).collect::<Vec<_>>(),
+                            &orig_x
+                                .iter()
+                                .zip(best)
+                                .map(|(a, b)| a - b)
+                                .collect::<Vec<_>>(),
                         );
                         let mut x: Vec<f32> =
                             (0..self.dims).map(|_| norm.sample(&mut local)).collect();

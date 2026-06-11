@@ -2,9 +2,7 @@
 //! - every model type save → load → save is byte-identical;
 //! - warm starts beat cold starts on appended data (BT-MM acceptance).
 
-use propagon::algos::{
-    Borda, BradleyTerryMM, Copeland, Lsr, PageRank, RankCentrality,
-};
+use propagon::algos::{Borda, BradleyTerryMM, Copeland, Lsr, PageRank, RankCentrality};
 use propagon::{GraphDataset, PairwiseDataset, Progress, RankModel, Ranker};
 
 fn pairwise() -> PairwiseDataset {
@@ -94,7 +92,10 @@ fn warm_start_converges_much_faster() {
         }
     }
 
-    let algo = BradleyTerryMM { tolerance: 1e-6, ..Default::default() };
+    let algo = BradleyTerryMM {
+        tolerance: 1e-6,
+        ..Default::default()
+    };
     let cold_model = algo.fit(&base).unwrap();
 
     // Append a small increment (the weekly-update scenario): a handful of
@@ -105,18 +106,24 @@ fn warm_start_converges_much_faster() {
         extended.push(&names[i], &names[j], 1.0);
     }
 
-    let count_sweeps = |run: &dyn Fn(&SweepCounter) -> ()| -> u64 {
+    let count_sweeps = |run: &dyn Fn(&SweepCounter)| -> u64 {
         let counter = SweepCounter::default();
         run(&counter);
         counter.0.load(std::sync::atomic::Ordering::Relaxed)
     };
 
     let cold_sweeps = count_sweeps(&|c| {
-        let opts = propagon::FitOptions { progress: Some(c), ..Default::default() };
+        let opts = propagon::FitOptions {
+            progress: Some(c),
+            ..Default::default()
+        };
         algo.fit_opts(&extended, &opts).unwrap();
     });
     let warm_sweeps = count_sweeps(&|c| {
-        let opts = propagon::FitOptions { progress: Some(c), ..Default::default() };
+        let opts = propagon::FitOptions {
+            progress: Some(c),
+            ..Default::default()
+        };
         algo.fit_warm_opts(&extended, &cold_model, &opts).unwrap();
     });
 

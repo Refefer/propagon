@@ -77,7 +77,10 @@ mod tests {
         d.push("B", 0.0);
         d.push("A", 0.5);
         assert_eq!(d.n_arms(), 2);
-        assert_eq!(d.rows().collect::<Vec<_>>(), vec![(0, 1.0), (1, 0.0), (0, 0.5)]);
+        assert_eq!(
+            d.rows().collect::<Vec<_>>(),
+            vec![(0, 1.0), (1, 0.0), (0, 0.5)]
+        );
         assert!(d.push_ids(5, 1.0).is_err());
     }
 }

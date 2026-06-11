@@ -37,7 +37,11 @@ impl Ranker for Borda {
         }
         let tally = data.tally();
         let scores = tally.wins.iter().map(|&(_, wsum)| wsum).collect();
-        Ok(BordaModel { params: *self, names: data.interner().clone(), scores })
+        Ok(BordaModel {
+            params: *self,
+            names: data.interner().clone(),
+            scores,
+        })
     }
 }
 
@@ -55,7 +59,11 @@ impl Borda {
                 scores[id as usize] += (m - 1 - p) as f64;
             }
         }
-        Ok(BordaModel { params: *self, names: data.interner().clone(), scores })
+        Ok(BordaModel {
+            params: *self,
+            names: data.interner().clone(),
+            scores,
+        })
     }
 }
 
