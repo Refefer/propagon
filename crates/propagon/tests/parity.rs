@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use propagon::algos::{BradleyTerryMM, Confidence, Glicko2, SectionKind, WinRate};
+use propagon::algos::{BradleyTerryMM, Confidence, Glicko2, Kemeny, Lsr, SectionKind, WinRate};
 use propagon::{OnlineRanker, PairwiseDataset, RankModel, Ranker};
 
 fn repo_path(rel: &str) -> PathBuf {
@@ -118,6 +118,34 @@ fn rate_matches_v1_golden() {
         }
         assert_eq!(checked, want.len(), "{file}");
     }
+}
+
+#[test]
+fn kemeny_insertion_matches_v1_golden() {
+    let model = Kemeny { passes: 5, ..Default::default() }.fit(&baseball()).unwrap();
+    let want = golden("kemeny.out");
+    let mut checked = 0;
+    for (name, rank) in model.scores() {
+        assert_eq!(rank, want[name][0], "{name}");
+        checked += 1;
+    }
+    assert_eq!(checked, want.len());
+}
+
+#[test]
+fn lsr_power_method_matches_v1_golden() {
+    let model = Lsr { steps: 20, ..Default::default() }.fit(&baseball()).unwrap();
+    let want = golden("lsr.out");
+    let mut checked = 0;
+    for (name, score) in model.scores() {
+        let expected = want[name][0];
+        assert!(
+            (score - expected).abs() < 2e-3,
+            "{name}: v2 {score} vs v1 {expected}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, want.len());
 }
 
 #[test]

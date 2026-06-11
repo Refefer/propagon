@@ -39,6 +39,7 @@ pub mod algos;
 pub mod dataset;
 mod error;
 mod interner;
+mod mathx;
 pub mod parallel;
 mod progress;
 pub mod state;
