@@ -21,8 +21,11 @@ use crate::traits::{FitOptions, RankModel, Ranker};
 /// pure propagation.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BiRank {
+    /// Number of alternating propagation sweeps.
     pub iterations: usize,
+    /// Scales the `dst`-side (item) update (v1 wiring).
     pub alpha: f64,
+    /// Scales the `src`-side (user) update (v1 wiring).
     pub beta: f64,
     /// Seeds the random initialization.
     pub seed: u64,

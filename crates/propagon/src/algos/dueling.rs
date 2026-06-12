@@ -57,10 +57,16 @@ use crate::traits::{FitOptions, OnlineRanker, RankModel};
 pub enum DuelingPolicy {
     /// Relative UCB: optimism on the pairwise win fractions; duels the
     /// sampled candidate champion against its most threatening challenger.
-    Rucb { alpha: f64 },
+    Rucb {
+        /// Confidence-width constant on the win-fraction upper bound.
+        alpha: f64,
+    },
     /// Double Thompson Sampling: a sampled-Copeland champion from Beta
     /// posteriors, then a resampled most-informative challenger.
-    DoubleThompson { alpha: f64 },
+    DoubleThompson {
+        /// Confidence-width constant gating which pairs stay in play.
+        alpha: f64,
+    },
 }
 
 impl DuelingPolicy {
@@ -80,6 +86,7 @@ impl Default for DuelingPolicy {
 /// Dueling-bandit algorithm parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DuelingBandit {
+    /// Exploration policy used to propose each duel.
     pub policy: DuelingPolicy,
     /// Seeds the per-round selection RNG stream.
     pub seed: u64,
@@ -130,6 +137,7 @@ pub struct DuelingModel {
 }
 
 impl DuelingModel {
+    /// Number of registered arms.
     pub fn n_arms(&self) -> usize {
         self.names.len()
     }

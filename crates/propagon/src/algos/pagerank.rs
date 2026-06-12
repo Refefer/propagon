@@ -61,9 +61,13 @@ pub enum Teleport {
 /// PageRank parameters.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PageRank {
+    /// Probability the surfer follows an edge rather than teleporting.
     pub damping: f64,
+    /// Number of power-iteration passes.
     pub iterations: usize,
+    /// How mass at sink nodes (no outgoing edges) is handled.
     pub sink: Sink,
+    /// Where the surfer restarts (uniform, or concentrated on seeds).
     pub teleport: Teleport,
 }
 

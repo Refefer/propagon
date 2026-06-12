@@ -41,24 +41,47 @@ pub enum BanditPolicy {
     /// Always exploit the best empirical mean.
     Greedy,
     /// Exploit with probability `1 − epsilon`, explore uniformly otherwise.
-    EpsilonGreedy { epsilon: f64 },
+    EpsilonGreedy {
+        /// Probability of an exploratory (random-arm) round.
+        epsilon: f64,
+    },
     /// Optimism in the face of uncertainty:
     /// `mean + sqrt(exploration · ln(t) / n)`. `exploration = 2.0` is the
     /// classic UCB1 of Auer et al. (2002). Unpulled arms rank first.
-    Ucb1 { exploration: f64 },
+    Ucb1 {
+        /// Scales the confidence radius `sqrt(exploration · ln(t) / n)`.
+        exploration: f64,
+    },
     /// Thompson Sampling with a Beta posterior; rewards must lie in `[0, 1]`.
-    ThompsonBeta { prior_alpha: f64, prior_beta: f64 },
+    ThompsonBeta {
+        /// Beta prior's `α` (pseudo-successes before any data).
+        prior_alpha: f64,
+        /// Beta prior's `β` (pseudo-failures before any data).
+        prior_beta: f64,
+    },
     /// Thompson Sampling with a Gaussian posterior over the mean.
     /// `prior_weight` acts as pseudo-observations of `prior_mean`.
-    ThompsonGaussian { prior_mean: f64, prior_weight: f64 },
+    ThompsonGaussian {
+        /// The prior's mean reward.
+        prior_mean: f64,
+        /// How many pseudo-observations of `prior_mean` the prior carries.
+        prior_weight: f64,
+    },
     /// KL-UCB (Garivier & Cappé 2011): the UCB1 idea with the exact
     /// Bernoulli-KL confidence set — uniformly better constants. Rewards
     /// must lie in `[0, 1]`. `c` scales the `ln ln t` term: the theory
     /// wants `c ≥ 3`, the paper recommends `c = 0` in practice.
-    KlUcb { c: f64 },
+    KlUcb {
+        /// Weight on the `ln ln t` term in the confidence bound.
+        c: f64,
+    },
     /// EXP3 (Auer et al. 2002): adversarial-setting exponential weights
     /// with exploration mix `gamma`. Rewards must lie in `[0, 1]`.
-    Exp3 { gamma: f64 },
+    Exp3 {
+        /// Fraction of each round's probability mass spread uniformly for
+        /// exploration.
+        gamma: f64,
+    },
 }
 
 impl BanditPolicy {
@@ -92,6 +115,7 @@ impl Default for BanditPolicy {
 /// Bandit algorithm parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Bandit {
+    /// Exploration policy used to rank and select arms.
     pub policy: BanditPolicy,
     /// Seeds the policy's random stream (ε-greedy exploration, TS draws).
     pub seed: u64,
@@ -140,6 +164,7 @@ pub struct BanditModel {
 }
 
 impl BanditModel {
+    /// Number of arms the model has seen.
     pub fn n_arms(&self) -> usize {
         self.names.len()
     }

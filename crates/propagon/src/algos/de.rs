@@ -11,12 +11,14 @@ use crate::parallel;
 
 /// Objective to maximize.
 pub trait Fitness: Send + Sync {
+    /// Scores one candidate vector; the optimizer maximizes this.
     fn score(&self, candidate: &[f32]) -> f32;
 }
 
 /// DE hyperparameters (see field docs in v1; defaults chosen by callers).
 #[derive(Clone, Copy, Debug)]
 pub struct DifferentialEvolution {
+    /// Dimensionality of each candidate vector.
     pub dims: usize,
     /// Population size.
     pub lambda: usize,

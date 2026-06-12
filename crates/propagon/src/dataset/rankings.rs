@@ -26,6 +26,7 @@ impl Default for RankingsDataset {
 }
 
 impl RankingsDataset {
+    /// An empty dataset with an empty interner.
     pub fn new() -> Self {
         Self::default()
     }
@@ -72,14 +73,17 @@ impl RankingsDataset {
         self.offsets.len() - 1
     }
 
+    /// Whether the dataset holds no rankings.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Number of distinct entities seen by the interner.
     pub fn n_entities(&self) -> usize {
         self.interner.len()
     }
 
+    /// The interner backing this dataset's entity ids.
     pub fn interner(&self) -> &Interner {
         &self.interner
     }
@@ -89,6 +93,7 @@ impl RankingsDataset {
         &self.items[self.offsets[i]..self.offsets[i + 1]]
     }
 
+    /// All rankings as id slices in insertion order, each best first.
     pub fn rankings(&self) -> impl Iterator<Item = &[u32]> {
         (0..self.len()).map(|i| self.ranking(i))
     }

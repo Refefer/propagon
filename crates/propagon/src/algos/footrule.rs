@@ -11,10 +11,12 @@
 //! makes the result a 2-approximation to the NP-hard Kemeny optimum
 //! [Dwork et al. 2001] — a guarantee where Kemeny's heuristics have none.
 //!
-//! Partial ballots use the **induced** footrule objective: a ballot charges
-//! displacement only for the items it actually ranks, so items it never saw
-//! sit wherever the remaining evidence is cheapest. Fully deterministic —
-//! no RNG, and matching ties break toward lower position indices.
+//! Assumes ballots are orderings over a shared item universe; they need not
+//! be complete. Partial ballots use the **induced** footrule objective: a
+//! ballot charges displacement only for the items it actually ranks, so items
+//! it never saw sit wherever the remaining evidence is cheapest. Fully
+//! deterministic — no RNG, and matching ties break toward lower position
+//! indices.
 //!
 //! Gotcha: the cost matrix and the matching are dense — O(n²) memory,
 //! O(n³) time. Metasearch and leaderboard sizes, not 10⁵-item catalogs.

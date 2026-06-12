@@ -53,6 +53,8 @@ impl SparseSymmetric {
         }
     }
 
+    /// Sparse matrix-vector product `out = A·x`, summing each row's stored
+    /// `(j, a_ij)` entries against `x`.
     fn matvec(&self, x: &[f64], out: &mut [f64]) {
         for (i, row) in self.rows.iter().enumerate() {
             out[i] = row.iter().map(|&(j, v)| v * x[j as usize]).sum();
@@ -76,6 +78,13 @@ impl SparseSymmetric {
         self.cg(b, iterations, tolerance, true)
     }
 
+    /// The shared conjugate-gradient loop behind [`SparseSymmetric::solve`]
+    /// and [`SparseSymmetric::solve_mean_zero`]. Iterates until the relative
+    /// residual falls under `tolerance` (returning the current iterate) or the
+    /// iteration cap is hit; with `center`, both `b` and every `A·p` are
+    /// projected mean-zero so a Laplacian's constant kernel is handled. Errors
+    /// on non-positive curvature (indefinite/asymmetric input) or on failing
+    /// to reach within 1000× the tolerance by the cap.
     fn cg(&self, b: &[f64], iterations: usize, tolerance: f64, center: bool) -> Result<Vec<f64>> {
         let n = b.len();
         let mut b = b.to_vec();
@@ -139,10 +148,12 @@ impl SparseSymmetric {
     }
 }
 
+/// Euclidean inner product of two equal-length vectors.
 fn dot(a: &[f64], b: &[f64]) -> f64 {
     a.iter().zip(b).map(|(x, y)| x * y).sum()
 }
 
+/// Subtracts the mean in place, projecting `v` onto the mean-zero subspace.
 fn demean(v: &mut [f64]) {
     let mean = v.iter().sum::<f64>() / v.len() as f64;
     v.iter_mut().for_each(|x| *x -= mean);

@@ -2,6 +2,15 @@
 //!
 //! Score = pairwise majorities won, with ties worth half. Condorcet-consistent:
 //! an entity that beats every opponent head-to-head always ranks first.
+//!
+//! Assumes each unordered pair's outcome is decided by its net directed win
+//! weight: rows are aggregated per pair, and only the sign of that net margin
+//! (positive, negative, or zero) feeds the score.
+//!
+//! Gotchas: only *who* won each pair matters, never by how much — a 100-game
+//! sweep and a single-game edge contribute the same point. Scores are coarse
+//! (multiples of ½, capped at n−1), so wide ties are common, and an entity
+//! with no recorded comparisons simply scores 0.
 
 use std::collections::HashMap;
 

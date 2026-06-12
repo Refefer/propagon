@@ -48,6 +48,7 @@ impl RumDistribution {
 /// ES-RUM parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EsRum {
+    /// Whether per-entity variance is learned or pinned to 1.
     pub distribution: RumDistribution,
     /// ES iterations.
     pub passes: usize,
@@ -59,6 +60,7 @@ pub struct EsRum {
     pub min_obs: usize,
     /// Pseudo-count smoothing added to every pairwise record.
     pub prior: usize,
+    /// Seed for the perturbation generators (makes fits reproducible).
     pub seed: u64,
 }
 

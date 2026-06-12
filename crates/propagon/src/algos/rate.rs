@@ -53,6 +53,7 @@ pub fn wilson_interval(successes: f64, failures: f64, z: f64) -> (f64, f64) {
 /// Win-rate ranker parameters. The struct is the algorithm; fields are params.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct WinRate {
+    /// Which statistic to rank by (point estimate or a Wilson upper bound).
     pub confidence: Confidence,
 }
 

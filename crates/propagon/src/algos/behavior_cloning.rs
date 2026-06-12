@@ -39,12 +39,16 @@ pub enum Granularity {
     Global,
     /// Tokens are `state<separator>action`, split on the first separator;
     /// frequencies are normalized within each state.
-    PerState { separator: char },
+    PerState {
+        /// Character splitting a token into its state and action parts.
+        separator: char,
+    },
 }
 
 /// Behavior-cloning parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BehaviorCloning {
+    /// Whether tokens are opaque actions or split into `state`/`action`.
     pub granularity: Granularity,
     /// Laplace smoothing α ≥ 0: score = (count + α) / (N + α·K) with K
     /// distinct actions in the normalization group.

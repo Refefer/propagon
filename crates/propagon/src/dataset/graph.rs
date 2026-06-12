@@ -17,6 +17,7 @@ pub struct GraphDataset {
 }
 
 impl GraphDataset {
+    /// An empty edge list with an empty interner.
     pub fn new() -> Self {
         Self::default()
     }
@@ -62,18 +63,22 @@ impl GraphDataset {
         self.weights.push(weight);
     }
 
+    /// Number of edges.
     pub fn len(&self) -> usize {
         self.src.len()
     }
 
+    /// Whether the graph has no edges.
     pub fn is_empty(&self) -> bool {
         self.src.is_empty()
     }
 
+    /// Number of distinct nodes seen by the interner.
     pub fn n_nodes(&self) -> usize {
         self.interner.len()
     }
 
+    /// The interner backing this graph's node ids.
     pub fn interner(&self) -> &Interner {
         &self.interner
     }
@@ -99,9 +104,13 @@ impl GraphDataset {
 /// [`PairwiseDataset::as_graph`](super::PairwiseDataset::as_graph).
 #[derive(Clone, Copy)]
 pub struct GraphView<'a> {
+    /// Edge source ids (the endorsing node), one per edge.
     pub src: &'a [u32],
+    /// Edge destination ids (the endorsed node), one per edge.
     pub dst: &'a [u32],
+    /// Edge weights, one per edge.
     pub weights: &'a [f32],
+    /// The interner mapping these ids back to node names.
     pub interner: &'a Interner,
 }
 
@@ -109,18 +118,22 @@ pub struct GraphView<'a> {
 pub type Adjacency = Vec<Vec<(u32, f32)>>;
 
 impl<'a> GraphView<'a> {
+    /// Number of distinct nodes seen by the interner.
     pub fn n_nodes(&self) -> usize {
         self.interner.len()
     }
 
+    /// Number of edges.
     pub fn n_edges(&self) -> usize {
         self.src.len()
     }
 
+    /// Whether the graph has no edges.
     pub fn is_empty(&self) -> bool {
         self.src.is_empty()
     }
 
+    /// All edges as `(src, dst, weight)` in stored order.
     pub fn edges(&self) -> impl Iterator<Item = (u32, u32, f32)> + 'a {
         self.src
             .iter()

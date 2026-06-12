@@ -1,26 +1,34 @@
-//! `propagon` — ranking from revealed preferences.
+//! `propagon` — the command-line front end for the ranking library.
 //!
-//! Subcommands are grouped by the shape of the input data:
+//! Subcommands are grouped by the shape of the input data. Each reads a
+//! plain-text file and writes `id: score` (tsv) or the model's state (jsonl):
 //!
-//! - `propagon tournament <algo> <path>` — pairwise comparison rankers
-//!   (win-rate, elo, glicko2, bradley-terry-model, thurstone-mosteller,
-//!   luce-spectral-ranking, i-luce-spectral-ranking, rank-centrality,
-//!   serial-rank, random-walker, random-utility-model, kemeny, borda-count,
-//!   copeland, massey, colley, keener, offense-defense,
-//!   bayesian-bradley-terry, hodge-rank) over `winner loser [weight]` rows.
-//! - `propagon rankings <algo> <path>` — ballot aggregation (plackett-luce,
-//!   i-luce-spectral-ranking, markov-chain, borda-count, kemeny, mallows,
-//!   footrule) over one-ballot-per-line files.
-//! - `propagon graph <algo> <path>` — node-importance rankers and utilities
-//!   (page-rank with optional teleport seeds, birank, hits, katz-centrality,
-//!   leader-rank, harmonic, degree, k-core, components) over
-//!   `src dst [weight]` edges.
-//! - `propagon bandit <policy> <path>` — multi-armed bandits (greedy,
-//!   epsilon-greedy, upper-confidence-bound, kl-ucb, exp3, thompson-beta,
-//!   thompson-gaussian) over `arm reward` rows.
+//! - `propagon tournament <algo> <path>` — two-sided game results, one per
+//!   `side1<TAB>side2<TAB>threshold[<TAB>count]` line (signed threshold: `>0`
+//!   side 1 wins by that margin, `<0` side 2 wins, `0` is a tie; rosters within
+//!   a side are space-separated). Hosts the Bradley-Terry family, Elo/Glicko-2,
+//!   spectral and least-squares rankers, Kemeny/Borda/Copeland, and more.
+//! - `propagon rankings <algo> <path>` — best-first ballots, one per line
+//!   (Plackett-Luce, I-LSR, MC4, Borda, Kemeny, Mallows, footrule).
+//! - `propagon crowd <algo> <path>` — annotator-tagged votes
+//!   (`annotator winner loser [weight]`): crowd-aware Bradley-Terry.
+//! - `propagon matchups <algo> <path>` — team matches (teams `|`-separated,
+//!   trailing `=` for a tie): Weng-Lin / OpenSkill.
+//! - `propagon graph <algo> <path>` — `src dst [weight]` edges: PageRank (with
+//!   optional teleport seeds), HITS, Katz, LeaderRank, harmonic, degree,
+//!   k-core, and the components splitter.
+//! - `propagon bandit <policy> <path>` — `arm reward` rows (LinUCB extends each
+//!   with a context vector): the multi-armed, sliding-window, and contextual
+//!   policies.
+//! - `propagon trajectories <algo> <path>` — `state reward` steps with a blank
+//!   line ending each episode: Monte Carlo / TD state values, bootstrap value
+//!   comparison, and behavior cloning.
 //!
-//! Cross-cutting: string ids natively, `--save-state`/`--load-state` for
-//! incremental and warm-started runs, `--format tsv|jsonl`, `--threads`.
+//! Flags are scoped to the commands that use them, so each command's `--help`
+//! is authoritative and shows every default. `--threads`, `--format tsv|jsonl`,
+//! and `--save-state` are universal; `--load-state` is on the resumable
+//! commands. The full algorithm catalog is in `README.md` and
+//! `docs/algorithms.md`.
 
 mod emit;
 mod io;
@@ -47,6 +55,7 @@ use propagon::{
     TiePolicy,
 };
 
+/// Entry point: runs the CLI, printing any error to stderr and exiting nonzero.
 fn main() {
     if let Err(e) = run() {
         eprintln!("error: {e}");
@@ -116,6 +125,7 @@ impl Progress for CliProgress {
 
 // ---------------------------------------------------------------- cli
 
+/// Builds a boolean `--name` flag (absent is false, present is true).
 fn flag(name: &'static str, help: &'static str) -> Arg {
     Arg::new(name)
         .long(name)
@@ -123,6 +133,8 @@ fn flag(name: &'static str, help: &'static str) -> Arg {
         .action(ArgAction::SetTrue)
 }
 
+/// Builds an optional `--name <value>` argument parsed as `T`, with no
+/// displayed default (use [`opt_def`] when the flag has an always-applied one).
 fn opt<T: Clone + Send + Sync + std::str::FromStr + 'static>(
     name: &'static str,
     help: &'static str,
@@ -211,6 +223,8 @@ fn with_periods(cmd: Command) -> Command {
     ))
 }
 
+/// Assembles the full clap command tree: the root options shared by every
+/// command plus the seven data-shape groups.
 fn cli() -> Command {
     Command::new("propagon")
         .version(env!("CARGO_PKG_VERSION"))
@@ -235,6 +249,7 @@ fn cli() -> Command {
         .subcommand(trajectories_cmd())
 }
 
+/// The `tournament` group: rankers over two-sided game-result rows.
 fn tournament_cmd() -> Command {
     Command::new("tournament")
         .about(
@@ -864,6 +879,7 @@ fn tournament_cmd() -> Command {
         ))))
 }
 
+/// The `rankings` group: consensus aggregation over best-first ballots.
 fn rankings_cmd() -> Command {
     Command::new("rankings")
         .visible_alias("ballots")
@@ -972,6 +988,7 @@ fn rankings_cmd() -> Command {
         ))))
 }
 
+/// The `crowd` group: annotator-aware ranking from tagged votes.
 fn crowd_cmd() -> Command {
     Command::new("crowd")
         .about("Rank from annotator-tagged votes: 'annotator winner loser [weight]' rows")
@@ -1013,6 +1030,7 @@ fn crowd_cmd() -> Command {
         )))
 }
 
+/// The `matchups` group: per-player ratings from team matches.
 fn matchups_cmd() -> Command {
     Command::new("matchups")
         .about("Rate players from team matches: teams '|'-separated best-first, '=' ties players whitespace-separated")
@@ -1064,6 +1082,7 @@ fn matchups_cmd() -> Command {
         )))
 }
 
+/// The `graph` group: node-importance rankers over edge lists.
 fn graph_cmd() -> Command {
     Command::new("graph")
         .about("Rank nodes by graph structure: 'src dst [weight]' edges")
@@ -1218,6 +1237,7 @@ fn graph_cmd() -> Command {
         ))
 }
 
+/// The `bandit` group: multi-armed and contextual policies over reward rows.
 fn bandit_cmd() -> Command {
     let common = |cmd: Command| -> Command {
         with_load_state(with_path(cmd))
@@ -1345,6 +1365,7 @@ fn bandit_cmd() -> Command {
         )))
 }
 
+/// The `trajectories` group: state values and behavior cloning from episodes.
 fn trajectories_cmd() -> Command {
     Command::new("trajectories")
         .about("Rank states from reward-bearing episodes: 'state reward' rows, blank line ends an episode")
@@ -1490,6 +1511,9 @@ fn choice<'a>(m: &'a ArgMatches, name: &str, fallback: &'a str) -> &'a str {
         .unwrap_or(fallback)
 }
 
+/// Per-invocation context: the resolved global options (input path, output
+/// format, state paths, threading, and the tie/period/min-count policies that
+/// shape how the input is read) plus the helpers every leaf runner shares.
 struct Ctx<'a> {
     path: &'a Path,
     format: String,
@@ -1504,6 +1528,9 @@ struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
+    /// Reads the global options from the parsed matches into a ready context,
+    /// building a dedicated thread pool when `--threads` was given. Flags absent
+    /// on the selected command fall back to their defaults (`try_get_one`).
     fn from_matches(sm: &'a ArgMatches) -> Result<Self> {
         let pool_holder = match sm.get_one::<usize>("threads") {
             Some(&n) => Some(
@@ -1569,6 +1596,8 @@ impl<'a> Ctx<'a> {
         })
     }
 
+    /// The [`FitOptions`] for this run — the progress sink (silent off a
+    /// terminal) and the thread pool (dedicated when `--threads` was set).
     fn opts(&self) -> FitOptions<'_> {
         FitOptions {
             progress: match &self.progress {
@@ -1582,6 +1611,9 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    /// Reads the input as a [`GamesDataset`](propagon::GamesDataset), splitting
+    /// blank-line batches into rating periods when `--groups-are-separate` is
+    /// set and applying the `--min-count` player-frequency filter.
     fn games(&self) -> Result<propagon::GamesDataset> {
         let g = io::read_games(self.path, self.periods)?;
         Ok(if self.min_count > 1 {
@@ -1602,6 +1634,9 @@ impl<'a> Ctx<'a> {
         self.games()?.margin_pairs(self.margin_ties)
     }
 
+    /// Errors when `--load-state` was passed to a command (`sub`) that has no
+    /// incremental or warm-start path — used by `maybe_bootstrap`, where a batch
+    /// command may carry the flag but resuming under resampling is invalid.
     fn reject_load_state(&self, sub: &str) -> Result<()> {
         if self.load_state.is_some() {
             return Err(Error::InvalidInput(format!(
@@ -1611,6 +1646,9 @@ impl<'a> Ctx<'a> {
         Ok(())
     }
 
+    /// Persists the model when `--save-state` was given, then writes it to
+    /// stdout in the chosen format (tsv scores or jsonl state). The standard
+    /// finish for the commands without a bespoke emitter.
     fn emit<M: RankModel>(&self, model: &M) -> Result<()> {
         self.save(model)?;
         let mut out = std::io::stdout().lock();
@@ -1620,6 +1658,8 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    /// Writes the model's state to `--save-state`'s path when that flag was
+    /// given; a no-op otherwise.
     fn save<M: RankModel>(&self, model: &M) -> Result<()> {
         if let Some(p) = &self.save_state {
             model.save_to_path(p)?;
@@ -1686,6 +1726,7 @@ fn update_maybe_loaded<A: OnlineRanker>(
 
 // ---------------------------------------------------------------- dispatch
 
+/// Parses argv and dispatches to the selected group's runner.
 fn run() -> Result<()> {
     let matches = cli().get_matches();
 
@@ -1711,6 +1752,8 @@ fn run() -> Result<()> {
     }
 }
 
+/// Runs one `tournament` leaf: build the context, read the games (lowered to the
+/// shape each algorithm wants), fit or fold, and emit.
 fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     match algo {
@@ -2196,6 +2239,7 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
     }
 }
 
+/// Runs one `rankings` leaf over the parsed ballots.
 fn run_rankings(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     let data = io::read_rankings(ctx.path)?;
@@ -2294,6 +2338,7 @@ fn run_rankings(algo: &str, sm: &ArgMatches) -> Result<()> {
     }
 }
 
+/// Runs one `crowd` leaf over the annotator-tagged votes.
 fn run_crowd(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     match algo {
@@ -2325,6 +2370,7 @@ fn run_crowd(algo: &str, sm: &ArgMatches) -> Result<()> {
     }
 }
 
+/// Runs one `matchups` leaf over the team matches.
 fn run_matchups(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     match algo {
@@ -2360,6 +2406,8 @@ fn run_matchups(algo: &str, sm: &ArgMatches) -> Result<()> {
     }
 }
 
+/// Runs one `graph` leaf over the edge list (`components` writes split files
+/// instead of scores).
 fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     match algo {
@@ -2532,6 +2580,7 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
     }
 }
 
+/// Runs one `trajectories` leaf over the parsed episodes.
 fn run_trajectories(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     let data = io::read_trajectories(ctx.path)?;
@@ -2624,6 +2673,9 @@ fn run_trajectories(algo: &str, sm: &ArgMatches) -> Result<()> {
     }
 }
 
+/// Runs one `bandit` leaf: fold rewards into the policy's state, then print
+/// either the per-arm scores or, with `--select`/`--select-for`, the next arm(s)
+/// to play.
 fn run_bandit(policy_name: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
 

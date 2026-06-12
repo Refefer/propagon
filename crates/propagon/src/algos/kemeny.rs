@@ -20,8 +20,10 @@ use crate::traits::{FitOptions, RankModel, Ranker};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum KemenyAlgo {
+    /// Repeated best-position insertion passes.
     #[default]
     Insertion,
+    /// Differential evolution over real-valued position scores.
     DiffEvo,
 }
 
@@ -33,15 +35,18 @@ pub enum KemenyPasses {
     /// or 50,000 DE evaluations.
     #[default]
     Auto,
+    /// An explicit budget of insertion passes / DE evaluations.
     Fixed(usize),
 }
 
 /// Kemeny parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Kemeny {
+    /// Search budget (insertion passes or DE evaluations).
     pub passes: KemenyPasses,
     /// Entities with fewer comparisons than this are dropped from output.
     pub min_obs: usize,
+    /// Which consensus-search heuristic to run.
     pub algo: KemenyAlgo,
     /// Seed for the DE search (v1 hardcoded 2020).
     pub seed: u64,

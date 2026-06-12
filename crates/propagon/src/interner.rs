@@ -18,6 +18,7 @@ pub struct Interner {
 }
 
 impl Interner {
+    /// An empty interner with no names.
     pub fn new() -> Self {
         Self::default()
     }
@@ -65,10 +66,12 @@ impl Interner {
         self.names.get(id as usize).map(AsRef::as_ref)
     }
 
+    /// Number of distinct interned names (the size of the dense id space).
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
+    /// Whether no names have been interned yet.
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }

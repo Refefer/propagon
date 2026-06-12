@@ -29,8 +29,10 @@ const EPS: f64 = 1e-8;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Estimator {
+    /// Deterministic power iteration on the transposed chain.
     #[default]
     PowerMethod,
+    /// Seeded random walks per start node.
     MonteCarlo,
 }
 
@@ -52,6 +54,7 @@ pub struct Lsr {
     /// Power-method passes, or random-walk steps per node for Monte Carlo
     /// (v1 defaults: 10 and 1000 respectively).
     pub steps: usize,
+    /// Which stationary-distribution estimator to run.
     pub estimator: Estimator,
     /// Seed for the Monte Carlo walks.
     pub seed: u64,

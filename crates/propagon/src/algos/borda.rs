@@ -4,6 +4,17 @@
 //! estimator, minimax-optimal for rank recovery under uniform schedules
 //! (Shah & Wainwright 2018). From rankings: classical positional points
 //! (`m - rank` per ballot).
+//!
+//! Assumes a roughly uniform comparison schedule for the pairwise mode's
+//! optimality guarantee: with imbalanced schedules a win total just rewards
+//! whoever played weak opponents most often, with no correction for strength
+//! of schedule.
+//!
+//! Gotchas: the two entry points live on different score scales — pairwise
+//! win-weight sums versus positional points — so their outputs are not
+//! comparable, only their orders. Borda is not Condorcet-consistent (it can
+//! rank a head-to-head winner second) and is manipulable by clones and
+//! strategic burying.
 
 use serde::{Deserialize, Serialize};
 

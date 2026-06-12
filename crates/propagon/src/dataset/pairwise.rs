@@ -37,6 +37,7 @@ pub struct Tally {
 }
 
 impl PairwiseDataset {
+    /// An empty dataset with an empty interner and no period boundaries.
     pub fn new() -> Self {
         Self::default()
     }
@@ -124,6 +125,7 @@ impl PairwiseDataset {
         self.winners.len()
     }
 
+    /// Whether the dataset holds no comparison rows.
     pub fn is_empty(&self) -> bool {
         self.winners.is_empty()
     }
@@ -133,6 +135,7 @@ impl PairwiseDataset {
         self.interner.len()
     }
 
+    /// The interner backing this dataset's entity ids.
     pub fn interner(&self) -> &Interner {
         &self.interner
     }

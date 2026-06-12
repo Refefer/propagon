@@ -23,6 +23,7 @@ pub struct AnnotatedPairsDataset {
 }
 
 impl AnnotatedPairsDataset {
+    /// An empty dataset with empty entity and annotator interners.
     pub fn new() -> Self {
         Self::default()
     }
@@ -40,22 +41,27 @@ impl AnnotatedPairsDataset {
         self.winners.len()
     }
 
+    /// Whether the dataset holds no votes.
     pub fn is_empty(&self) -> bool {
         self.winners.is_empty()
     }
 
+    /// Number of distinct entities (compared items) seen.
     pub fn n_entities(&self) -> usize {
         self.entities.len()
     }
 
+    /// Number of distinct annotators seen.
     pub fn n_annotators(&self) -> usize {
         self.annotators.len()
     }
 
+    /// The interner backing the entity (winner/loser) ids.
     pub fn entities(&self) -> &Interner {
         &self.entities
     }
 
+    /// The interner backing the annotator ids.
     pub fn annotators(&self) -> &Interner {
         &self.annotators
     }

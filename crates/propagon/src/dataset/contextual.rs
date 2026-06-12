@@ -24,6 +24,7 @@ pub struct ContextualRewardsDataset {
 }
 
 impl ContextualRewardsDataset {
+    /// An empty event log with an empty interner and unknown `dim`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -99,18 +100,22 @@ impl ContextualRewardsDataset {
         self.dim
     }
 
+    /// Number of reward events.
     pub fn len(&self) -> usize {
         self.arms.len()
     }
 
+    /// Whether the log holds no events.
     pub fn is_empty(&self) -> bool {
         self.arms.is_empty()
     }
 
+    /// Number of distinct arms seen by the interner.
     pub fn n_arms(&self) -> usize {
         self.interner.len()
     }
 
+    /// The interner backing this log's arm ids.
     pub fn interner(&self) -> &Interner {
         &self.interner
     }

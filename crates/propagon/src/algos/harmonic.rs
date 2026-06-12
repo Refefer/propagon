@@ -62,7 +62,12 @@ pub enum SourceBudget {
     All,
     /// Boldi-Vigna estimator: `count` distinct sources drawn with the seeded
     /// generator, accumulated scores scaled by n/count.
-    Sample { count: usize, seed: u64 },
+    Sample {
+        /// Number of distinct source nodes to sample.
+        count: usize,
+        /// Seed for the source-sampling RNG.
+        seed: u64,
+    },
 }
 
 /// Harmonic-centrality parameters.

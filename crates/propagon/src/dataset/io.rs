@@ -234,6 +234,7 @@ struct RewardsChunk {
 }
 
 impl RewardsDataset {
+    /// Serializes the dataset (vocab + columnar `(arm, reward)` chunks).
     pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
         write_header(&mut w, "rewards", serde_json::Value::Null, self.n_arms())?;
         write_vocab(&mut w, self.interner())?;
@@ -249,6 +250,8 @@ impl RewardsDataset {
         Ok(())
     }
 
+    /// Loads a dataset written by [`RewardsDataset::save_jsonl`]; arm ids and
+    /// column lengths are re-validated, so corrupted files surface as errors.
     pub fn load_jsonl<R: BufRead>(r: R) -> Result<Self> {
         let reader = read_dataset_prefix(r, "rewards")?;
         let mut out = RewardsDataset::new();
@@ -374,6 +377,7 @@ struct GraphChunk {
 }
 
 impl GraphDataset {
+    /// Serializes the dataset (vocab + columnar `(src, dst, weight)` chunks).
     pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
         write_header(&mut w, "graph", serde_json::Value::Null, self.n_nodes())?;
         write_vocab(&mut w, self.interner())?;
@@ -390,6 +394,8 @@ impl GraphDataset {
         Ok(())
     }
 
+    /// Loads a dataset written by [`GraphDataset::save_jsonl`]; node ids and
+    /// column lengths are re-validated, so corrupted files surface as errors.
     pub fn load_jsonl<R: BufRead>(r: R) -> Result<Self> {
         let reader = read_dataset_prefix(r, "graph")?;
         let mut out = GraphDataset::new();
@@ -418,6 +424,8 @@ struct RankingsChunk {
 }
 
 impl RankingsDataset {
+    /// Serializes the dataset (vocab + chunks of whole rankings, each a list
+    /// of vocab indices best-first).
     pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
         write_header(
             &mut w,
@@ -435,6 +443,8 @@ impl RankingsDataset {
         Ok(())
     }
 
+    /// Loads a dataset written by [`RankingsDataset::save_jsonl`]; each id is
+    /// resolved against the vocab, so out-of-range ids surface as errors.
     pub fn load_jsonl<R: BufRead>(r: R) -> Result<Self> {
         let reader = read_dataset_prefix(r, "rankings")?;
         let interner = reader.interner.clone();

@@ -45,6 +45,7 @@ pub struct BayesianBradleyTerry {
     pub burn_in: usize,
     /// Central credible-interval mass (e.g. 0.9 → 5%..95%).
     pub credible: f64,
+    /// Seed for the Gibbs sampler (makes draws exactly reproducible).
     pub seed: u64,
 }
 

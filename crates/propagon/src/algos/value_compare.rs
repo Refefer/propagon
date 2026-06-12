@@ -60,7 +60,10 @@ pub enum PairwiseTests {
     Off,
     /// For every state pair: exceedance over shared replicates and a
     /// two-sided permutation test with this many label shuffles.
-    On { permutations: usize },
+    On {
+        /// Number of label shuffles per pair's permutation test.
+        permutations: usize,
+    },
 }
 
 /// Bootstrap value-comparison parameters.
@@ -68,15 +71,19 @@ pub enum PairwiseTests {
 pub struct ValueCompare {
     /// Discount factor in `(0, 1]`.
     pub gamma: f64,
+    /// Which within-episode occurrences contribute return samples.
     pub visit: Visit,
     /// Resampling replicates (at least 2).
     pub replicates: usize,
+    /// How episodes are reweighted in each replicate.
     pub method: ResampleScheme,
     /// Central interval mass in `(0, 1)` (0.95 → 2.5%..97.5%).
     pub credible: f64,
+    /// Whether to also compute pairwise exceedance and permutation tests.
     pub pairwise: PairwiseTests,
     /// States with fewer full-data return samples than this are excluded.
     pub min_observations: usize,
+    /// Seeds the per-replicate (and permutation) resampling streams.
     pub seed: u64,
 }
 

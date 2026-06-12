@@ -58,6 +58,7 @@ pub enum TieModel {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum HomeAdvantage {
+    /// No home edge; γ is pinned to 1.
     #[default]
     None,
     /// Estimate a multiplicative γ on side 1 (the home side).

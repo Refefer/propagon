@@ -44,6 +44,7 @@ pub enum Visit {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Aggregate {
+    /// Arithmetic mean of the return samples.
     #[default]
     Mean,
     /// Robust to outliers; the empirical 0.5-quantile with linear
@@ -55,6 +56,7 @@ pub enum Aggregate {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Winsorize {
+    /// No clamping; samples are aggregated as-is.
     #[default]
     Off,
     /// Clamp each state's samples into its own `[q, 1−q]` empirical
@@ -67,8 +69,11 @@ pub enum Winsorize {
 pub struct McValue {
     /// Discount factor in `(0, 1]`; 1 weighs all future rewards equally.
     pub gamma: f64,
+    /// Which within-episode occurrences of a state contribute samples.
     pub visit: Visit,
+    /// How a state's return samples collapse into one estimate.
     pub aggregate: Aggregate,
+    /// Optional per-state outlier clamping applied before aggregation.
     pub winsorize: Winsorize,
     /// States with fewer samples than this are excluded from the model.
     pub min_observations: usize,

@@ -34,8 +34,10 @@ use crate::traits::{FitOptions, OnlineRanker, RankModel};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WengLinVariant {
+    /// Logistic likelihood (paper Algorithm 1).
     #[default]
     BradleyTerryFull,
+    /// Probit likelihood with a draw margin `ε` (paper Algorithm 3).
     ThurstoneMostellerFull,
 }
 
@@ -53,6 +55,7 @@ pub enum GammaPolicy {
 /// Weng-Lin parameters (paper §6.1 defaults).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WengLin {
+    /// Pairwise likelihood used for the per-comparison updates.
     pub variant: WengLinVariant,
     /// Initial rating mean.
     pub mu: f64,
@@ -66,6 +69,7 @@ pub struct WengLin {
     pub epsilon: f64,
     /// Pre-match additive dynamics: σ ← √(σ² + τ²) (0 = paper-faithful).
     pub tau: f64,
+    /// How the variance-update damping factor `γ_q` is chosen.
     pub gamma: GammaPolicy,
 }
 
@@ -94,7 +98,9 @@ struct RatingLine {
 /// One player's rating.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rating {
+    /// Estimated skill mean.
     pub mu: f64,
+    /// Skill uncertainty (standard deviation).
     pub sigma: f64,
 }
 

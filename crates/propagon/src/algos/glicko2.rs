@@ -30,9 +30,14 @@ use crate::traits::{FitOptions, OnlineRanker, RankModel};
 /// (0.3–1.2; smaller = more stable).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Glicko2 {
+    /// System constant constraining how fast volatility changes (0.3–1.2;
+    /// smaller = more stable).
     pub tau: f64,
+    /// Rating assigned to unseen entities.
     pub rating: f64,
+    /// Rating deviation assigned to unseen entities.
     pub rd: f64,
+    /// Volatility assigned to unseen entities.
     pub sigma: f64,
 }
 

@@ -56,10 +56,12 @@ pub struct HitsModel {
 }
 
 impl HitsModel {
+    /// Per-node authority scores (pointed to by good hubs), L1-normalized.
     pub fn authority_scores(&self) -> impl Iterator<Item = (&str, f64)> {
         self.names.names().zip(self.authority.iter().copied())
     }
 
+    /// Per-node hub scores (point to good authorities), L1-normalized.
     pub fn hub_scores(&self) -> impl Iterator<Item = (&str, f64)> {
         self.names.names().zip(self.hub.iter().copied())
     }

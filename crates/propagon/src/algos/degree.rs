@@ -32,6 +32,7 @@ pub enum Direction {
 /// Degree-centrality parameters.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Degree {
+    /// Which incident edges count: in-, out-, or total strength.
     pub direction: Direction,
 }
 

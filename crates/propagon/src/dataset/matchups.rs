@@ -37,6 +37,7 @@ impl Default for MatchupsDataset {
 }
 
 impl MatchupsDataset {
+    /// An empty dataset with an empty interner.
     pub fn new() -> Self {
         Self::default()
     }
@@ -94,14 +95,17 @@ impl MatchupsDataset {
         self.match_offsets.len() - 1
     }
 
+    /// Whether the dataset holds no matches.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Number of distinct players seen by the interner.
     pub fn n_entities(&self) -> usize {
         self.interner.len()
     }
 
+    /// The interner backing this dataset's player ids.
     pub fn interner(&self) -> &Interner {
         &self.interner
     }

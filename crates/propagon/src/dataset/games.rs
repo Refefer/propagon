@@ -42,14 +42,18 @@ pub enum GameOutcome {
     Side1Win(f32),
     /// Side 2 won by this margin.
     Side2Win(f32),
+    /// The game was a draw.
     Tie,
 }
 
 /// One game borrowed out of a [`GamesDataset`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameView<'a> {
+    /// Side 1's roster (interned player ids).
     pub side1: &'a [u32],
+    /// Side 2's roster (interned player ids).
     pub side2: &'a [u32],
+    /// The result from side 1's perspective.
     pub outcome: GameOutcome,
     /// Aggregation weight (repeat count); 1.0 = one observed game.
     pub weight: f32,
@@ -60,8 +64,10 @@ pub struct GameView<'a> {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TiePolicy {
+    /// Reject the lowering: a tie is a hard error (the default).
     #[default]
     Error,
+    /// Drop tied games entirely.
     Discard,
     /// Each tie becomes two half-weight rows, one per direction.
     HalfWin,
@@ -72,8 +78,10 @@ pub enum TiePolicy {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MarginTies {
+    /// Reject the lowering: a tie is a hard error (the default).
     #[default]
     Error,
+    /// Drop tied games entirely.
     Discard,
     /// A tie is a zero-margin observation.
     Zero,
@@ -108,6 +116,7 @@ impl Default for GamesDataset {
 }
 
 impl GamesDataset {
+    /// An empty dataset with an empty interner and no period boundaries.
     pub fn new() -> Self {
         Self::default()
     }
@@ -258,6 +267,7 @@ impl GamesDataset {
         self.outcomes.len()
     }
 
+    /// Whether the dataset holds no games.
     pub fn is_empty(&self) -> bool {
         self.outcomes.is_empty()
     }
@@ -267,6 +277,7 @@ impl GamesDataset {
         self.interner.len()
     }
 
+    /// The interner backing this dataset's player ids.
     pub fn interner(&self) -> &Interner {
         &self.interner
     }

@@ -41,6 +41,7 @@ impl Default for TrajectoriesDataset {
 }
 
 impl TrajectoriesDataset {
+    /// An empty dataset with an empty interner and no episodes.
     pub fn new() -> Self {
         Self::default()
     }
@@ -135,6 +136,7 @@ impl TrajectoriesDataset {
         self.states.len()
     }
 
+    /// Whether the dataset holds no steps.
     pub fn is_empty(&self) -> bool {
         self.states.is_empty()
     }
@@ -144,6 +146,7 @@ impl TrajectoriesDataset {
         self.interner.len()
     }
 
+    /// The interner backing this dataset's state ids.
     pub fn interner(&self) -> &Interner {
         &self.interner
     }

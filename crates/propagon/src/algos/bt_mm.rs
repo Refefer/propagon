@@ -443,6 +443,7 @@ pub enum SectionKind {
 /// A group of entities sharing one score scale.
 #[derive(Clone, Debug)]
 pub struct Section {
+    /// Which score scale these entries share (ranked, undefeated, winless).
     pub kind: SectionKind,
     /// `(id, score)` sorted as v1 emitted them.
     pub entries: Vec<(u32, f64)>,
@@ -472,6 +473,7 @@ impl BtmMmModel {
         &self.sections
     }
 
+    /// Resolves an entity id to its name, or `None` if out of range.
     pub fn name(&self, id: u32) -> Option<&str> {
         self.names.name(id)
     }

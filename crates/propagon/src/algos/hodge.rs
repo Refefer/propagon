@@ -45,6 +45,7 @@ pub enum HodgeFlow {
 /// HodgeRank parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HodgeRank {
+    /// Which skew-symmetric statistic each pair's comparisons aggregate into.
     pub flow: HodgeFlow,
     /// Maximum CG iterations.
     pub iterations: usize,

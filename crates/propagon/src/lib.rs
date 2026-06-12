@@ -50,6 +50,8 @@
 
 // AGENTS.md rule 7: unit tests fail loud by design; production code may not.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+// AGENTS.md rule 4: every public item carries documentation.
+#![warn(missing_docs)]
 
 pub mod algos;
 pub mod dataset;

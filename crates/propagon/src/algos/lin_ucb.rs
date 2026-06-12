@@ -168,6 +168,7 @@ pub struct LinUcbModel {
 }
 
 impl LinUcbModel {
+    /// Number of distinct arms the model has seen.
     pub fn n_arms(&self) -> usize {
         self.names.len()
     }

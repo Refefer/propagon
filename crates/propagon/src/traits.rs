@@ -91,11 +91,15 @@ pub trait RankModel: Sized {
 
 /// Batch fitting: dataset in, model out.
 pub trait Ranker {
+    /// The dataset shape this algorithm consumes.
     type Data;
+    /// The fitted model this algorithm produces.
     type Model: RankModel;
 
+    /// Fits a model from `data`, honoring `opts` (progress sink, thread pool).
     fn fit_opts(&self, data: &Self::Data, opts: &FitOptions<'_>) -> Result<Self::Model>;
 
+    /// Fits a model from `data` with default options.
     fn fit(&self, data: &Self::Data) -> Result<Self::Model> {
         self.fit_opts(data, &FitOptions::default())
     }
@@ -113,6 +117,7 @@ pub trait Ranker {
         self.fit_opts(data, opts)
     }
 
+    /// Warm-starts from `init` with default options.
     fn fit_warm(&self, data: &Self::Data, init: &Self::Model) -> Result<Self::Model> {
         self.fit_warm_opts(data, init, &FitOptions::default())
     }
@@ -120,13 +125,15 @@ pub trait Ranker {
 
 /// Incremental fitting: state evolves batch by batch, history is never replayed.
 pub trait OnlineRanker {
+    /// The dataset shape this algorithm consumes.
     type Data;
+    /// The incremental model this algorithm maintains.
     type Model: RankModel;
 
     /// Fresh state with no observations.
     fn init(&self) -> Self::Model;
 
-    /// Folds one batch into the model.
+    /// Folds one batch into `model`, honoring `opts` (progress, threading).
     fn update_opts(
         &self,
         model: &mut Self::Model,
@@ -134,6 +141,7 @@ pub trait OnlineRanker {
         opts: &FitOptions<'_>,
     ) -> Result<()>;
 
+    /// Folds one batch into `model` with default options.
     fn update(&self, model: &mut Self::Model, data: &Self::Data) -> Result<()> {
         self.update_opts(model, data, &FitOptions::default())
     }
