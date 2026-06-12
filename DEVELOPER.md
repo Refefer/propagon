@@ -174,12 +174,19 @@ Every implemented algorithm by CLI group (survey § references point into
 | | Counting behavior cloning (§13.6) | `behavior-cloning` (`bc`) |
 | *(any batch)* | Bootstrap intervals on scores and ranks (§11.4) | `--bootstrap N` on every batch command |
 
-Cross-cutting flags everywhere: `--threads N`, `--format tsv|jsonl`,
-`--save-state PATH`, `--load-state PATH`. The `tournament`, `rankings`, `crowd`,
-`graph`, and `trajectories` groups also take `--bootstrap N`
-(+ `--bootstrap-credible`, `--bootstrap-seed`); the `tournament` group adds
-`--ties error|discard|half-win` and `--margin-ties error|discard|zero` for
-lowering tie games to the win/loss and margin shapes.
+Flags appear only on the commands that use them — each command's `--help` lists
+exactly what it accepts, and an irrelevant flag is a parse error, not a runtime
+one (every value-bearing flag also shows its `[default: …]`, sourced from the
+algorithm's `Default`). Universal: `--threads N`, `--format tsv|jsonl`,
+`--save-state PATH`. `--load-state PATH` is on the resumable commands only
+(online updaters and the warm-startable batch fits). `--bootstrap N`
+(+ `--bootstrap-credible`, `--bootstrap-seed`) is on the batch rankers that can
+be wrapped — not the online ones (elo, glicko2, win-rate, melo, whr, td) or the
+already-bootstrap ones (compare). `--ties error|discard|half-win` is on the
+win/loss-lowering tournament commands; `--margin-ties error|discard|zero` on the
+margin ones (massey, keener, offense-defense, hodge-rank); `--groups-are-separate`
+on the period-aware ones (glicko2, whr); `--min-count` on the whole tournament
+group.
 
 ## CLI reference: key flags
 
@@ -188,17 +195,17 @@ tuning reference for the flags that change results most.
 
 **`tournament bradley-terry-model`** — `--estimator mm` (exact MM iteration, the default) or `sgd` (logistic gradient descent: streams better, supports `--passes/--alpha/--decay`). MM needs a connected comparison graph with no undefeated entities; mitigations built in: `--remove-total-losers`, `--create-fake-games W`, `--random-subgraph-links N`. Tighten `--tolerance` (default 1e-6) for publication-grade fits.
 
-**`tournament generalized-bradley-terry`** — `--tie-model none|davidson|rao-kupper` (default `davidson`) models draws; `--home-advantage` estimates a multiplicative edge for the side listed **first**. Fitted tie ν/θ and home γ are reported on stderr. (Uses its own `--tie-model`, not the group `--ties`.)
+**`tournament generalized-bradley-terry`** — `--tie-model none|davidson|rao-kupper` (default `davidson`) models draws; `--home-advantage` estimates a multiplicative edge for the side listed **first**. Fitted tie ν/θ and home γ are reported on stderr. (Handles ties natively, so it has its own `--tie-model` and no `--ties`.)
 
-**`tournament team-bradley-terry`** — `--aggregate additive|product` builds team strength from member strengths; tie handling comes from the group-global `--ties`.
+**`tournament team-bradley-terry`** — `--aggregate additive|product` builds team strength from member strengths; tie handling via `--ties`.
 
 **`tournament glicko2`** — `--tau` (0.3–1.2, default 0.5) bounds how fast a player's *volatility* can grow: lower = stabler ratings, higher = faster reaction to form swings. Feed rating periods as blank-line-separated batches with `--groups-are-separate`; each period is one Bayesian update.
 
 **`tournament elo`** — `--k` (default 32) is the whole game: high K tracks fast and stays noisy, low K converges and goes stale. `--scale` (400) sets how many points mean 10:1 odds. `--margin-of-victory` switches to MOV-Elo, scaling K by `(ln(1+margin)/ln 2)^mov_exponent` (`--mov-exponent`, default 1.0); a margin-1 win matches plain Elo. Elo is order-dependent and never converges by design — for frozen entities use Bradley-Terry.
 
-**`tournament whole-history-rating`** — `--w2` (Wiener variance per period; smaller = flatter careers) and `--prior-games` (virtual anchor draws). Periods come from `--groups-are-separate`; `--timeline` emits the full `(period, rating, sd)` curve per player. Batch-only — `--bootstrap` is rejected (it would drop the periods).
+**`tournament whole-history-rating`** — `--w2` (Wiener variance per period; smaller = flatter careers) and `--prior-games` (virtual anchor draws). Periods come from `--groups-are-separate`; `--timeline` emits the full `(period, rating, sd)` curve per player. No `--bootstrap` (row resampling would drop the rating periods).
 
-**`tournament melo`** — `--k` cyclic dimension pairs (model rank 2k; `k=0` ≡ Elo), `--lr-rating`/`--lr-vector` step sizes, `--seed`. Online; `--bootstrap` rejected. The leaderboard shows the transitive rating; the cyclic part lives in the library `predict(a,b)`.
+**`tournament melo`** — `--k` cyclic dimension pairs (model rank 2k; `k=0` ≡ Elo), `--lr-rating`/`--lr-vector` step sizes, `--seed`. Online, so no `--bootstrap`. The leaderboard shows the transitive rating; the cyclic part lives in the library `predict(a,b)`.
 
 **`tournament nash-averaging`** — `--iterations`/`--tolerance` for the multiplicative-weights solve, `--learning-rate` (in (0,1]), `--anneal-every` (temperature halving). The duality gap is printed to stderr as a convergence certificate.
 
@@ -306,7 +313,7 @@ existing rankers keep their pairwise/matchups input types.
   Documented exception: EXP3's replay is order-dependent, so its `merge`
   approximates the concatenated log. Online rankers are **excluded** from
   `Bootstrap` by the type bound — resampling rows changes what an order-dependent
-  model means, so `--bootstrap` is rejected on those commands.
+  model means, so their CLI commands don't carry `--bootstrap` at all.
 
 **Resampling**: `Resample` is implemented for every shape, with the natural unit
 (rows / ballots / edges / matches / games / episodes). `Bootstrap<R: Ranker>`
@@ -372,10 +379,15 @@ patterns in use:
 5. If a published worked example exists, add it to `tests/reference.rs`
    **with the source cited** — never hard-code numbers you cannot point to.
 6. Wire the CLI: a leaf under the right group (`tournament`/`rankings`/`crowd`/
-   `matchups`/`graph`/`bandit`/`trajectories`) using the `set`/`choice` pattern;
-   spell names out for laymen with a short `visible_alias`. If it's a batch
-   `Ranker`, it gets `--bootstrap` for free via the group flag; if it's online,
-   call `reject_bootstrap`.
+   `matchups`/`graph`/`bandit`/`trajectories`). Use `opt_def` (not `opt`) for any
+   value-bearing flag, sourcing the default from the algorithm's `Default` so the
+   `[default: …]` in `--help` stays single-sourced; read it back with `set`/
+   `choice`. Attach only the flags the algorithm uses via the `with_*`
+   combinators (`with_path`, `with_load_state`, `with_bootstrap`, `with_ties`,
+   `with_margin_ties`, `with_periods`) — e.g. wrap a batch `Ranker` in
+   `with_bootstrap` and route it through `maybe_bootstrap`; leave `with_bootstrap`
+   off an online ranker so `--bootstrap` is a parse error there. Spell names out
+   for laymen with a short `visible_alias`.
 7. Run the full gate (below).
 
 ## Testing and correctness

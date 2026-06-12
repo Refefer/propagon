@@ -275,6 +275,37 @@ fn new_subcommands_run() -> TestResult {
     Ok(())
 }
 
+/// Flags a method does not use are rejected at parse time (unrepresentable),
+/// not silently accepted or caught only at runtime.
+#[test]
+fn irrelevant_flags_rejected_at_parse() -> TestResult {
+    // (command, flag it must not accept)
+    let cases: &[&[&str]] = &[
+        &["tournament", "elo", "--ties", "half-win"],
+        &["tournament", "elo", "--bootstrap", "10"],
+        &["tournament", "elo", "--groups-are-separate"],
+        &["tournament", "massey", "--ties", "error"],
+        &["tournament", "whole-history-rating", "--bootstrap", "10"],
+        &["trajectories", "td", "--bootstrap", "10"],
+    ];
+    for args in cases {
+        let out = Command::new(env!("CARGO_BIN_EXE_propagon"))
+            .args(*args)
+            .arg(repo(EDGES))
+            .output()?;
+        assert!(
+            !out.status.success(),
+            "{args:?} should be rejected at parse"
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("unexpected argument"),
+            "{args:?} expected a parse error, got: {stderr}"
+        );
+    }
+    Ok(())
+}
+
 /// Bandit group: per-policy subcommands, scores and seeded selection.
 #[test]
 fn bandit_subcommand_runs() -> TestResult {

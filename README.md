@@ -1813,7 +1813,7 @@ You have logs of thousands of user sessions through your website — each a sequ
 
 - You have episodic trajectories with rewards (sessions, games, rollouts) and want a per-state value with no transition model — just averaged outcomes.
 - You want a robust, tunable estimate: first- or every-visit counting, mean or median aggregation, and winsorization to tame heavy-tailed returns.
-- You need the simplest unbiased value estimate as a baseline before reaching for bootstrapping (TD) methods.
+- You need the simplest unbiased value estimate as a baseline before reaching for a temporal-difference (TD) method.
 
 **When to avoid**
 
@@ -2244,7 +2244,7 @@ Each arm's score is its **windowed UCB index**: the arm's mean reward *over the 
 
 **Real-world scenario**
 
-You want per-state values from session logs, like Monte Carlo gives you, but your rewards are sparse and arrive only at the very end of long episodes — so Monte Carlo's full-return averages are wildly noisy. TD(0) instead learns by bootstrapping: each step nudges a state's value toward the immediate reward plus the (discounted) value of the next state, letting reward signal seep backward through the chain a little at a time. It's the streaming, lower-variance cousin of Monte Carlo value estimation.
+You want per-state values from session logs, like Monte Carlo gives you, but your rewards are sparse and arrive only at the very end of long episodes — so Monte Carlo's full-return averages are wildly noisy. TD(0) instead learns by *bootstrapping off its own estimates*: each step nudges a state's value toward the immediate reward plus the (discounted) value of the next state, letting reward signal seep backward through the chain a little at a time. It's the streaming, lower-variance cousin of Monte Carlo value estimation.
 
 **When to use**
 
@@ -2263,6 +2263,8 @@ You want per-state values from session logs, like Monte Carlo gives you, but you
 # input rows are: state reward   (a blank line ends each episode)
 propagon trajectories td --alpha 0.1 --gamma 0.95 --passes 5 sessions.txt
 ```
+
+> Note: "bootstrapping" above is the reinforcement-learning sense (TD estimates a value from another estimate) — **not** the `--bootstrap` resampling flag. Because TD is online and order-dependent, `td` has no `--bootstrap` flag at all; for confidence intervals on trajectory values use `trajectories compare` (or `monte-carlo --bootstrap N`, which is batch).
 
 **Library usage**
 
