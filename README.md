@@ -16,6 +16,22 @@ cargo build --release          # binary at target/release/propagon
 
 Requires Rust 1.88+. Building from source, the crate API, the full CLI reference, and the test strategy live in [`DEVELOPER.md`](DEVELOPER.md).
 
+## Installing the CLI
+
+To put the `propagon` binary on your `PATH` so you can run it from anywhere:
+
+```bash
+cargo install --path crates/propagon-cli
+```
+
+This installs the binary into `~/.cargo/bin/propagon` (or wherever your Cargo home resolves). After that, `propagon --help` works from any directory.
+
+To update to the latest version from a cloned repo, re-run the same command with `--force`:
+
+```bash
+cargo install --path crates/propagon-cli --force
+```
+
 ## Which algorithm should I use?
 
 Use this guide to find the right category for your data:

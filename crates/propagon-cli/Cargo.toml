@@ -15,6 +15,11 @@ readme = "../../README.md"
 name = "propagon"
 path = "src/main.rs"
 
+[features]
+default = ["parallel"]
+# Enable parallel fitting in the propagon library (rayon).
+parallel = ["propagon/parallel"]
+
 [dependencies]
 propagon.workspace = true
 clap.workspace = true
