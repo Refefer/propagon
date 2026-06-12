@@ -36,12 +36,24 @@ run copeland              copeland
 run colley                colley
 run keener                keener
 run bayes-bt              bayesian-bradley-terry --samples 1000
+run thurstone-mosteller   thurstone-mosteller
+run ilsr                  i-luce-spectral-ranking
+run serial-rank           serial-rank
+run random-walker         random-walker --bias 0.8
+run whr                   whole-history-rating
+run melo                  melo --k 1
+run nash-averaging        nash-averaging --iterations 50000
+run blade-chest           blade-chest --epochs 20
+run gbt                   generalized-bradley-terry --tie-model none
+run btm-bootstrap         bradley-terry-model --bootstrap 200
 
-# Massey reads the weight column as the margin of victory; the baseball
-# file carries plain win counts, so feed every game with margin 1 (a valid
-# if uninformative margin) just to demo the command shape.
+# Massey and offense-defense read the threshold as the margin of victory;
+# the baseball file carries margin-1 wins (a valid if uninformative margin)
+# just to demo the command shape.
 echo "== massey" >&2
 "$BIN" tournament massey "$DATA" > out/massey.scores
+echo "== offense-defense" >&2
+"$BIN" tournament offense-defense "$DATA" > out/offense-defense.scores
 
 # HodgeRank also prints how *rankable* the season is (cyclic-flow share).
 echo "== hodge-rank" >&2

@@ -1,7 +1,7 @@
 # Ranking a season of pairwise outcomes
 
 `baseball.2018` is the full 2018 MLB regular season — 2,431 games as
-`winner loser` rows (tab-separated, quoted team codes). `baseball.2018.edges`
+`winner<TAB>loser<TAB>1` rows (quoted team codes; threshold 1 = a win with unit margin). `baseball.2018.edges`
 is the same season with numeric ids (kept because the test suite pins
 golden outputs against it). Real data, all 30 teams, ~162 games each: dense
 enough that every algorithm has something to say.

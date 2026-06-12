@@ -16,6 +16,15 @@ for policy in greedy epsilon-greedy upper-confidence-bound kl-ucb thompson-beta 
   "$BIN" bandit "$policy" rewards > "out/$policy.scores"
 done
 
+# Sliding-window UCB forgets old evidence — the policy for drifting arms.
+echo "== sliding-window-ucb" >&2
+"$BIN" bandit sliding-window-ucb --window 200 rewards > out/sliding-window-ucb.scores
+
+# LinUCB shares strength across arms through per-round context features.
+echo "== linucb" >&2
+"$BIN" bandit linucb rewards.contextual > out/linucb.scores
+echo "linucb pick for context (1, 0): $("$BIN" bandit linucb --select-for '1,0' rewards.contextual)" >&2
+
 echo "== next arm to play, per policy" >&2
 for policy in greedy thompson-beta kl-ucb exp3; do
   printf '%-22s -> %s\n' "$policy" "$("$BIN" bandit "$policy" --seed 42 --select 1 rewards)" >&2

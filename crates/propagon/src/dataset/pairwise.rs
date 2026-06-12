@@ -88,6 +88,24 @@ impl PairwiseDataset {
         Ok(())
     }
 
+    /// Same interner (so the same entity universe) with no rows and no
+    /// period boundaries — the seed for resampled copies.
+    pub(crate) fn empty_like(&self) -> Self {
+        Self {
+            interner: self.interner.clone(),
+            ..Self::default()
+        }
+    }
+
+    /// Appends one row without the [`PairwiseDataset::push_ids`] range
+    /// check; only resampling may use it, where the ids come from `rows()`
+    /// of a dataset sharing this interner and so cannot be out of range.
+    pub(crate) fn push_row_unchecked(&mut self, winner: u32, loser: u32, weight: f32) {
+        self.winners.push(winner);
+        self.losers.push(loser);
+        self.weights.push(weight);
+    }
+
     /// Starts a new period at the current end of the dataset. Calling this
     /// with no rows since the previous boundary is a no-op (empty periods
     /// collapse, matching v1's blank-line semantics).

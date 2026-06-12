@@ -26,6 +26,10 @@ run degree-in        degree
 run degree-total     degree --direction total
 run k-core           k-core
 run birank           birank
+run leader-rank      leader-rank
+run harmonic         harmonic
+run harmonic-out     harmonic --direction out
+run ppr-14th-century page-rank --iterations 30 --seeds 14th_century
 
 # Split the graph into connected components (writes articles.0, ...).
 "$BIN" graph components --min-graph-size 5 "$DATA"

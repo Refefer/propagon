@@ -72,8 +72,18 @@ impl AnnotatedPairsDataset {
         })
     }
 
-    /// Used by dataset io to rebuild the columns; ids must come from the
-    /// matching interners.
+    /// Same interners (so the same entity and annotator universes) with no
+    /// votes — the seed for resampled copies.
+    pub(crate) fn empty_like(&self) -> Self {
+        Self {
+            entities: self.entities.clone(),
+            annotators: self.annotators.clone(),
+            ..Self::default()
+        }
+    }
+
+    /// Used by dataset io and resampling to rebuild the columns; ids must
+    /// come from the matching interners.
     pub(crate) fn push_ids(&mut self, annotator: u32, winner: u32, loser: u32, weight: f32) {
         self.annotator.push(annotator);
         self.winners.push(winner);

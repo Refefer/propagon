@@ -7,7 +7,8 @@
 //! singular with the constant vector as kernel; the canonical fix is the
 //! mean-zero solution, solved here by projected conjugate gradients.
 //!
-//! Assumes the row weight **is the margin of victory** (margins ≤ 0 are
+//! Assumes the row weight **is the margin of victory** (a zero margin is
+//! a tie — the rating gap should be ≈ 0; negative margins are
 //! rejected). Requires a connected schedule — disconnected groups have no
 //! common scale, surfaced as a solver error rather than silently bridged.
 
@@ -63,9 +64,9 @@ impl Ranker for Massey {
 
         for (w, l, x) in data.rows() {
             let margin = f64::from(x);
-            if margin <= 0.0 {
+            if margin < 0.0 {
                 return Err(Error::InvalidInput(format!(
-                    "massey needs positive margins as row weights; got {margin} for {} vs {}",
+                    "massey needs non-negative margins as row weights; got {margin} for {} vs {}",
                     data.interner().resolve(w),
                     data.interner().resolve(l)
                 )));
@@ -107,13 +108,23 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_positive_margins() {
+    fn rejects_negative_margins_but_accepts_tie_rows() {
         let mut d = PairwiseDataset::new();
-        d.push("a", "b", 0.0);
+        d.push("a", "b", -1.0);
         assert!(matches!(
             Massey::default().fit(&d),
             Err(Error::InvalidInput(_))
         ));
+
+        // A zero-margin row is a tie: the fitted gap should be ≈ 0.
+        let mut t = PairwiseDataset::new();
+        t.push("a", "b", 0.0);
+        t.push("a", "b", 4.0);
+        let m = Massey::default().fit(&t).unwrap();
+        let s: std::collections::HashMap<_, _> = m.scores().collect();
+        // Two games, net differential 4 ⇒ gap = 4/2 = 2 (mean-zero: ±1).
+        assert!((s["a"] - 1.0).abs() < 1e-8, "{}", s["a"]);
+        assert!((s["b"] + 1.0).abs() < 1e-8, "{}", s["b"]);
     }
 
     #[test]

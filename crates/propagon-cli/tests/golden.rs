@@ -220,9 +220,9 @@ fn glicko2_save_load_state_flow() -> TestResult {
     let p1 = dir.join("p1.edges");
     let p2 = dir.join("p2.edges");
     let both = dir.join("both.edges");
-    std::fs::write(&p1, "a b\nc b\n")?;
-    std::fs::write(&p2, "b a\na c\n")?;
-    std::fs::write(&both, "a b\nc b\n\nb a\na c\n")?;
+    std::fs::write(&p1, "a\tb\t1\nc\tb\t1\n")?;
+    std::fs::write(&p2, "b\ta\t1\na\tc\t1\n")?;
+    std::fs::write(&both, "a\tb\t1\nc\tb\t1\n\nb\ta\t1\na\tc\t1\n")?;
     let state = dir.join("state.jsonl");
     let state_arg = state.to_str().ok_or("non-utf8 temp path")?;
 

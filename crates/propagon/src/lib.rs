@@ -20,13 +20,13 @@
 //!
 //! ```
 //! use propagon::algos::Glicko2;
-//! use propagon::{OnlineRanker, PairwiseDataset, RankModel};
+//! use propagon::{GamesDataset, OnlineRanker, RankModel};
 //!
 //! // One dataset, string ids interned for you.
-//! let mut week1 = PairwiseDataset::new();
-//! week1.push("ARI", "COL", 1.0);
-//! week1.push("ARI", "NYM", 1.0);
-//! week1.push("COL", "NYM", 1.0);
+//! let mut week1 = GamesDataset::new();
+//! week1.push_pair("ARI", "COL", 1.0).unwrap();
+//! week1.push_pair("ARI", "NYM", 1.0).unwrap();
+//! week1.push_pair("COL", "NYM", 1.0).unwrap();
 //!
 //! // Incremental fitting: state persists, history is never replayed.
 //! let glicko = Glicko2::default();
@@ -63,8 +63,9 @@ pub mod state;
 mod traits;
 
 pub use dataset::{
-    Adjacency, AnnotatedPairsDataset, GraphDataset, GraphView, MatchupsDataset, PairwiseDataset,
-    RankingsDataset, RewardsDataset, Tally,
+    Adjacency, AnnotatedPairsDataset, ContextualRewardsDataset, GameOutcome, GameView,
+    GamesDataset, GraphDataset, GraphView, MarginTies, MatchupsDataset, PairwiseDataset,
+    RankingsDataset, Resample, RewardsDataset, Tally, TiePolicy, TrajectoriesDataset,
 };
 pub use error::{Error, Result};
 pub use interner::Interner;

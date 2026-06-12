@@ -122,6 +122,31 @@ impl MatchupsDataset {
         (0..self.len()).map(|m| self.match_teams(m))
     }
 
+    /// Same interner (so the same player universe) with no matches — the
+    /// seed for resampled copies.
+    pub(crate) fn empty_like(&self) -> Self {
+        Self {
+            interner: self.interner.clone(),
+            ..Self::default()
+        }
+    }
+
+    /// Appends one match copied verbatim from a dataset sharing this
+    /// interner (the resample path, fed by `match_teams`); the source
+    /// already validated it (≥ 2 teams, non-empty rosters, ids in range),
+    /// so push validation is skipped.
+    pub(crate) fn push_match_unchecked<'a>(
+        &mut self,
+        teams: impl Iterator<Item = (u32, &'a [u32])>,
+    ) {
+        for (rank, roster) in teams {
+            self.players.extend_from_slice(roster);
+            self.team_offsets.push(self.players.len());
+            self.team_ranks.push(rank);
+        }
+        self.match_offsets.push(self.team_ranks.len());
+    }
+
     /// Used by dataset io; ids must come from this dataset's interner.
     pub(crate) fn push_match_ids(&mut self, teams: &[Vec<u32>], ranks: &[u32]) -> Result<()> {
         if teams.len() < 2 || teams.len() != ranks.len() || teams.iter().any(Vec::is_empty) {

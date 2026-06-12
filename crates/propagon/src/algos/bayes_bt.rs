@@ -224,17 +224,7 @@ impl Ranker for BayesianBradleyTerry {
     }
 }
 
-/// Empirical quantile of a sorted sample (linear interpolation).
-fn quantile(sorted: &[f64], q: f64) -> f64 {
-    let pos = q * (sorted.len() - 1) as f64;
-    let base = pos.floor() as usize;
-    let frac = pos - base as f64;
-
-    match sorted.get(base + 1) {
-        Some(&next) => sorted[base] * (1.0 - frac) + next * frac,
-        None => sorted[base],
-    }
-}
+use crate::mathx::quantile;
 
 #[cfg(test)]
 mod tests {

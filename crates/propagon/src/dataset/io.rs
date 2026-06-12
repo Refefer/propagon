@@ -19,7 +19,10 @@ use crate::error::{Error, Result};
 use crate::interner::Interner;
 use crate::state::{Header, SCHEMA_VERSION};
 
-use super::{GraphDataset, PairwiseDataset, RankingsDataset, RewardsDataset};
+use super::{
+    ContextualRewardsDataset, GameOutcome, GamesDataset, GraphDataset, PairwiseDataset,
+    RankingsDataset, RewardsDataset, TrajectoriesDataset,
+};
 
 /// Maximum entries per vocab / row-chunk line.
 const CHUNK: usize = 65_536;
@@ -265,6 +268,102 @@ impl RewardsDataset {
     }
 }
 
+// ---------------------------------------------------------------- contextual
+
+#[derive(Serialize, Deserialize)]
+struct ContextualMeta {
+    /// Feature dimensionality; absent (`null`) only for an empty dataset.
+    dim: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ContextualChunk {
+    a: Vec<u32>,
+    r: Vec<f32>,
+    /// Flat features, `a.len() · dim` values.
+    x: Vec<f64>,
+}
+
+impl ContextualRewardsDataset {
+    /// Serializes the dataset (vocab + columnar row chunks with flat,
+    /// stride-`dim` feature columns).
+    pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
+        let meta = ContextualMeta { dim: self.dim() };
+        write_header(
+            &mut w,
+            "contextual-rewards",
+            serde_json::to_value(meta)?,
+            self.n_arms(),
+        )?;
+        write_vocab(&mut w, self.interner())?;
+        let rows: Vec<(u32, f32, &[f64])> = self.rows().collect();
+        for chunk in rows.chunks(CHUNK) {
+            let mut line = ContextualChunk {
+                a: Vec::with_capacity(chunk.len()),
+                r: Vec::with_capacity(chunk.len()),
+                x: Vec::new(),
+            };
+            for (a, r, x) in chunk {
+                line.a.push(*a);
+                line.r.push(*r);
+                line.x.extend_from_slice(x);
+            }
+            serde_json::to_writer(&mut w, &line)?;
+            w.write_all(b"\n")?;
+        }
+        Ok(())
+    }
+
+    /// Loads a dataset written by `save_jsonl`. Chunk lengths, arm ids,
+    /// dimensionality, and feature finiteness are all re-validated, so
+    /// corrupted files surface as typed errors.
+    pub fn load_jsonl<R: BufRead>(r: R) -> Result<Self> {
+        let reader = read_dataset_prefix(r, "contextual-rewards")?;
+        let meta: ContextualMeta = serde_json::from_value(reader.header.params.clone())
+            .map_err(|e| Error::State(format!("bad contextual meta: {e}")))?;
+        if meta.dim == Some(0) {
+            return Err(Error::State("contextual meta declares dim 0".into()));
+        }
+
+        let mut out = ContextualRewardsDataset::new();
+        let interner = reader.interner.clone();
+        for name in interner.names() {
+            out.intern(name);
+        }
+
+        reader.rows(|chunk: ContextualChunk| {
+            let dim = match meta.dim {
+                Some(d) => d,
+                None => {
+                    return Err(Error::State(
+                        "contextual rows present but meta declares no dim".into(),
+                    ));
+                }
+            };
+            if chunk.a.len() != chunk.r.len() || chunk.x.len() != chunk.a.len() * dim {
+                return Err(Error::State("contextual chunk column mismatch".into()));
+            }
+            for (i, x) in chunk.x.chunks(dim).enumerate() {
+                out.push_ids(chunk.a[i], chunk.r[i], x)
+                    .map_err(|e| Error::State(format!("bad contextual row: {e}")))?;
+            }
+            Ok(())
+        })?;
+
+        // A meta dim with no rows cannot come from `save_jsonl` (dim is fixed
+        // by the first pushed row); rejecting it keeps "dim known ⟺ rows
+        // exist" true in memory and round trips byte-identical.
+        if out.dim() != meta.dim {
+            return Err(Error::State(format!(
+                "meta declares dim {:?} but the rows imply {:?}",
+                meta.dim,
+                out.dim()
+            )));
+        }
+        Ok(out)
+    }
+}
+
 // ---------------------------------------------------------------- graph
 
 #[derive(Serialize, Deserialize)]
@@ -358,6 +457,97 @@ impl RankingsDataset {
     }
 }
 
+// ---------------------------------------------------------------- trajectories
+
+#[derive(Serialize, Deserialize, Default)]
+struct TrajectoriesMeta {
+    /// Interior episode boundaries (step indices where episodes after the
+    /// first begin; may end with a boundary at the total step count when the
+    /// last episode was explicitly ended).
+    episodes: Vec<usize>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TrajectoriesChunk {
+    s: Vec<u32>,
+    r: Vec<f32>,
+}
+
+impl TrajectoriesDataset {
+    /// Serializes the dataset (vocab + columnar step chunks + episode
+    /// boundary marks, mirroring how pairwise persists periods).
+    pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
+        let meta = TrajectoriesMeta {
+            episodes: self.episode_starts_for_io(),
+        };
+        write_header(
+            &mut w,
+            "trajectories",
+            serde_json::to_value(meta)?,
+            self.n_entities(),
+        )?;
+        write_vocab(&mut w, self.interner())?;
+        let rows: Vec<(u32, f32)> = self.steps().collect();
+        for chunk in rows.chunks(CHUNK) {
+            let line = TrajectoriesChunk {
+                s: chunk.iter().map(|r| r.0).collect(),
+                r: chunk.iter().map(|r| r.1).collect(),
+            };
+            serde_json::to_writer(&mut w, &line)?;
+            w.write_all(b"\n")?;
+        }
+        Ok(())
+    }
+
+    /// Loads a dataset written by [`TrajectoriesDataset::save_jsonl`].
+    /// Episode boundaries are re-injected between steps; state ids, reward
+    /// finiteness, and column lengths are re-validated, so corrupted files
+    /// surface as typed errors. A trailing boundary (last episode explicitly
+    /// ended) is re-applied after the final step to keep round trips
+    /// byte-identical.
+    pub fn load_jsonl<R: BufRead>(r: R) -> Result<Self> {
+        let reader = read_dataset_prefix(r, "trajectories")?;
+        let meta: TrajectoriesMeta = serde_json::from_value(reader.header.params.clone())
+            .map_err(|e| Error::State(format!("bad trajectories meta: {e}")))?;
+
+        let mut out = TrajectoriesDataset::new();
+        let interner = reader.interner.clone();
+        for name in interner.names() {
+            out.intern(name);
+        }
+
+        let mut boundaries = meta.episodes.into_iter().peekable();
+        let mut step_idx = 0usize;
+        let (_, _) = reader.rows(|chunk: TrajectoriesChunk| {
+            if chunk.s.len() != chunk.r.len() {
+                return Err(Error::State("trajectories chunk column mismatch".into()));
+            }
+            for i in 0..chunk.s.len() {
+                while boundaries.peek() == Some(&step_idx) {
+                    boundaries.next();
+                    out.end_episode();
+                }
+                out.push_step_ids(chunk.s[i], chunk.r[i])
+                    .map_err(|e| Error::State(format!("bad trajectory step: {e}")))?;
+                step_idx += 1;
+            }
+            Ok(())
+        })?;
+
+        while boundaries.peek() == Some(&step_idx) {
+            boundaries.next();
+            out.end_episode();
+        }
+
+        if let Some(b) = boundaries.next() {
+            return Err(Error::State(format!(
+                "episode boundary {b} does not match any of the {step_idx} steps present"
+            )));
+        }
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,6 +609,71 @@ mod tests {
     }
 
     #[test]
+    fn contextual_round_trip_and_validation() {
+        let mut d = ContextualRewardsDataset::new();
+        d.push("A", 1.0, &[0.5, -1.25]).unwrap();
+        d.push("B", 0.0, &[2.0, 3.5]).unwrap();
+        d.push("A", 0.5, &[0.0, 0.125]).unwrap();
+
+        let mut buf = Vec::new();
+        d.save_jsonl(&mut buf).unwrap();
+        let d2 = ContextualRewardsDataset::load_jsonl(buf.as_slice()).unwrap();
+        assert_eq!(d2.dim(), Some(2));
+        assert_eq!(
+            d.rows()
+                .map(|(a, r, x)| (a, r, x.to_vec()))
+                .collect::<Vec<_>>(),
+            d2.rows()
+                .map(|(a, r, x)| (a, r, x.to_vec()))
+                .collect::<Vec<_>>()
+        );
+
+        // byte-identical re-save
+        let mut buf2 = Vec::new();
+        d2.save_jsonl(&mut buf2).unwrap();
+        assert_eq!(buf, buf2);
+
+        // empty dataset round trips too (dim stays unknown)
+        let empty = ContextualRewardsDataset::new();
+        let mut buf = Vec::new();
+        empty.save_jsonl(&mut buf).unwrap();
+        let e2 = ContextualRewardsDataset::load_jsonl(buf.as_slice()).unwrap();
+        assert_eq!(e2.dim(), None);
+        assert!(e2.is_empty());
+
+        // corrupted chunks are rejected
+        let good = {
+            let mut buf = Vec::new();
+            d.save_jsonl(&mut buf).unwrap();
+            String::from_utf8(buf).unwrap()
+        };
+        for (bad_chunk, why) in [
+            (
+                r#"{"a":[0],"r":[1.0],"x":[0.5]}"#,
+                "flat x shorter than dim",
+            ),
+            (r#"{"a":[0],"r":[1.0,2.0],"x":[0.5,1.0]}"#, "ragged columns"),
+            (
+                r#"{"a":[9],"r":[1.0],"x":[0.5,1.0]}"#,
+                "arm id out of vocab",
+            ),
+            (
+                r#"{"a":[0],"r":[1.0],"x":[0.5,null]}"#,
+                "non-finite feature",
+            ),
+        ] {
+            let mut lines: Vec<&str> = good.lines().collect();
+            let last = lines.len() - 1;
+            lines[last] = bad_chunk;
+            let file = lines.join("\n");
+            assert!(
+                ContextualRewardsDataset::load_jsonl(file.as_bytes()).is_err(),
+                "{why}"
+            );
+        }
+    }
+
+    #[test]
     fn wrong_schema_is_rejected() {
         let mut d = PairwiseDataset::new();
         d.push("a", "b", 1.0);
@@ -428,6 +683,175 @@ mod tests {
             GraphDataset::load_jsonl(buf.as_slice()),
             Err(Error::AlgorithmMismatch { .. })
         ));
+    }
+
+    #[test]
+    fn games_round_trip_with_periods_and_append() {
+        let mut d = GamesDataset::new();
+        d.push_game(&["a", "b"], &["c", "d"], GameOutcome::Side1Win(3.5), 1.0)
+            .unwrap();
+        d.new_period();
+        d.push_game(&["c"], &["a"], GameOutcome::Tie, 2.0).unwrap();
+        d.push_pair("d", "b", 1.0).unwrap();
+
+        let mut buf = Vec::new();
+        d.save_jsonl(&mut buf).unwrap();
+        let mut d2 = GamesDataset::load_jsonl(buf.as_slice()).unwrap();
+
+        assert_eq!(d2.n_periods(), 2);
+        assert_eq!(d2.len(), 3);
+        for (g1, g2) in d.games().zip(d2.games()) {
+            assert_eq!(g1.side1, g2.side1);
+            assert_eq!(g1.side2, g2.side2);
+            assert_eq!(g1.outcome, g2.outcome);
+            assert_eq!(g1.weight, g2.weight);
+        }
+
+        // byte-identical re-save
+        let mut buf2 = Vec::new();
+        d2.save_jsonl(&mut buf2).unwrap();
+        assert_eq!(buf, buf2);
+
+        // append flow: same ids keep resolving
+        d2.new_period();
+        d2.push_pair("a", "d", 1.0).unwrap();
+        assert_eq!(d2.n_periods(), 3);
+        assert_eq!(d2.interner().get("a"), Some(0));
+    }
+
+    #[test]
+    fn trajectories_round_trip_with_episodes_and_append() {
+        let mut d = TrajectoriesDataset::new();
+        d.push_step("a", 1.0).unwrap();
+        d.push_step("b", -0.5).unwrap();
+        d.end_episode();
+        d.push_step("b", 2.0).unwrap();
+        d.end_episode();
+
+        let mut buf = Vec::new();
+        d.save_jsonl(&mut buf).unwrap();
+        let mut d2 = TrajectoriesDataset::load_jsonl(buf.as_slice()).unwrap();
+
+        assert_eq!(d2.n_episodes(), 2);
+        assert_eq!(d2.episode(0), d.episode(0));
+        assert_eq!(d2.episode(1), d.episode(1));
+
+        // byte-identical re-save (including the trailing boundary)
+        let mut buf2 = Vec::new();
+        d2.save_jsonl(&mut buf2).unwrap();
+        assert_eq!(buf, buf2);
+
+        // append flow: same ids keep resolving
+        d2.push_step("a", 0.25).unwrap();
+        d2.end_episode();
+        assert_eq!(d2.n_episodes(), 3);
+        assert_eq!(d2.interner().get("a"), Some(0));
+
+        // an open trailing episode (no final end_episode) also round trips
+        let mut open = TrajectoriesDataset::new();
+        open.push_step("x", 1.0).unwrap();
+        open.end_episode();
+        open.push_step("y", 0.0).unwrap();
+        let mut buf = Vec::new();
+        open.save_jsonl(&mut buf).unwrap();
+        let open2 = TrajectoriesDataset::load_jsonl(buf.as_slice()).unwrap();
+        assert_eq!(open2.n_episodes(), 2);
+        let mut buf2 = Vec::new();
+        open2.save_jsonl(&mut buf2).unwrap();
+        assert_eq!(buf, buf2);
+    }
+
+    #[test]
+    fn trajectories_corrupted_files_are_rejected() {
+        let mut d = TrajectoriesDataset::new();
+        d.push_step("a", 1.0).unwrap();
+        d.push_step("b", 0.0).unwrap();
+        d.end_episode();
+        let mut buf = Vec::new();
+        d.save_jsonl(&mut buf).unwrap();
+        let good = String::from_utf8(buf).unwrap();
+
+        for (bad_chunk, why) in [
+            (r#"{"s":[9],"r":[1.0]}"#, "state id out of vocab"),
+            (r#"{"s":[0,1],"r":[1.0]}"#, "ragged columns"),
+            (r#"{"s":[0],"r":[null]}"#, "non-finite reward"),
+        ] {
+            let mut lines: Vec<&str> = good.lines().collect();
+            let last = lines.len() - 1;
+            lines[last] = bad_chunk;
+            let file = lines.join("\n");
+            assert!(
+                matches!(
+                    TrajectoriesDataset::load_jsonl(file.as_bytes()),
+                    Err(Error::State(_))
+                ),
+                "{why}"
+            );
+        }
+
+        // an episode boundary beyond the data is rejected
+        let broken = good.replacen(r#""episodes":[2]"#, r#""episodes":[9]"#, 1);
+        assert_ne!(broken, good, "fixture must contain the boundary meta");
+        assert!(matches!(
+            TrajectoriesDataset::load_jsonl(broken.as_bytes()),
+            Err(Error::State(_))
+        ));
+    }
+
+    #[test]
+    fn games_corrupted_chunks_are_rejected() {
+        let mut d = GamesDataset::new();
+        d.push_pair("a", "b", 1.0).unwrap();
+        let mut buf = Vec::new();
+        d.save_jsonl(&mut buf).unwrap();
+        let good = String::from_utf8(buf).unwrap();
+
+        for (bad_chunk, why) in [
+            (
+                r#"{"s1":[[0]],"s2":[[1]],"o":[2],"m":[1.0],"x":[1.0]}"#,
+                "outcome out of range",
+            ),
+            (
+                r#"{"s1":[[0]],"s2":[[1]],"o":[1],"m":[0.0],"x":[1.0]}"#,
+                "zero margin on a win",
+            ),
+            (
+                r#"{"s1":[[0]],"s2":[[1]],"o":[0],"m":[1.0],"x":[1.0]}"#,
+                "nonzero margin on a tie",
+            ),
+            (
+                r#"{"s1":[[0]],"s2":[[1]],"o":[1],"m":[1.0],"x":[0.0]}"#,
+                "zero weight",
+            ),
+            (
+                r#"{"s1":[[0]],"s2":[[1]],"o":[1],"m":[1.0],"x":[1.0,2.0]}"#,
+                "ragged columns",
+            ),
+            (
+                r#"{"s1":[[0]],"s2":[[7]],"o":[1],"m":[1.0],"x":[1.0]}"#,
+                "id out of vocab",
+            ),
+            (
+                r#"{"s1":[[0]],"s2":[[0]],"o":[1],"m":[1.0],"x":[1.0]}"#,
+                "duplicate player",
+            ),
+            (
+                r#"{"s1":[[]],"s2":[[1]],"o":[1],"m":[1.0],"x":[1.0]}"#,
+                "empty side",
+            ),
+        ] {
+            let mut lines: Vec<&str> = good.lines().collect();
+            let last = lines.len() - 1;
+            lines[last] = bad_chunk;
+            let file = lines.join("\n");
+            assert!(
+                matches!(
+                    GamesDataset::load_jsonl(file.as_bytes()),
+                    Err(Error::State(_))
+                ),
+                "{why}"
+            );
+        }
     }
 }
 
@@ -619,6 +1043,132 @@ impl super::MatchupsDataset {
         out.set_interner(interner);
         for (teams, ranks) in staged {
             out.push_match_ids(&teams, &ranks)?;
+        }
+        Ok(out)
+    }
+}
+
+// ---------------------------------------------------------------- games
+
+#[derive(Serialize, Deserialize, Default)]
+struct GamesMeta {
+    periods: Vec<usize>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct GamesChunk {
+    /// Side-1 rosters (vocab indices), one per game.
+    s1: Vec<Vec<u32>>,
+    /// Side-2 rosters.
+    s2: Vec<Vec<u32>>,
+    /// Outcome sign per game: 1 = side 1 won, -1 = side 2 won, 0 = tie.
+    o: Vec<i8>,
+    /// Win margin (> 0 for wins, exactly 0 for ties).
+    m: Vec<f32>,
+    /// Aggregation weight (repeat count).
+    x: Vec<f32>,
+}
+
+impl GamesDataset {
+    /// Serializes the dataset (vocab + per-game roster/outcome chunks +
+    /// period marks).
+    pub fn save_jsonl<W: Write>(&self, mut w: W) -> Result<()> {
+        let meta = GamesMeta {
+            periods: self.period_starts_for_io(),
+        };
+        write_header(
+            &mut w,
+            "games",
+            serde_json::to_value(meta)?,
+            self.n_entities(),
+        )?;
+        write_vocab(&mut w, self.interner())?;
+
+        let games: Vec<_> = self.games().collect();
+        for chunk in games.chunks(CHUNK / 16) {
+            let mut line = GamesChunk {
+                s1: Vec::with_capacity(chunk.len()),
+                s2: Vec::with_capacity(chunk.len()),
+                o: Vec::with_capacity(chunk.len()),
+                m: Vec::with_capacity(chunk.len()),
+                x: Vec::with_capacity(chunk.len()),
+            };
+            for view in chunk {
+                line.s1.push(view.side1.to_vec());
+                line.s2.push(view.side2.to_vec());
+                let (o, m) = match view.outcome {
+                    GameOutcome::Side1Win(m) => (1, m),
+                    GameOutcome::Side2Win(m) => (-1, m),
+                    GameOutcome::Tie => (0, 0.0),
+                };
+                line.o.push(o);
+                line.m.push(m);
+                line.x.push(view.weight);
+            }
+            serde_json::to_writer(&mut w, &line)?;
+            w.write_all(b"\n")?;
+        }
+        Ok(())
+    }
+
+    /// Loads a dataset written by [`GamesDataset::save_jsonl`]. Every chunk
+    /// is re-validated (outcome signs, margin/weight constraints, roster
+    /// invariants), so corrupted files surface as typed errors rather than
+    /// illegal in-memory states.
+    pub fn load_jsonl<R: BufRead>(r: R) -> Result<Self> {
+        let reader = read_dataset_prefix(r, "games")?;
+        let meta: GamesMeta = serde_json::from_value(reader.header.params.clone())
+            .map_err(|e| Error::State(format!("bad games meta: {e}")))?;
+
+        let mut out = GamesDataset::new();
+        let interner = reader.interner.clone();
+        let mut boundaries = meta.periods.into_iter().peekable();
+        let mut game_idx = 0usize;
+        let mut staged_interner = Some(interner);
+
+        let (_, _) = reader.rows(|chunk: GamesChunk| {
+            if let Some(int) = staged_interner.take() {
+                out.set_interner(int);
+            }
+            let len = chunk.s1.len();
+            if chunk.s2.len() != len
+                || chunk.o.len() != len
+                || chunk.m.len() != len
+                || chunk.x.len() != len
+            {
+                return Err(Error::State("games chunk column mismatch".into()));
+            }
+            for i in 0..len {
+                while boundaries.peek() == Some(&game_idx) {
+                    boundaries.next();
+                    out.new_period();
+                }
+                let margin_ok = chunk.m[i].is_finite() && chunk.m[i] > 0.0;
+                let outcome = match chunk.o[i] {
+                    1 if margin_ok => GameOutcome::Side1Win(chunk.m[i]),
+                    -1 if margin_ok => GameOutcome::Side2Win(chunk.m[i]),
+                    0 if chunk.m[i] == 0.0 => GameOutcome::Tie,
+                    o => {
+                        return Err(Error::State(format!(
+                            "games chunk has outcome {o} with margin {}",
+                            chunk.m[i]
+                        )));
+                    }
+                };
+                if !(chunk.x[i].is_finite() && chunk.x[i] > 0.0) {
+                    return Err(Error::State(format!(
+                        "games chunk has weight {}",
+                        chunk.x[i]
+                    )));
+                }
+                out.push_game_ids(&chunk.s1[i], &chunk.s2[i], outcome, chunk.x[i])?;
+                game_idx += 1;
+            }
+            Ok(())
+        })?;
+        // An empty file (header + vocab, no chunks) still carries its vocab.
+        if let Some(int) = staged_interner.take() {
+            out.set_interner(int);
         }
         Ok(out)
     }

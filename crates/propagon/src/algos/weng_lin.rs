@@ -171,10 +171,10 @@ impl RankModel for WengLinModel {
     }
 }
 
-/// φ, the standard normal density.
-fn pdf(x: f64) -> f64 {
-    (-0.5 * x * x).exp() / (2.0 * std::f64::consts::PI).sqrt()
-}
+use crate::mathx::norm_pdf as pdf;
+
+// (φ itself lives in `mathx`; the aliased import keeps the paper-notation
+// call sites below readable.)
 
 /// Tiny-denominator guard from the paper's §6.1 (≈ smallest positive Φ they
 /// observed before switching to the asymptote).

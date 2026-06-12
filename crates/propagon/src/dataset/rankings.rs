@@ -50,6 +50,23 @@ impl RankingsDataset {
         Ok(())
     }
 
+    /// Same interner (so the same entity universe) with no rankings — the
+    /// seed for resampled copies.
+    pub(crate) fn empty_like(&self) -> Self {
+        Self {
+            interner: self.interner.clone(),
+            ..Self::default()
+        }
+    }
+
+    /// Appends one ranking copied verbatim from a dataset sharing this
+    /// interner (the resample path); the source already validated it (≥ 2
+    /// items, ids in range), so push validation is skipped.
+    pub(crate) fn push_ranking_unchecked(&mut self, ranking: &[u32]) {
+        self.items.extend_from_slice(ranking);
+        self.offsets.push(self.items.len());
+    }
+
     /// Number of rankings.
     pub fn len(&self) -> usize {
         self.offsets.len() - 1

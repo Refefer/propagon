@@ -1,9 +1,21 @@
-//! PageRank (`docs/algorithms.md` §4.4).
+//! PageRank, personalized PageRank & random walk with restart
+//! (`docs/algorithms.md` §4.4).
 //!
 //! Random-surfer importance over an endorsement graph (`src` endorses `dst`),
 //! with v1's three sink policies for nodes with no outgoing endorsements.
 //! Parallel edges between the same pair are deduplicated (v1 semantics);
 //! edge weights are ignored.
+//!
+//! [`Teleport::Seeds`] concentrates the restart distribution on a seed set,
+//! turning the same solver into personalized PageRank / random walk with
+//! restart: scores become importance *as seen from the seeds*. TrustRank is
+//! a recipe on top of this — teleport uniformly over a manually vetted
+//! trusted set and spam unreachable from it scores near zero.
+//!
+//! Gotcha: under seeded teleport, [`Sink::All`] keeps its v1 semantics
+//! (uniform over the other nodes) and therefore ignores personalization;
+//! [`Sink::Uniform`] redistributes sink mass proportional to the teleport
+//! vector (the textbook personalized dangling fix).
 
 use serde::{Deserialize, Serialize};
 
@@ -21,21 +33,38 @@ pub enum Sink {
     #[default]
     Reverse,
     /// Sinks distribute their mass to every other node (v1 semantics:
-    /// the sink itself is excluded from its own redistribution).
+    /// the sink itself is excluded from its own redistribution; ignores
+    /// personalization).
     All,
-    /// The textbook treatment: a sink's row becomes uniform over **all**
-    /// nodes, itself included (Langville & Meyer's dangling-node fix).
+    /// The textbook treatment: a sink's row becomes the teleport
+    /// distribution — uniform over **all** nodes, itself included, under
+    /// [`Teleport::Uniform`] (Langville & Meyer's dangling-node fix),
+    /// proportional to the seed weights under [`Teleport::Seeds`].
     Uniform,
     /// Sinks absorb mass (the L1 norm decays; v1 behavior).
     None,
 }
 
+/// Where the surfer restarts.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Teleport {
+    /// Restart anywhere: classic global PageRank.
+    #[default]
+    Uniform,
+    /// Restart at the named seeds with the given positive weights
+    /// (normalized internally): personalized PageRank / random walk with
+    /// restart.
+    Seeds(Vec<(String, f64)>),
+}
+
 /// PageRank parameters.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PageRank {
     pub damping: f64,
     pub iterations: usize,
     pub sink: Sink,
+    pub teleport: Teleport,
 }
 
 impl Default for PageRank {
@@ -44,6 +73,7 @@ impl Default for PageRank {
             damping: 0.85,
             iterations: 10,
             sink: Sink::Reverse,
+            teleport: Teleport::Uniform,
         }
     }
 }
@@ -66,6 +96,35 @@ impl PageRank {
             return Err(Error::EmptyDataset);
         }
         let n = g.n_nodes();
+
+        // `None` = uniform restart, kept implicit so the classic path
+        // reproduces v1's float operations exactly (golden stability).
+        let seeds: Option<Vec<f64>> = match &self.teleport {
+            Teleport::Uniform => None,
+            Teleport::Seeds(list) => {
+                if list.is_empty() {
+                    return Err(Error::InvalidInput(
+                        "teleport seed list is empty; use Teleport::Uniform for the classic walk"
+                            .into(),
+                    ));
+                }
+                let mut v = vec![0.0f64; n];
+                for (name, weight) in list {
+                    let id = g.interner.get(name).ok_or_else(|| {
+                        Error::InvalidInput(format!("teleport seed '{name}' is not in the graph"))
+                    })?;
+                    if !(*weight > 0.0 && weight.is_finite()) {
+                        return Err(Error::InvalidInput(format!(
+                            "teleport seed '{name}' needs a positive finite weight, got {weight}"
+                        )));
+                    }
+                    v[id as usize] += weight;
+                }
+                let total: f64 = v.iter().sum();
+                v.iter_mut().for_each(|w| *w /= total);
+                Some(v)
+            }
+        };
 
         // Deduplicated out-adjacency (v1 used HashSet values).
         let mut out: Vec<Vec<u32>> = vec![Vec::new(); n];
@@ -104,7 +163,10 @@ impl PageRank {
             }
         }
 
-        let mut policy = vec![1.0 / n as f64; n];
+        let mut policy = match &seeds {
+            None => vec![1.0 / n as f64; n],
+            Some(v) => v.clone(),
+        };
         let mut next = vec![0.0f64; n];
         for _ in 0..self.iterations {
             next.iter_mut().for_each(|v| *v = 0.0);
@@ -134,25 +196,43 @@ impl PageRank {
                             }
                         }
                     }
-                    // Textbook: uniform over all nodes, self included.
-                    Sink::Uniform => {
-                        let pooled = sink_mass / n as f64;
-                        for value in next.iter_mut() {
-                            *value += pooled;
+                    // Textbook: a sink's row becomes the teleport
+                    // distribution (uniform over all nodes, self included,
+                    // in the classic case).
+                    Sink::Uniform => match &seeds {
+                        None => {
+                            let pooled = sink_mass / n as f64;
+                            for value in next.iter_mut() {
+                                *value += pooled;
+                            }
                         }
-                    }
+                        Some(v) => {
+                            for (value, &w) in next.iter_mut().zip(v) {
+                                *value += sink_mass * w;
+                            }
+                        }
+                    },
                     Sink::Reverse | Sink::None => {}
                 }
             }
 
-            for value in next.iter_mut() {
-                *value = *value * self.damping + (1.0 - self.damping) / n as f64;
+            match &seeds {
+                None => {
+                    for value in next.iter_mut() {
+                        *value = *value * self.damping + (1.0 - self.damping) / n as f64;
+                    }
+                }
+                Some(v) => {
+                    for (value, &w) in next.iter_mut().zip(v) {
+                        *value = *value * self.damping + (1.0 - self.damping) * w;
+                    }
+                }
             }
             std::mem::swap(&mut policy, &mut next);
         }
 
         Ok(PageRankModel {
-            params: *self,
+            params: self.clone(),
             names: g.interner.clone(),
             scores: policy,
         })
@@ -204,6 +284,7 @@ mod tests {
             damping: 0.85,
             iterations: 1,
             sink: Sink::None,
+            ..PageRank::default()
         };
         let result = scores(&pr.fit(&graph()).unwrap());
         let expected = [
@@ -226,6 +307,7 @@ mod tests {
                 damping: 0.85,
                 iterations: 10,
                 sink,
+                ..PageRank::default()
             };
             let result = scores(&pr.fit(&graph()).unwrap());
             let expected = [
@@ -244,5 +326,108 @@ mod tests {
             let total: f64 = result.iter().map(|e| e.1).sum();
             assert!((total - 1.0).abs() < 1e-5, "{sink:?} sums to 1");
         }
+    }
+
+    /// Analytic personalized PageRank on the 3-cycle 1→2→3→1 with the
+    /// restart concentrated on node 1:
+    ///   p₂ = d·p₁, p₃ = d·p₂, p₁ = d·p₃ + (1−d)
+    ///   ⇒ p₁ = (1−d)/(1−d³); at d = ½: p = (4/7, 2/7, 1/7).
+    #[test]
+    fn seeded_teleport_matches_analytic_cycle() {
+        let mut g = GraphDataset::new();
+        g.push("1", "2", 1.0);
+        g.push("2", "3", 1.0);
+        g.push("3", "1", 1.0);
+        let pr = PageRank {
+            damping: 0.5,
+            iterations: 100,
+            sink: Sink::None,
+            teleport: Teleport::Seeds(vec![("1".into(), 1.0)]),
+        };
+        let m = pr.fit(&g).unwrap();
+        let s: std::collections::HashMap<_, _> = m.scores().collect();
+        for (node, want) in [("1", 4.0 / 7.0), ("2", 2.0 / 7.0), ("3", 1.0 / 7.0)] {
+            assert!(
+                (s[node] - want).abs() < 1e-9,
+                "{node}: {} vs {want}",
+                s[node]
+            );
+        }
+    }
+
+    /// Seeded teleport + Sink::Uniform: sink mass restarts at the seeds.
+    /// Graph 1→2 (2 is a sink), seed = {1}:
+    ///   p₁ = d·p₂ + (1−d), p₂ = d·p₁ ⇒ p₁ = 1/(1+d); at d = ½: (⅔, ⅓).
+    #[test]
+    fn seeded_teleport_with_uniform_sink_matches_analytic_chain() {
+        let mut g = GraphDataset::new();
+        g.push("1", "2", 1.0);
+        let pr = PageRank {
+            damping: 0.5,
+            iterations: 200,
+            sink: Sink::Uniform,
+            teleport: Teleport::Seeds(vec![("1".into(), 1.0)]),
+        };
+        let m = pr.fit(&g).unwrap();
+        let s: std::collections::HashMap<_, _> = m.scores().collect();
+        assert!((s["1"] - 2.0 / 3.0).abs() < 1e-9, "p1 = {}", s["1"]);
+        assert!((s["2"] - 1.0 / 3.0).abs() < 1e-9, "p2 = {}", s["2"]);
+    }
+
+    /// Seed weights normalize; multiple seeds split the restart mass.
+    #[test]
+    fn seed_weights_are_normalized() {
+        let mut g = GraphDataset::new();
+        g.push("1", "2", 1.0);
+        g.push("2", "1", 1.0);
+        let symmetric = PageRank {
+            teleport: Teleport::Seeds(vec![("1".into(), 5.0), ("2".into(), 5.0)]),
+            ..PageRank::default()
+        };
+        let m = symmetric.fit(&g).unwrap();
+        let s: std::collections::HashMap<_, _> = m.scores().collect();
+        assert!((s["1"] - 0.5).abs() < 1e-12);
+        assert!((s["2"] - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn seed_validation_errors() {
+        let mut g = GraphDataset::new();
+        g.push("1", "2", 1.0);
+        for seeds in [
+            vec![],
+            vec![("ghost".to_string(), 1.0)],
+            vec![("1".to_string(), 0.0)],
+            vec![("1".to_string(), f64::NAN)],
+        ] {
+            let pr = PageRank {
+                teleport: Teleport::Seeds(seeds.clone()),
+                ..PageRank::default()
+            };
+            assert!(
+                matches!(pr.fit(&g), Err(Error::InvalidInput(_))),
+                "{seeds:?}"
+            );
+        }
+    }
+
+    /// The seeded model round-trips byte-identically (Teleport rides in
+    /// the params object).
+    #[test]
+    fn seeded_round_trip_is_byte_identical() {
+        let mut g = GraphDataset::new();
+        g.push("1", "2", 1.0);
+        g.push("2", "1", 1.0);
+        let pr = PageRank {
+            teleport: Teleport::Seeds(vec![("1".into(), 1.0)]),
+            ..PageRank::default()
+        };
+        let m = pr.fit(&g).unwrap();
+        let mut buf1 = Vec::new();
+        m.save_jsonl(&mut buf1).unwrap();
+        let m2 = PageRankModel::load_jsonl(buf1.as_slice()).unwrap();
+        let mut buf2 = Vec::new();
+        m2.save_jsonl(&mut buf2).unwrap();
+        assert_eq!(buf1, buf2);
     }
 }

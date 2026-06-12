@@ -3,13 +3,14 @@
 //! Each entity carries a rating, a rating deviation (RD — how uncertain the
 //! rating is), and a volatility σ (how erratic the entity's performance has
 //! been). Updates happen per **rating period**: every period in the dataset
-//! ([`PairwiseDataset::periods`](crate::PairwiseDataset::periods), v1's
-//! blank-line batches) is folded in as one Glicko-2 step, against the ratings
-//! as they stood at the period's start.
+//! ([`GamesDataset::periods`](crate::GamesDataset::periods), blank-line
+//! batches in the input file) is folded in as one Glicko-2 step, against the
+//! ratings as they stood at the period's start.
 //!
 //! This is the flagship incremental algorithm (PRD FR-5): state lives in the
-//! owned [`Glicko2Model`]; `update` never replays history. Game weights are
-//! ignored (v1 behavior): each row is one game.
+//! owned [`Glicko2Model`]; `update` never replays history. Ties take the
+//! native `S = ½` path; margins are ignored; a game's repeat count scales
+//! its period contribution (the game happened that many times).
 //!
 //! Algorithm reference: Glickman, "Example of the Glicko-2 system"
 //! (<http://www.glicko.net/glicko/glicko2.pdf>); model from Glickman (2001).
@@ -18,7 +19,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::dataset::PairwiseDataset;
+use crate::dataset::{GameOutcome, GamesDataset};
 use crate::error::{Error, Result};
 use crate::interner::Interner;
 use crate::state;
@@ -125,19 +126,20 @@ impl Glicko2Model {
     }
 
     /// One rating period: all games are scored against the ratings as they
-    /// stood when the period began.
-    fn update_period(&mut self, games: &[(usize, usize)], tau: f64) -> Result<()> {
+    /// stood when the period began. `games` rows are `(side1, side2,
+    /// side-1 score, multiplicity)` with score ∈ {1, ½, 0}.
+    fn update_period(&mut self, games: &[(usize, usize, f64, f64)], tau: f64) -> Result<()> {
         // Accumulate v and Δ contributions per participant.
         let mut dv: HashMap<usize, (f64, f64)> = HashMap::new();
-        for &(winner, loser) in games {
-            for (me, them, score) in [(winner, loser, 1.0), (loser, winner, 0.0)] {
+        for &(a, b, s1, weight) in games {
+            for (me, them, score) in [(a, b, s1), (b, a, 1.0 - s1)] {
                 let (mu, _) = self.mu_phi(me);
                 let (mu_j, phi_j) = self.mu_phi(them);
                 let g = g_of_phi(phi_j);
                 let e = 1.0 / (1.0 + (-g * (mu - mu_j)).exp());
                 let entry = dv.entry(me).or_insert((0.0, 0.0));
-                entry.0 += g * g * e * (1.0 - e);
-                entry.1 += g * (score - e);
+                entry.0 += weight * g * g * e * (1.0 - e);
+                entry.1 += weight * g * (score - e);
             }
         }
 
@@ -209,7 +211,7 @@ impl RankModel for Glicko2Model {
 }
 
 impl OnlineRanker for Glicko2 {
-    type Data = PairwiseDataset;
+    type Data = GamesDataset;
     type Model = Glicko2Model;
 
     fn init(&self) -> Glicko2Model {
@@ -223,7 +225,7 @@ impl OnlineRanker for Glicko2 {
     fn update_opts(
         &self,
         model: &mut Glicko2Model,
-        data: &PairwiseDataset,
+        data: &GamesDataset,
         opts: &FitOptions<'_>,
     ) -> Result<()> {
         if model.params != *self {
@@ -235,14 +237,33 @@ impl OnlineRanker for Glicko2 {
         let progress = opts.progress;
         progress.start("glicko2 periods", Some(data.n_periods() as u64));
         for (i, period) in data.periods().enumerate() {
-            let games: Vec<(usize, usize)> = data
-                .period_rows(period)
-                .map(|(w, l, _)| {
-                    let wn = data.interner().resolve(w);
-                    let ln = data.interner().resolve(l);
-                    (model.intern(wn), model.intern(ln))
+            let start = period.start;
+            let games: Vec<(usize, usize, f64, f64)> = data
+                .period_games(period)
+                .enumerate()
+                .map(|(off, view)| {
+                    let (&[a], &[b]) = (view.side1, view.side2) else {
+                        return Err(Error::InvalidInput(format!(
+                            "game {} has a multi-player side; glicko2 rates 1v1 \
+                             games — use weng-lin on a matchups dataset for teams",
+                            start + off
+                        )));
+                    };
+                    let s1 = match view.outcome {
+                        GameOutcome::Side1Win(_) => 1.0,
+                        GameOutcome::Tie => 0.5,
+                        GameOutcome::Side2Win(_) => 0.0,
+                    };
+                    let an = data.interner().resolve(a);
+                    let bn = data.interner().resolve(b);
+                    Ok((
+                        model.intern(an),
+                        model.intern(bn),
+                        s1,
+                        f64::from(view.weight),
+                    ))
                 })
-                .collect();
+                .collect::<Result<_>>()?;
             model.update_period(&games, self.tau)?;
             progress.update(i as u64 + 1);
         }
@@ -359,10 +380,10 @@ mod tests {
             },
         );
 
-        let mut d = PairwiseDataset::new();
-        d.push("1", "2", 1.0);
-        d.push("3", "1", 1.0);
-        d.push("4", "1", 1.0);
+        let mut d = GamesDataset::new();
+        d.push_pair("1", "2", 1.0).unwrap();
+        d.push_pair("3", "1", 1.0).unwrap();
+        d.push_pair("4", "1", 1.0).unwrap();
         algo.update(&mut model, &d).unwrap();
 
         let p1 = model.players().find(|(n, _)| *n == "1").unwrap().1;
@@ -392,9 +413,9 @@ mod tests {
                 sigma: 0.06095741696613419,
             },
         );
-        let mut d = PairwiseDataset::new();
-        d.push("low", "high", 1.0);
-        d.push("low", "high", 1.0);
+        let mut d = GamesDataset::new();
+        d.push_pair("low", "high", 1.0).unwrap();
+        d.push_pair("low", "high", 1.0).unwrap();
         algo.update(&mut model, &d).unwrap();
         let p = model.players().find(|(n, _)| *n == "low").unwrap().1;
         assert!(p.sigma < 1.0);
@@ -409,22 +430,22 @@ mod tests {
         };
 
         // Two periods in one dataset.
-        let mut both = PairwiseDataset::new();
-        both.push("a", "b", 1.0);
-        both.push("c", "b", 1.0);
+        let mut both = GamesDataset::new();
+        both.push_pair("a", "b", 1.0).unwrap();
+        both.push_pair("c", "b", 1.0).unwrap();
         both.new_period();
-        both.push("b", "a", 1.0);
-        both.push("a", "c", 1.0);
+        both.push_pair("b", "a", 1.0).unwrap();
+        both.push_pair("a", "c", 1.0).unwrap();
         let mut continuous = algo.init();
         algo.update(&mut continuous, &both).unwrap();
 
         // Same data, split across an update + save/load + update.
-        let mut p1 = PairwiseDataset::new();
-        p1.push("a", "b", 1.0);
-        p1.push("c", "b", 1.0);
-        let mut p2 = PairwiseDataset::new();
-        p2.push("b", "a", 1.0);
-        p2.push("a", "c", 1.0);
+        let mut p1 = GamesDataset::new();
+        p1.push_pair("a", "b", 1.0).unwrap();
+        p1.push_pair("c", "b", 1.0).unwrap();
+        let mut p2 = GamesDataset::new();
+        p2.push_pair("b", "a", 1.0).unwrap();
+        p2.push_pair("a", "c", 1.0).unwrap();
 
         let mut resumed = algo.init();
         algo.update(&mut resumed, &p1).unwrap();
@@ -452,8 +473,8 @@ mod tests {
             ..Default::default()
         };
         let mut model = a.init();
-        let mut d = PairwiseDataset::new();
-        d.push("x", "y", 1.0);
+        let mut d = GamesDataset::new();
+        d.push_pair("x", "y", 1.0).unwrap();
         assert!(matches!(
             b.update(&mut model, &d),
             Err(Error::ParamMismatch(_))

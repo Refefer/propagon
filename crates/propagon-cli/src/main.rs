@@ -3,13 +3,20 @@
 //! Subcommands are grouped by the shape of the input data:
 //!
 //! - `propagon tournament <algo> <path>` — pairwise comparison rankers
-//!   (win-rate, elo, glicko2, bradley-terry-model, luce-spectral-ranking,
-//!   rank-centrality, random-utility-model, kemeny, borda-count, copeland)
-//!   over `winner loser [weight]` rows.
+//!   (win-rate, elo, glicko2, bradley-terry-model, thurstone-mosteller,
+//!   luce-spectral-ranking, i-luce-spectral-ranking, rank-centrality,
+//!   serial-rank, random-walker, random-utility-model, kemeny, borda-count,
+//!   copeland, massey, colley, keener, offense-defense,
+//!   bayesian-bradley-terry, hodge-rank) over `winner loser [weight]` rows.
+//! - `propagon rankings <algo> <path>` — ballot aggregation (plackett-luce,
+//!   i-luce-spectral-ranking, markov-chain, borda-count, kemeny, mallows,
+//!   footrule) over one-ballot-per-line files.
 //! - `propagon graph <algo> <path>` — node-importance rankers and utilities
-//!   (page-rank, birank, components) over `src dst [weight]` edges.
+//!   (page-rank with optional teleport seeds, birank, hits, katz-centrality,
+//!   leader-rank, harmonic, degree, k-core, components) over
+//!   `src dst [weight]` edges.
 //! - `propagon bandit <policy> <path>` — multi-armed bandits (greedy,
-//!   epsilon-greedy, upper-confidence-bound, thompson-beta,
+//!   epsilon-greedy, upper-confidence-bound, kl-ucb, exp3, thompson-beta,
 //!   thompson-gaussian) over `arm reward` rows.
 //!
 //! Cross-cutting: string ids natively, `--save-state`/`--load-state` for
@@ -24,13 +31,21 @@ use std::sync::Mutex;
 
 use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
 use propagon::algos::{
-    Bandit, BanditModel, BanditPolicy, BayesianBradleyTerry, BiRank, Borda, BradleyTerryLR,
-    BradleyTerryMM, Colley, Confidence, Copeland, CrowdBt, Degree, Direction, Elo, EsRum,
-    Estimator, GammaPolicy, Glicko2, Hits, HodgeFlow, HodgeRank, KCore, Katz, Keener, Kemeny,
-    KemenyAlgo, KemenyPasses, Lsr, Massey, Mc4, PageRank, PlackettLuce, RankCentrality,
-    RumDistribution, Sink, WengLin, WengLinVariant, WinRate, extract_components,
+    Aggregate, Bandit, BanditModel, BanditPolicy, BayesianBradleyTerry, BehaviorCloning, BiRank,
+    BladeChest, BladeChestVariant, Borda, BradleyTerryLR, BradleyTerryMM, Colley, Confidence,
+    Copeland, CovariateBt, CrowdBt, Degree, Direction, EdgeCost, Elo, EsRum, Estimator, Footrule,
+    GammaPolicy, GeneralizedBt, Glicko2, Granularity, Harmonic, Hits, HodgeFlow, HodgeRank,
+    HomeAdvantage, ILsr, KCore, Katz, Keener, Kemeny, KemenyAlgo, KemenyPasses, LeaderRank, LinUcb,
+    LinUcbModel, Lsr, MElo, Mallows, Massey, Mc4, McValue, MovElo, NashAveraging, OffenseDefense,
+    PageRank, PairwiseTests, PlackettLuce, RandomWalker, RankCentrality, ResampleScheme,
+    RumDistribution, SerialRank, Sink, SlidingWindowUcb, SourceBudget, SwUcbModel, TdValue,
+    TeamAggregate, TeamBradleyTerry, Teleport, ThurstoneMosteller, TieModel, ValueCompare, Visit,
+    WengLin, WengLinVariant, Whr, WinRate, Winsorize, extract_components,
 };
-use propagon::{Error, FitOptions, OnlineRanker, Progress, RankModel, Ranker, Result};
+use propagon::{
+    Error, FitOptions, MarginTies, OnlineRanker, Progress, RankModel, Ranker, Resample, Result,
+    TiePolicy,
+};
 
 fn main() {
     if let Err(e) = run() {
@@ -154,16 +169,35 @@ fn cli() -> Command {
         .subcommand(matchups_cmd())
         .subcommand(graph_cmd())
         .subcommand(bandit_cmd())
+        .subcommand(trajectories_cmd())
 }
 
 fn tournament_cmd() -> Command {
     Command::new("tournament")
-        .about("Rank entities from pairwise outcomes: 'winner loser [weight]' rows")
+        .about(
+            "Rank entities from game results: 'side1<TAB>side2<TAB>threshold[<TAB>count]' \
+             rows (threshold >0: side 1 wins by that margin, <0: side 2 wins, =0: tie)",
+        )
         .subcommand_required(true)
         .arg(
             opt::<usize>(
+                "bootstrap",
+                "Resample-and-refit N times; emit score and rank intervals",
+            )
+            .global(true),
+        )
+        .arg(
+            opt::<f64>(
+                "bootstrap-credible",
+                "Central interval mass for --bootstrap (default 0.95)",
+            )
+            .global(true),
+        )
+        .arg(opt::<u64>("bootstrap-seed", "Resampling seed for --bootstrap").global(true))
+        .arg(
+            opt::<usize>(
                 "min-count",
-                "Iteratively drop rows whose endpoints appear fewer times",
+                "Iteratively drop games whose players appear fewer times",
             )
             .global(true),
         )
@@ -173,6 +207,22 @@ fn tournament_cmd() -> Command {
                 "Treat blank-line-separated batches as rating periods",
             )
             .global(true),
+        )
+        .arg(
+            Arg::new("ties")
+                .long("ties")
+                .value_parser(["error", "discard", "half-win"])
+                .default_value("error")
+                .help("How win/loss algorithms lower tie games")
+                .global(true),
+        )
+        .arg(
+            Arg::new("margin-ties")
+                .long("margin-ties")
+                .value_parser(["error", "discard", "zero"])
+                .default_value("error")
+                .help("How margin algorithms (massey, keener, offense-defense) lower ties")
+                .global(true),
         )
         .subcommand(with_path(
             Command::new("win-rate")
@@ -187,10 +237,18 @@ fn tournament_cmd() -> Command {
         ))
         .subcommand(with_path(
             Command::new("elo")
-                .about("Elo ratings (order-dependent online updates)")
+                .about("Elo ratings (order-dependent online updates; ties score half)")
                 .arg(opt::<f64>("k", "Update step size"))
                 .arg(opt::<f64>("initial-rating", "Rating for unseen entities"))
-                .arg(opt::<f64>("scale", "Logistic scale (default 400)")),
+                .arg(opt::<f64>("scale", "Logistic scale (default 400)"))
+                .arg(flag(
+                    "margin-of-victory",
+                    "Scale K by ln(1+margin)/ln 2 (margin-1 wins match plain elo)",
+                ))
+                .arg(opt::<f64>(
+                    "mov-exponent",
+                    "Exponent on the margin multiplier (with --margin-of-victory)",
+                )),
         ))
         .subcommand(with_path(
             Command::new("glicko2")
@@ -346,6 +404,157 @@ fn tournament_cmd() -> Command {
                 .arg(opt::<usize>("iterations", "Maximum solver iterations"))
                 .arg(opt::<f64>("tolerance", "Relative residual target")),
         ))
+        .subcommand(with_path(
+            Command::new("thurstone-mosteller")
+                .visible_alias("tm")
+                .about("Thurstone-Mosteller Case V scale values (probit link)")
+                .arg(opt::<usize>("iterations", "Maximum Newton sweeps"))
+                .arg(opt::<f64>("tolerance", "Mean-change stopping rule"))
+                .arg(opt::<f64>(
+                    "pseudo-count",
+                    "Virtual games both ways per observed pair (separation fix)",
+                )),
+        ))
+        .subcommand(with_path(
+            Command::new("i-luce-spectral-ranking")
+                .visible_alias("ilsr")
+                .about("I-LSR: iterated spectral solves to the exact Plackett-Luce MLE")
+                .arg(opt::<usize>("outer", "Chain-rebuild iterations"))
+                .arg(opt::<usize>(
+                    "inner-steps",
+                    "Power passes per stationary solve",
+                ))
+                .arg(opt::<f64>("tolerance", "Outer L1 stopping rule")),
+        ))
+        .subcommand(with_path(
+            Command::new("serial-rank")
+                .about("SerialRank seriation ordering (scores are Fiedler coordinates)")
+                .arg(opt::<usize>("iterations", "Power-iteration budget"))
+                .arg(opt::<f64>("tolerance", "Alignment stopping rule"))
+                .arg(opt::<u64>("seed", "Start-vector seed")),
+        ))
+        .subcommand(with_path(
+            Command::new("random-walker")
+                .about("Random-walker rankings: fans follow winners with bias p")
+                .arg(opt::<f64>(
+                    "bias",
+                    "Winner-following bias p, strictly in (0.5, 1)",
+                ))
+                .arg(opt::<usize>("iterations", "Maximum sweeps"))
+                .arg(opt::<f64>("tolerance", "Early-exit tolerance")),
+        ))
+        .subcommand(with_path(
+            Command::new("offense-defense")
+                .visible_alias("od")
+                .about("Offense-defense Sinkhorn ratings (margins as scores)")
+                .arg(opt::<usize>("iterations", "Maximum Sinkhorn sweeps"))
+                .arg(opt::<f64>("tolerance", "Relative-change stopping rule")),
+        ))
+        .subcommand(with_path(
+            Command::new("generalized-bradley-terry")
+                .visible_alias("gbt")
+                .about("Bradley-Terry with native ties and home advantage (side 1 = home)")
+                .arg(
+                    Arg::new("tie-model")
+                        .long("tie-model")
+                        .value_parser(["none", "davidson", "rao-kupper"])
+                        .default_value("davidson")
+                        .help("Tie likelihood (davidson: P(tie) ~ nu sqrt(pi_i pi_j))"),
+                )
+                .arg(flag(
+                    "home-advantage",
+                    "Estimate a multiplicative advantage for side 1 (the home side)",
+                ))
+                .arg(opt::<usize>("iterations", "Maximum MM sweeps"))
+                .arg(opt::<f64>("tolerance", "Convergence tolerance")),
+        ))
+        .subcommand(with_path(
+            Command::new("team-bradley-terry")
+                .visible_alias("team-bt")
+                .about("Player strengths from team games (multi-player sides)")
+                .arg(
+                    Arg::new("aggregate")
+                        .long("aggregate")
+                        .value_parser(["additive", "product"])
+                        .default_value("additive")
+                        .help("Team strength: sum or product of member strengths"),
+                )
+                .arg(opt::<usize>("iterations", "Maximum sweeps"))
+                .arg(opt::<f64>("tolerance", "Convergence tolerance")),
+        ))
+        .subcommand(with_path(
+            Command::new("whole-history-rating")
+                .visible_alias("whr")
+                .about("WHR skill curves over rating periods (Wiener prior + Newton)")
+                .arg(opt::<f64>(
+                    "w2",
+                    "Wiener variance per period (natural log-odds units)",
+                ))
+                .arg(opt::<f64>(
+                    "prior-games",
+                    "Virtual anchor draws on each player's first period",
+                ))
+                .arg(opt::<usize>("iterations", "Maximum Newton sweeps"))
+                .arg(opt::<f64>("tolerance", "Max rating change to stop at"))
+                .arg(flag(
+                    "timeline",
+                    "Emit every (period, rating, sd) point per player",
+                )),
+        ))
+        .subcommand(with_path(
+            Command::new("melo")
+                .about("Multidimensional Elo: rating + cyclic vectors (mElo_2k)")
+                .arg(opt::<usize>("k", "Cyclic dimension pairs"))
+                .arg(opt::<f64>("lr-rating", "Rating learning rate"))
+                .arg(opt::<f64>("lr-vector", "Cyclic-vector learning rate"))
+                .arg(opt::<f64>("initial-rating", "Rating for unseen entities"))
+                .arg(opt::<f64>("init-scale", "Stddev of fresh cyclic vectors"))
+                .arg(opt::<u64>("seed", "Vector-initialization seed")),
+        ))
+        .subcommand(with_path(
+            Command::new("nash-averaging")
+                .visible_alias("nash")
+                .about("Maxent-Nash weighted skill (redundancy-invariant evaluation)")
+                .arg(opt::<usize>("iterations", "Multiplicative-weights budget"))
+                .arg(opt::<f64>("tolerance", "Duality-gap target"))
+                .arg(opt::<f64>("learning-rate", "MW step in (0, 1]"))
+                .arg(opt::<usize>(
+                    "anneal-every",
+                    "Iterations per temperature halving",
+                )),
+        ))
+        .subcommand(with_path(
+            Command::new("blade-chest")
+                .about("Blade-chest embeddings for intransitive matchups")
+                .arg(
+                    Arg::new("variant")
+                        .long("variant")
+                        .value_parser(["inner", "dist"])
+                        .default_value("inner")
+                        .help("Matchup score: inner products or squared distances"),
+                )
+                .arg(opt::<usize>("dims", "Embedding dimension"))
+                .arg(opt::<f64>("lr", "SGD learning rate"))
+                .arg(opt::<usize>("epochs", "Shuffled passes over the data"))
+                .arg(opt::<f64>("l2", "Vector shrinkage per touch"))
+                .arg(opt::<f64>("init-scale", "Stddev of initial vectors"))
+                .arg(opt::<u64>("seed", "Init/shuffle seed")),
+        ))
+        .subcommand(with_path(
+            Command::new("covariate-bradley-terry")
+                .visible_alias("cbt")
+                .about("Conditional logit: strengths from entity features (s = beta . x)")
+                .arg(
+                    opt::<PathBuf>("features", "File of 'entity x1 x2 ... xd' rows").required(true),
+                )
+                .arg(opt::<f64>("l2", "Ridge penalty on coefficients"))
+                .arg(flag(
+                    "intercepts",
+                    "Add per-entity intercepts (partial pooling; needs --l2 > 0)",
+                ))
+                .arg(opt::<usize>("iterations", "Maximum Newton steps"))
+                .arg(opt::<f64>("tolerance", "Gradient-norm stopping rule")),
+        ))
 }
 
 fn rankings_cmd() -> Command {
@@ -353,6 +562,21 @@ fn rankings_cmd() -> Command {
         .visible_alias("ballots")
         .about("Aggregate full or partial rankings: one ballot per line, best first")
         .subcommand_required(true)
+        .arg(
+            opt::<usize>(
+                "bootstrap",
+                "Resample-and-refit N times; emit score and rank intervals",
+            )
+            .global(true),
+        )
+        .arg(
+            opt::<f64>(
+                "bootstrap-credible",
+                "Central interval mass for --bootstrap (default 0.95)",
+            )
+            .global(true),
+        )
+        .arg(opt::<u64>("bootstrap-seed", "Resampling seed for --bootstrap").global(true))
         .subcommand(with_path(
             Command::new("plackett-luce")
                 .visible_alias("pl")
@@ -393,12 +617,50 @@ fn rankings_cmd() -> Command {
                 )
                 .arg(opt::<u64>("seed", "Seed for the DE search")),
         ))
+        .subcommand(with_path(
+            Command::new("i-luce-spectral-ranking")
+                .visible_alias("ilsr")
+                .about("I-LSR Plackett-Luce MLE fitted natively on the ballots")
+                .arg(opt::<usize>("outer", "Chain-rebuild iterations"))
+                .arg(opt::<usize>(
+                    "inner-steps",
+                    "Power passes per stationary solve",
+                ))
+                .arg(opt::<f64>("tolerance", "Outer L1 stopping rule")),
+        ))
+        .subcommand(with_path(
+            Command::new("mallows")
+                .about("Mallows model: Kemeny consensus plus dispersion phi")
+                .arg(opt::<usize>(
+                    "passes",
+                    "Kemeny insertion budget (omit for auto)",
+                ))
+                .arg(opt::<u64>("seed", "Consensus-search seed")),
+        ))
+        .subcommand(with_path(Command::new("footrule").about(
+            "Footrule-optimal aggregation (exact matching; 2-approximates Kemeny)",
+        )))
 }
 
 fn crowd_cmd() -> Command {
     Command::new("crowd")
         .about("Rank from annotator-tagged votes: 'annotator winner loser [weight]' rows")
         .subcommand_required(true)
+        .arg(
+            opt::<usize>(
+                "bootstrap",
+                "Resample-and-refit N times; emit score and rank intervals",
+            )
+            .global(true),
+        )
+        .arg(
+            opt::<f64>(
+                "bootstrap-credible",
+                "Central interval mass for --bootstrap (default 0.95)",
+            )
+            .global(true),
+        )
+        .arg(opt::<u64>("bootstrap-seed", "Resampling seed for --bootstrap").global(true))
         .subcommand(with_path(
             Command::new("bradley-terry")
                 .visible_alias("crowd-bt")
@@ -456,6 +718,21 @@ fn graph_cmd() -> Command {
     Command::new("graph")
         .about("Rank nodes by graph structure: 'src dst [weight]' edges")
         .subcommand_required(true)
+        .arg(
+            opt::<usize>(
+                "bootstrap",
+                "Resample-and-refit N times; emit score and rank intervals",
+            )
+            .global(true),
+        )
+        .arg(
+            opt::<f64>(
+                "bootstrap-credible",
+                "Central interval mass for --bootstrap (default 0.95)",
+            )
+            .global(true),
+        )
+        .arg(opt::<u64>("bootstrap-seed", "Resampling seed for --bootstrap").global(true))
         .subcommand(with_path(
             Command::new("page-rank")
                 .about("PageRank over an endorsement graph (src endorses dst)")
@@ -467,10 +744,47 @@ fn graph_cmd() -> Command {
                         .value_parser(["reverse", "all", "uniform", "none"])
                         .default_value("reverse"),
                 )
+                .arg(
+                    opt::<String>(
+                        "seeds",
+                        "Comma-separated teleport seeds (personalized PageRank / RWR)",
+                    )
+                    .conflicts_with("seeds-file"),
+                )
+                .arg(opt::<PathBuf>(
+                    "seeds-file",
+                    "File of 'name [weight]' teleport seeds",
+                ))
                 .arg(flag(
                     "matches",
                     "Treat rows as match results: 'winner loser' becomes loser -> winner",
                 )),
+        ))
+        .subcommand(with_path(
+            Command::new("leader-rank")
+                .about("LeaderRank: parameter-free ground-node random walk")
+                .arg(opt::<usize>("iterations", "Power-iteration budget"))
+                .arg(opt::<f64>("tolerance", "Early-exit threshold")),
+        ))
+        .subcommand(with_path(
+            Command::new("harmonic")
+                .about("Harmonic centrality: sum of inverse distances")
+                .arg(
+                    Arg::new("direction")
+                        .long("direction")
+                        .value_parser(["in", "out", "total"])
+                        .default_value("in")
+                        .help("Distance orientation (in: how easily others reach you)"),
+                )
+                .arg(flag(
+                    "weighted",
+                    "Use edge weights as lengths (Dijkstra; weights must be > 0)",
+                ))
+                .arg(opt::<usize>(
+                    "sample-sources",
+                    "Estimate from N sampled sources instead of all",
+                ))
+                .arg(opt::<u64>("seed", "Source-sampling seed")),
         ))
         .subcommand(with_path(
             Command::new("birank")
@@ -570,6 +884,128 @@ fn bandit_cmd() -> Command {
                 .arg(opt::<f64>("prior-mean", "Prior mean"))
                 .arg(opt::<f64>("prior-weight", "Prior pseudo-observations")),
         ))
+        .subcommand(
+            with_path(
+                Command::new("sliding-window-ucb")
+                    .visible_alias("sw-ucb")
+                    .about("UCB over the last N events only (tracks drifting arms)")
+                    .arg(opt::<usize>("window", "Events kept in the window"))
+                    .arg(opt::<f64>("exploration", "Exploration constant")),
+            )
+            .arg(opt::<usize>(
+                "select",
+                "Print the next N arms to play instead of scores",
+            )),
+        )
+        .subcommand(with_path(
+            Command::new("linucb")
+                .about("Contextual LinUCB over 'arm reward x1 x2 ... xd' rows")
+                .arg(opt::<f64>("alpha", "Exploration width"))
+                .arg(opt::<f64>("ridge", "Ridge regularization"))
+                .arg(opt::<String>(
+                    "select-for",
+                    "Print the arm to play for this comma-separated context",
+                )),
+        ))
+}
+
+fn trajectories_cmd() -> Command {
+    Command::new("trajectories")
+        .about("Rank states from reward-bearing episodes: 'state reward' rows, blank line ends an episode")
+        .subcommand_required(true)
+        .arg(
+            opt::<usize>(
+                "bootstrap",
+                "Resample-and-refit N times; emit score and rank intervals",
+            )
+            .global(true),
+        )
+        .arg(
+            opt::<f64>(
+                "bootstrap-credible",
+                "Central interval mass for --bootstrap (default 0.95)",
+            )
+            .global(true),
+        )
+        .arg(opt::<u64>("bootstrap-seed", "Resampling seed for --bootstrap").global(true))
+        .subcommand(with_path(
+            Command::new("monte-carlo")
+                .visible_alias("mc")
+                .about("Monte Carlo state values: discounted returns averaged per state")
+                .arg(opt::<f64>("gamma", "Discount factor in (0, 1]"))
+                .arg(
+                    Arg::new("visit")
+                        .long("visit")
+                        .value_parser(["first", "every"])
+                        .default_value("first")
+                        .help("Count each state once per episode, or every occurrence"),
+                )
+                .arg(
+                    Arg::new("aggregate")
+                        .long("aggregate")
+                        .value_parser(["mean", "median"])
+                        .default_value("mean"),
+                )
+                .arg(opt::<f64>(
+                    "winsorize",
+                    "Clamp returns into the [q, 1-q] quantiles before aggregating",
+                ))
+                .arg(opt::<usize>(
+                    "min-observations",
+                    "Drop states with fewer return samples",
+                )),
+        ))
+        .subcommand(with_path(
+            Command::new("td")
+                .about("TD(0) state values (order-dependent online updates)")
+                .arg(opt::<f64>("alpha", "Learning rate in (0, 1]"))
+                .arg(opt::<f64>("gamma", "Discount factor in (0, 1]"))
+                .arg(opt::<usize>("passes", "Sweeps over the batch per update"))
+                .arg(opt::<f64>("initial-value", "Value for unseen states")),
+        ))
+        .subcommand(with_path(
+            Command::new("compare")
+                .about("Bootstrap CIs on state values, plus pairwise exceedance tests")
+                .arg(opt::<f64>("gamma", "Discount factor in (0, 1]"))
+                .arg(
+                    Arg::new("visit")
+                        .long("visit")
+                        .value_parser(["first", "every"])
+                        .default_value("first"),
+                )
+                .arg(opt::<usize>("replicates", "Bootstrap replicates"))
+                .arg(
+                    Arg::new("method")
+                        .long("method")
+                        .value_parser(["bootstrap", "bayesian"])
+                        .default_value("bootstrap")
+                        .help("Episode resampling scheme"),
+                )
+                .arg(opt::<f64>("credible", "Central interval mass"))
+                .arg(opt::<usize>(
+                    "pairwise",
+                    "Also run pairwise tests with this many permutations",
+                ))
+                .arg(opt::<usize>(
+                    "min-observations",
+                    "Drop states seen in fewer episodes",
+                ))
+                .arg(opt::<u64>("seed", "Resampling seed")),
+        ))
+        .subcommand(with_path(
+            Command::new("behavior-cloning")
+                .visible_alias("bc")
+                .about("Rank actions by expert frequency (rewards ignored)")
+                .arg(opt::<char>(
+                    "per-state",
+                    "Split tokens as state<SEP>action on this separator",
+                ))
+                .arg(opt::<f64>("smoothing", "Laplace smoothing pseudo-count"))
+                .arg(flag(
+                    "emit-pairs",
+                    "Print the implied preference edges as tournament rows instead of scores",
+                )),
+        ))
 }
 
 // ---------------------------------------------------------------- helpers
@@ -598,6 +1034,8 @@ struct Ctx<'a> {
     load_state: Option<PathBuf>,
     min_count: usize,
     periods: bool,
+    ties: TiePolicy,
+    margin_ties: MarginTies,
     progress: Option<CliProgress>,
     pool_holder: Option<rayon::ThreadPool>,
 }
@@ -637,6 +1075,26 @@ impl<'a> Ctx<'a> {
                 .flatten()
                 .copied()
                 == Some(true),
+            ties: match sm
+                .try_get_one::<String>("ties")
+                .ok()
+                .flatten()
+                .map(String::as_str)
+            {
+                Some("discard") => TiePolicy::Discard,
+                Some("half-win") => TiePolicy::HalfWin,
+                _ => TiePolicy::Error,
+            },
+            margin_ties: match sm
+                .try_get_one::<String>("margin-ties")
+                .ok()
+                .flatten()
+                .map(String::as_str)
+            {
+                Some("discard") => MarginTies::Discard,
+                Some("zero") => MarginTies::Zero,
+                _ => MarginTies::Error,
+            },
             progress: std::io::stderr().is_terminal().then(CliProgress::default),
             pool_holder,
         })
@@ -655,8 +1113,24 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    fn games(&self) -> Result<propagon::GamesDataset> {
+        let g = io::read_games(self.path, self.periods)?;
+        Ok(if self.min_count > 1 {
+            g.filter_min_count(self.min_count)
+        } else {
+            g
+        })
+    }
+
+    /// Win/loss pairs for the BT family (ties per `--ties`).
     fn pairwise(&self) -> Result<propagon::PairwiseDataset> {
-        io::read_pairwise(self.path, self.periods, self.min_count)
+        self.games()?.to_pairwise(self.ties)
+    }
+
+    /// Margin rows for Massey/Keener/Hodge mean-margin (ties per
+    /// `--margin-ties`).
+    fn margin_pairs(&self) -> Result<propagon::PairwiseDataset> {
+        self.games()?.margin_pairs(self.margin_ties)
     }
 
     fn reject_load_state(&self, sub: &str) -> Result<()> {
@@ -696,6 +1170,53 @@ fn fit_maybe_warm<A: Ranker>(algo: &A, data: &A::Data, ctx: &Ctx<'_>) -> Result<
     }
 }
 
+/// Runs the bootstrap wrapper instead of a plain fit when `--bootstrap N`
+/// was passed; returns true when it handled the command (model emitted).
+fn maybe_bootstrap<A>(algo: A, data: &A::Data, ctx: &Ctx<'_>, sm: &ArgMatches) -> Result<bool>
+where
+    A: Ranker + Sync,
+    A::Data: Resample + Sync,
+    A::Model: Send,
+{
+    let n = match sm.try_get_one::<usize>("bootstrap").ok().flatten() {
+        Some(&n) => n,
+        None => return Ok(false),
+    };
+    ctx.reject_load_state("--bootstrap")?;
+    let mut bs = propagon::algos::Bootstrap::new(algo);
+    bs.replicates = n;
+    set(sm, "bootstrap-credible", &mut bs.credible);
+    set(sm, "bootstrap-seed", &mut bs.seed);
+
+    let model = bs.fit_opts(data, &ctx.opts())?;
+    if model.replicates_ok() < n {
+        eprintln!("replicates ok: {}/{n}", model.replicates_ok());
+    }
+    ctx.save(&model)?;
+    let mut out = std::io::stdout().lock();
+    match ctx.format.as_str() {
+        "jsonl" => emit::jsonl(&mut out, &model)?,
+        _ => emit::bootstrap(&mut out, &model)?,
+    }
+    Ok(true)
+}
+
+/// Rejects `--bootstrap` on algorithms it cannot wrap (online updates, or
+/// batch fits whose semantics resampling would silently change).
+fn reject_bootstrap(sm: &ArgMatches, algo: &str, why: &str) -> Result<()> {
+    if sm
+        .try_get_one::<usize>("bootstrap")
+        .ok()
+        .flatten()
+        .is_some()
+    {
+        return Err(Error::InvalidInput(format!(
+            "--bootstrap does not support {algo}: {why}"
+        )));
+    }
+    Ok(())
+}
+
 /// Init or load from `--load-state`, then fold the new data in.
 fn update_maybe_loaded<A: OnlineRanker>(
     algo: &A,
@@ -732,6 +1253,7 @@ fn run() -> Result<()> {
         "matchups" => run_matchups(leaf, sm),
         "graph" => run_graph(leaf, sm),
         "bandit" => run_bandit(leaf, sm),
+        "trajectories" => run_trajectories(leaf, sm),
         other => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
     }
 }
@@ -740,6 +1262,7 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
     match algo {
         "win-rate" => {
+            reject_bootstrap(sm, "win-rate", "it folds tallies online")?;
             let confidence = match choice(sm, "confidence-interval", "0.95") {
                 "0.95" => Confidence::P95,
                 "0.9" | "0.90" => Confidence::P90,
@@ -750,19 +1273,31 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             ctx.emit(&model)
         }
         "elo" => {
+            reject_bootstrap(sm, "elo", "online updates are order-dependent")?;
+            if sm.get_flag("margin-of-victory") {
+                let mut algo = MovElo::default();
+                set(sm, "k", &mut algo.k);
+                set(sm, "initial-rating", &mut algo.initial_rating);
+                set(sm, "scale", &mut algo.scale);
+                set(sm, "mov-exponent", &mut algo.mov_exponent);
+
+                let model = update_maybe_loaded(&algo, &ctx.games()?, &ctx)?;
+                return ctx.emit(&model);
+            }
             let mut algo = Elo::default();
             set(sm, "k", &mut algo.k);
             set(sm, "initial-rating", &mut algo.initial_rating);
             set(sm, "scale", &mut algo.scale);
 
-            let model = update_maybe_loaded(&algo, &ctx.pairwise()?, &ctx)?;
+            let model = update_maybe_loaded(&algo, &ctx.games()?, &ctx)?;
             ctx.emit(&model)
         }
         "glicko2" => {
+            reject_bootstrap(sm, "glicko2", "online updates are order-dependent")?;
             let mut algo = Glicko2::default();
             set(sm, "tau", &mut algo.tau);
 
-            let model = update_maybe_loaded(&algo, &ctx.pairwise()?, &ctx)?;
+            let model = update_maybe_loaded(&algo, &ctx.games()?, &ctx)?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
 
@@ -779,7 +1314,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
                 set(sm, "decay", &mut algo.decay);
                 algo.thrifty = sm.get_flag("thrifty");
 
-                let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
+                let data = ctx.pairwise()?;
+                if maybe_bootstrap(algo, &data, &ctx, sm)? {
+                    return Ok(());
+                }
+                let model = fit_maybe_warm(&algo, &data, &ctx)?;
                 ctx.emit(&model)
             }
             _ => {
@@ -797,7 +1336,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
                 set(sm, "seed", &mut algo.seed);
                 algo.remove_total_losers = sm.get_flag("remove-total-losers");
 
-                let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
+                let data = ctx.pairwise()?;
+                if maybe_bootstrap(algo, &data, &ctx, sm)? {
+                    return Ok(());
+                }
+                let model = fit_maybe_warm(&algo, &data, &ctx)?;
                 ctx.save(&model)?;
                 let mut out = std::io::stdout().lock();
 
@@ -817,7 +1360,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "steps", &mut algo.steps);
             set(sm, "seed", &mut algo.seed);
 
-            let model = fit_maybe_warm(&algo, &ctx.pairwise()?, &ctx)?;
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(algo, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = fit_maybe_warm(&algo, &data, &ctx)?;
             ctx.emit(&model)
         }
         "rank-centrality" => {
@@ -826,7 +1373,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "iterations", &mut rc.iterations);
             set(sm, "tolerance", &mut rc.tolerance);
 
-            let model = rc.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(rc, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = rc.fit_opts(&data, &ctx.opts())?;
             ctx.emit(&model)
         }
         "random-utility-model" => {
@@ -843,7 +1394,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
                 es.distribution = RumDistribution::FixedNormal;
             }
 
-            let model = es.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(es, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = es.fit_opts(&data, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
 
@@ -865,17 +1420,29 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
                 km.passes = KemenyPasses::Fixed(n);
             }
 
-            let model = km.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(km, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = km.fit_opts(&data, &ctx.opts())?;
             ctx.emit(&model)
         }
         "borda-count" => {
             ctx.reject_load_state(algo)?;
-            let model = Borda::default().fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(Borda::default(), &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = Borda::default().fit_opts(&data, &ctx.opts())?;
             ctx.emit(&model)
         }
         "copeland" => {
             ctx.reject_load_state(algo)?;
-            let model = Copeland::default().fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(Copeland::default(), &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = Copeland::default().fit_opts(&data, &ctx.opts())?;
             ctx.emit(&model)
         }
         "massey" => {
@@ -884,7 +1451,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "iterations", &mut ms.iterations);
             set(sm, "tolerance", &mut ms.tolerance);
 
-            let model = ms.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.margin_pairs()?;
+            if maybe_bootstrap(ms, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = ms.fit_opts(&data, &ctx.opts())?;
             ctx.emit(&model)
         }
         "colley" => {
@@ -893,7 +1464,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "iterations", &mut cl.iterations);
             set(sm, "tolerance", &mut cl.tolerance);
 
-            let model = cl.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(cl, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = cl.fit_opts(&data, &ctx.opts())?;
             ctx.emit(&model)
         }
         "keener" => {
@@ -904,7 +1479,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             kn.skew = !sm.get_flag("no-skew");
             kn.normalize_games = !sm.get_flag("no-normalize-games");
 
-            let model = kn.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.margin_pairs()?;
+            if maybe_bootstrap(kn, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = kn.fit_opts(&data, &ctx.opts())?;
             ctx.emit(&model)
         }
         "bayesian-bradley-terry" => {
@@ -917,7 +1496,11 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "credible", &mut bb.credible);
             set(sm, "seed", &mut bb.seed);
 
-            let model = bb.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(bb, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = bb.fit_opts(&data, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
 
@@ -938,10 +1521,247 @@ fn run_tournament(algo: &str, sm: &ArgMatches) -> Result<()> {
                 _ => HodgeFlow::LogOdds,
             };
 
-            let model = hr.fit_opts(&ctx.pairwise()?, &ctx.opts())?;
+            let data = match hr.flow {
+                HodgeFlow::MeanMargin => ctx.margin_pairs()?,
+                _ => ctx.pairwise()?,
+            };
+            if maybe_bootstrap(hr, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = hr.fit_opts(&data, &ctx.opts())?;
             eprintln!(
                 "inconsistency (cyclic flow share): {:.4}",
                 model.inconsistency()
+            );
+            ctx.emit(&model)
+        }
+        "thurstone-mosteller" => {
+            ctx.reject_load_state(algo)?;
+            let mut tm = ThurstoneMosteller::default();
+            set(sm, "iterations", &mut tm.iterations);
+            set(sm, "tolerance", &mut tm.tolerance);
+            set(sm, "pseudo-count", &mut tm.pseudo_count);
+
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(tm, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = tm.fit_opts(&data, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "i-luce-spectral-ranking" => {
+            let mut il = ILsr::default();
+            set(sm, "outer", &mut il.outer);
+            set(sm, "inner-steps", &mut il.inner_steps);
+            set(sm, "tolerance", &mut il.tolerance);
+
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(il, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = fit_maybe_warm(&il, &data, &ctx)?;
+            ctx.emit(&model)
+        }
+        "serial-rank" => {
+            ctx.reject_load_state(algo)?;
+            let mut sr = SerialRank::default();
+            set(sm, "iterations", &mut sr.iterations);
+            set(sm, "tolerance", &mut sr.tolerance);
+            set(sm, "seed", &mut sr.seed);
+
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(sr, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = sr.fit_opts(&data, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "random-walker" => {
+            ctx.reject_load_state(algo)?;
+            let mut rw = RandomWalker::default();
+            set(sm, "bias", &mut rw.p);
+            set(sm, "iterations", &mut rw.iterations);
+            set(sm, "tolerance", &mut rw.tolerance);
+
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(rw, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = rw.fit_opts(&data, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "offense-defense" => {
+            ctx.reject_load_state(algo)?;
+            let mut od = OffenseDefense::default();
+            set(sm, "iterations", &mut od.iterations);
+            set(sm, "tolerance", &mut od.tolerance);
+
+            let data = ctx.margin_pairs()?;
+            if maybe_bootstrap(od, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = od.fit_opts(&data, &ctx.opts())?;
+            ctx.save(&model)?;
+            let mut out = std::io::stdout().lock();
+
+            match ctx.format.as_str() {
+                "jsonl" => emit::jsonl(&mut out, &model),
+                _ => emit::offense_defense(&mut out, &model),
+            }
+        }
+        "generalized-bradley-terry" => {
+            ctx.reject_load_state(algo)?;
+            let ties = match choice(sm, "tie-model", "davidson") {
+                "none" => TieModel::None,
+                "rao-kupper" => TieModel::RaoKupper,
+                _ => TieModel::Davidson,
+            };
+            let mut gb = GeneralizedBt {
+                ties,
+                ..GeneralizedBt::default()
+            };
+            if sm.get_flag("home-advantage") {
+                gb.home = HomeAdvantage::Estimate;
+            }
+            set(sm, "iterations", &mut gb.iterations);
+            set(sm, "tolerance", &mut gb.tolerance);
+
+            let data = ctx.games()?;
+            if maybe_bootstrap(gb, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = gb.fit_opts(&data, &ctx.opts())?;
+            match (gb.ties, gb.home) {
+                (TieModel::None, HomeAdvantage::None) => {}
+                (TieModel::None, _) => {
+                    eprintln!("home advantage gamma: {:.4}", model.home_advantage());
+                }
+                (_, HomeAdvantage::None) => {
+                    eprintln!("tie parameter: {:.4}", model.tie_parameter());
+                }
+                _ => eprintln!(
+                    "tie parameter: {:.4}  home advantage gamma: {:.4}",
+                    model.tie_parameter(),
+                    model.home_advantage()
+                ),
+            }
+            ctx.emit(&model)
+        }
+        "team-bradley-terry" => {
+            ctx.reject_load_state(algo)?;
+            let mut tb = TeamBradleyTerry::default();
+            if choice(sm, "aggregate", "additive") == "product" {
+                tb.aggregate = TeamAggregate::Product;
+            }
+            tb.ties = ctx.ties;
+            set(sm, "iterations", &mut tb.iterations);
+            set(sm, "tolerance", &mut tb.tolerance);
+
+            let data = ctx.games()?;
+            if maybe_bootstrap(tb, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = tb.fit_opts(&data, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "whole-history-rating" => {
+            reject_bootstrap(
+                sm,
+                "whole-history-rating",
+                "row resampling drops the rating periods WHR is built on",
+            )?;
+            let mut wh = Whr::default();
+            set(sm, "w2", &mut wh.w2);
+            set(sm, "prior-games", &mut wh.prior_games);
+            set(sm, "iterations", &mut wh.iterations);
+            set(sm, "tolerance", &mut wh.tolerance);
+
+            let model = fit_maybe_warm(&wh, &ctx.pairwise()?, &ctx)?;
+            if sm.get_flag("timeline") {
+                ctx.save(&model)?;
+                let mut out = std::io::stdout().lock();
+                match ctx.format.as_str() {
+                    "jsonl" => emit::jsonl(&mut out, &model)?,
+                    _ => emit::whr_timeline(&mut out, &model)?,
+                }
+                Ok(())
+            } else {
+                ctx.emit(&model)
+            }
+        }
+        "melo" => {
+            reject_bootstrap(sm, "melo", "online updates are order-dependent")?;
+            let mut me = MElo::default();
+            set(sm, "k", &mut me.k);
+            set(sm, "lr-rating", &mut me.lr_rating);
+            set(sm, "lr-vector", &mut me.lr_vector);
+            set(sm, "initial-rating", &mut me.initial_rating);
+            set(sm, "init-scale", &mut me.init_scale);
+            set(sm, "seed", &mut me.seed);
+
+            let model = update_maybe_loaded(&me, &ctx.games()?, &ctx)?;
+            ctx.emit(&model)
+        }
+        "nash-averaging" => {
+            ctx.reject_load_state(algo)?;
+            let mut na = NashAveraging::default();
+            set(sm, "iterations", &mut na.iterations);
+            set(sm, "tolerance", &mut na.tolerance);
+            set(sm, "learning-rate", &mut na.learning_rate);
+            set(sm, "anneal-every", &mut na.anneal_every);
+
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(na, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = na.fit_opts(&data, &ctx.opts())?;
+            eprintln!("duality gap: {:.3e}", model.gap());
+            ctx.emit(&model)
+        }
+        "blade-chest" => {
+            ctx.reject_load_state(algo)?;
+            let mut bc = BladeChest::default();
+            if choice(sm, "variant", "inner") == "dist" {
+                bc.variant = BladeChestVariant::Dist;
+            }
+            set(sm, "dims", &mut bc.dims);
+            set(sm, "lr", &mut bc.lr);
+            set(sm, "epochs", &mut bc.epochs);
+            set(sm, "l2", &mut bc.l2);
+            set(sm, "init-scale", &mut bc.init_scale);
+            set(sm, "seed", &mut bc.seed);
+
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(bc, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = bc.fit_opts(&data, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "covariate-bradley-terry" => {
+            ctx.reject_load_state(algo)?;
+            let features_path = sm
+                .get_one::<PathBuf>("features")
+                .ok_or_else(|| Error::InvalidInput("--features is required".into()))?;
+            let mut cb = CovariateBt::new(io::read_features(features_path)?);
+            set(sm, "l2", &mut cb.l2);
+            cb.intercepts = sm.get_flag("intercepts");
+            set(sm, "iterations", &mut cb.iterations);
+            set(sm, "tolerance", &mut cb.tolerance);
+
+            let data = ctx.pairwise()?;
+            if maybe_bootstrap(cb.clone(), &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = cb.fit_opts(&data, &ctx.opts())?;
+            eprintln!(
+                "coefficients: {}",
+                model
+                    .coefficients()
+                    .iter()
+                    .map(|c| format!("{c:.6}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
             );
             ctx.emit(&model)
         }
@@ -961,6 +1781,9 @@ fn run_rankings(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "iterations", &mut pl.iterations);
             set(sm, "tolerance", &mut pl.tolerance);
 
+            if maybe_bootstrap(pl, &data, &ctx, sm)? {
+                return Ok(());
+            }
             let model = fit_maybe_warm(&pl, &data, &ctx)?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
@@ -977,11 +1800,19 @@ fn run_rankings(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "iterations", &mut mc.iterations);
             set(sm, "tolerance", &mut mc.tolerance);
 
+            if maybe_bootstrap(mc, &data, &ctx, sm)? {
+                return Ok(());
+            }
             let model = mc.fit_opts(&data, &ctx.opts())?;
             ctx.emit(&model)
         }
         "borda-count" => {
             ctx.reject_load_state(algo)?;
+            reject_bootstrap(
+                sm,
+                "rankings borda-count",
+                "the positional path has no resampling wrapper yet",
+            )?;
             let model = Borda::default().fit_rankings(&data)?;
             ctx.emit(&model)
         }
@@ -998,7 +1829,54 @@ fn run_rankings(algo: &str, sm: &ArgMatches) -> Result<()> {
                 km.passes = KemenyPasses::Fixed(n);
             }
 
-            let model = km.fit_opts(&data.to_pairwise(), &ctx.opts())?;
+            let pairs = data.to_pairwise();
+            if maybe_bootstrap(km, &pairs, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = km.fit_opts(&pairs, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "i-luce-spectral-ranking" => {
+            ctx.reject_load_state(algo)?;
+            let mut il = ILsr::default();
+            set(sm, "outer", &mut il.outer);
+            set(sm, "inner-steps", &mut il.inner_steps);
+            set(sm, "tolerance", &mut il.tolerance);
+
+            reject_bootstrap(
+                sm,
+                "rankings i-luce-spectral-ranking",
+                "the native ballot path has no resampling wrapper yet",
+            )?;
+            let model = il.fit_rankings_opts(&data, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "mallows" => {
+            ctx.reject_load_state(algo)?;
+            let mut ml = Mallows::default();
+            set(sm, "seed", &mut ml.seed);
+            if let Some(&n) = sm.get_one::<usize>("passes") {
+                ml.passes = KemenyPasses::Fixed(n);
+            }
+
+            if maybe_bootstrap(ml, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = ml.fit_opts(&data, &ctx.opts())?;
+            eprintln!(
+                "phi (dispersion): {:.4}  mean Kendall distance: {:.4}",
+                model.phi(),
+                model.mean_distance()
+            );
+            ctx.emit(&model)
+        }
+        "footrule" => {
+            ctx.reject_load_state(algo)?;
+            if maybe_bootstrap(Footrule::default(), &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = Footrule::default().fit_opts(&data, &ctx.opts())?;
+            eprintln!("total footrule distance: {}", model.cost());
             ctx.emit(&model)
         }
         other => Err(Error::InvalidInput(format!(
@@ -1020,7 +1898,11 @@ fn run_crowd(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "tolerance", &mut cb.tolerance);
             set(sm, "inner-sweeps", &mut cb.inner_sweeps);
 
-            let model = cb.fit_opts(&io::read_annotated(ctx.path)?, &ctx.opts())?;
+            let data = io::read_annotated(ctx.path)?;
+            if maybe_bootstrap(cb, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = cb.fit_opts(&data, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
 
@@ -1085,11 +1967,63 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
                 "none" => Sink::None,
                 _ => Sink::Reverse,
             };
+            if let Some(list) = sm.get_one::<String>("seeds") {
+                pr.teleport = Teleport::Seeds(
+                    list.split(',')
+                        .map(|n| (n.trim().to_string(), 1.0))
+                        .collect(),
+                );
+            } else if let Some(p) = sm.get_one::<PathBuf>("seeds-file") {
+                pr.teleport = Teleport::Seeds(io::read_seeds(p)?);
+            }
 
             // --matches: rows are 'winner loser', i.e. the endorsement
             // loser -> winner (the tournament-file orientation).
             let graph = io::read_graph(ctx.path, sm.get_flag("matches"))?;
+            if maybe_bootstrap(pr.clone(), &graph, &ctx, sm)? {
+                return Ok(());
+            }
             let model = pr.fit_opts(&graph, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "leader-rank" => {
+            ctx.reject_load_state(algo)?;
+            let mut lr = LeaderRank::default();
+            set(sm, "iterations", &mut lr.iterations);
+            set(sm, "tolerance", &mut lr.tolerance);
+
+            let graph = io::read_graph(ctx.path, false)?;
+            if maybe_bootstrap(lr, &graph, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = lr.fit_opts(&graph, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "harmonic" => {
+            ctx.reject_load_state(algo)?;
+            let direction = match choice(sm, "direction", "in") {
+                "out" => Direction::Out,
+                "total" => Direction::Total,
+                _ => Direction::In,
+            };
+            let mut hc = Harmonic {
+                direction,
+                ..Harmonic::default()
+            };
+            if sm.get_flag("weighted") {
+                hc.cost = EdgeCost::Weight;
+            }
+            if let Some(&count) = sm.get_one::<usize>("sample-sources") {
+                let mut seed = Harmonic::DEFAULT_SAMPLE_SEED;
+                set(sm, "seed", &mut seed);
+                hc.sources = SourceBudget::Sample { count, seed };
+            }
+
+            let graph = io::read_graph(ctx.path, false)?;
+            if maybe_bootstrap(hc, &graph, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = hc.fit_opts(&graph, &ctx.opts())?;
             ctx.emit(&model)
         }
         "birank" => {
@@ -1101,6 +2035,9 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "seed", &mut br.seed);
 
             let graph = io::read_graph(ctx.path, false)?;
+            if maybe_bootstrap(br, &graph, &ctx, sm)? {
+                return Ok(());
+            }
             let model = br.fit_opts(&graph, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
@@ -1117,6 +2054,9 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "tolerance", &mut ht.tolerance);
 
             let graph = io::read_graph(ctx.path, false)?;
+            if maybe_bootstrap(ht, &graph, &ctx, sm)? {
+                return Ok(());
+            }
             let model = ht.fit_opts(&graph, &ctx.opts())?;
             ctx.save(&model)?;
             let mut out = std::io::stdout().lock();
@@ -1133,7 +2073,11 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
             set(sm, "iterations", &mut kz.iterations);
             set(sm, "tolerance", &mut kz.tolerance);
 
-            let model = kz.fit_opts(&io::read_graph(ctx.path, false)?, &ctx.opts())?;
+            let graph = io::read_graph(ctx.path, false)?;
+            if maybe_bootstrap(kz, &graph, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = kz.fit_opts(&graph, &ctx.opts())?;
             ctx.emit(&model)
         }
         "degree" => {
@@ -1144,14 +2088,20 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
                 _ => Direction::In,
             };
 
-            let model =
-                Degree { direction }.fit_opts(&io::read_graph(ctx.path, false)?, &ctx.opts())?;
+            let graph = io::read_graph(ctx.path, false)?;
+            if maybe_bootstrap(Degree { direction }, &graph, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = Degree { direction }.fit_opts(&graph, &ctx.opts())?;
             ctx.emit(&model)
         }
         "k-core" => {
             ctx.reject_load_state(algo)?;
-            let model =
-                KCore::default().fit_opts(&io::read_graph(ctx.path, false)?, &ctx.opts())?;
+            let graph = io::read_graph(ctx.path, false)?;
+            if maybe_bootstrap(KCore::default(), &graph, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = KCore::default().fit_opts(&graph, &ctx.opts())?;
             ctx.emit(&model)
         }
         "components" => {
@@ -1183,8 +2133,158 @@ fn run_graph(algo: &str, sm: &ArgMatches) -> Result<()> {
     }
 }
 
+fn run_trajectories(algo: &str, sm: &ArgMatches) -> Result<()> {
+    let ctx = Ctx::from_matches(sm)?;
+    let data = io::read_trajectories(ctx.path)?;
+
+    match algo {
+        "monte-carlo" => {
+            ctx.reject_load_state(algo)?;
+            let mut mc = McValue::default();
+            set(sm, "gamma", &mut mc.gamma);
+            set(sm, "min-observations", &mut mc.min_observations);
+            if choice(sm, "visit", "first") == "every" {
+                mc.visit = Visit::Every;
+            }
+            if choice(sm, "aggregate", "mean") == "median" {
+                mc.aggregate = Aggregate::Median;
+            }
+            if let Some(&q) = sm.get_one::<f64>("winsorize") {
+                mc.winsorize = Winsorize::Percentile(q);
+            }
+
+            if maybe_bootstrap(mc, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = mc.fit_opts(&data, &ctx.opts())?;
+            ctx.emit(&model)
+        }
+        "td" => {
+            reject_bootstrap(sm, "td", "online updates are order-dependent")?;
+            let mut td = TdValue::default();
+            set(sm, "alpha", &mut td.alpha);
+            set(sm, "gamma", &mut td.gamma);
+            set(sm, "passes", &mut td.passes);
+            set(sm, "initial-value", &mut td.initial_value);
+
+            let model = update_maybe_loaded(&td, &data, &ctx)?;
+            ctx.emit(&model)
+        }
+        "compare" => {
+            ctx.reject_load_state(algo)?;
+            let mut vc = ValueCompare::default();
+            set(sm, "gamma", &mut vc.gamma);
+            set(sm, "replicates", &mut vc.replicates);
+            set(sm, "credible", &mut vc.credible);
+            set(sm, "min-observations", &mut vc.min_observations);
+            set(sm, "seed", &mut vc.seed);
+            if choice(sm, "visit", "first") == "every" {
+                vc.visit = Visit::Every;
+            }
+            if choice(sm, "method", "bootstrap") == "bayesian" {
+                vc.method = ResampleScheme::BayesianBootstrap;
+            }
+            if let Some(&permutations) = sm.get_one::<usize>("pairwise") {
+                vc.pairwise = PairwiseTests::On { permutations };
+            }
+
+            reject_bootstrap(sm, "compare", "it is already a bootstrap procedure")?;
+            let model = vc.fit_opts(&data, &ctx.opts())?;
+            ctx.save(&model)?;
+            let mut out = std::io::stdout().lock();
+            match ctx.format.as_str() {
+                "jsonl" => emit::jsonl(&mut out, &model),
+                _ => emit::value_compare(&mut out, &model),
+            }
+        }
+        "behavior-cloning" => {
+            ctx.reject_load_state(algo)?;
+            let mut bc = BehaviorCloning::default();
+            set(sm, "smoothing", &mut bc.smoothing);
+            if let Some(&separator) = sm.get_one::<char>("per-state") {
+                bc.granularity = Granularity::PerState { separator };
+            }
+
+            if maybe_bootstrap(bc, &data, &ctx, sm)? {
+                return Ok(());
+            }
+            let model = bc.fit_opts(&data, &ctx.opts())?;
+            if sm.get_flag("emit-pairs") {
+                ctx.save(&model)?;
+                let pairs = model.implied_pairs();
+                use std::io::Write;
+                let mut out = std::io::stdout().lock();
+                for (w, l, x) in pairs.rows() {
+                    let wn = pairs.interner().name(w).unwrap_or("<unresolved>");
+                    let ln = pairs.interner().name(l).unwrap_or("<unresolved>");
+                    writeln!(out, "{wn}\t{ln}\t1\t{x}")?;
+                }
+                Ok(())
+            } else {
+                ctx.emit(&model)
+            }
+        }
+        other => Err(Error::InvalidInput(format!(
+            "unknown trajectories algorithm {other:?}"
+        ))),
+    }
+}
+
 fn run_bandit(policy_name: &str, sm: &ArgMatches) -> Result<()> {
     let ctx = Ctx::from_matches(sm)?;
+
+    if policy_name == "sliding-window-ucb" {
+        let mut algo = SlidingWindowUcb::default();
+        set(sm, "window", &mut algo.window);
+        set(sm, "exploration", &mut algo.exploration);
+
+        let data = io::read_rewards(ctx.path)?;
+        let mut model: SwUcbModel = match &ctx.load_state {
+            Some(p) => SwUcbModel::load_from_path(p)?,
+            None => algo.init(),
+        };
+        algo.update_opts(&mut model, &data, &ctx.opts())?;
+
+        if let Some(&k) = sm.get_one::<usize>("select") {
+            ctx.save(&model)?;
+            for name in model.select_k(k)? {
+                println!("{name}");
+            }
+            return Ok(());
+        }
+        return ctx.emit(&model);
+    }
+    if policy_name == "linucb" {
+        let mut algo = LinUcb::default();
+        set(sm, "alpha", &mut algo.alpha);
+        set(sm, "ridge", &mut algo.ridge);
+
+        let data = io::read_contextual(ctx.path)?;
+        let mut model: LinUcbModel = match &ctx.load_state {
+            Some(p) => LinUcbModel::load_from_path(p)?,
+            None => algo.init(),
+        };
+        algo.update_opts(&mut model, &data, &ctx.opts())?;
+        ctx.save(&model)?;
+
+        if let Some(spec) = sm.get_one::<String>("select-for") {
+            let x: Vec<f64> = spec
+                .split(',')
+                .map(|v| {
+                    v.trim()
+                        .parse::<f64>()
+                        .map_err(|e| Error::InvalidInput(format!("bad context value {v:?}: {e}")))
+                })
+                .collect::<Result<_>>()?;
+            println!("{}", model.select_for(&x)?);
+            return Ok(());
+        }
+        let mut out = std::io::stdout().lock();
+        return match ctx.format.as_str() {
+            "jsonl" => emit::jsonl(&mut out, &model),
+            _ => emit::scores(&mut out, &model),
+        };
+    }
 
     let policy = match policy_name {
         "greedy" => BanditPolicy::Greedy,

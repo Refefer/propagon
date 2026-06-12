@@ -1,8 +1,28 @@
-//! Small numerical helpers: standard-normal CDF and quantile.
+//! Small numerical helpers: standard-normal density/CDF/quantile and
+//! empirical quantiles.
 //!
 //! Self-contained approximations instead of a stats dependency — keeps the
 //! core lean and WASM-clean. Accuracy is far beyond what the stochastic
 //! fitters using them (ES-RUM) can resolve.
+
+/// φ, the standard normal density.
+pub fn norm_pdf(x: f64) -> f64 {
+    (-0.5 * x * x).exp() / (2.0 * std::f64::consts::PI).sqrt()
+}
+
+/// Empirical quantile of a sorted sample (linear interpolation).
+///
+/// Assumes `sorted` is non-empty and ascending; `q` in [0, 1].
+pub(crate) fn quantile(sorted: &[f64], q: f64) -> f64 {
+    let pos = q * (sorted.len() - 1) as f64;
+    let base = pos.floor() as usize;
+    let frac = pos - base as f64;
+
+    match sorted.get(base + 1) {
+        Some(&next) => sorted[base] * (1.0 - frac) + next * frac,
+        None => sorted[base],
+    }
+}
 
 /// Standard normal CDF via Abramowitz & Stegun 7.1.26 (|err| ≤ 1.5e-7).
 pub fn norm_cdf(x: f64) -> f64 {

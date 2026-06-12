@@ -44,6 +44,24 @@ impl GraphDataset {
         Ok(())
     }
 
+    /// Same interner (so the same node universe) with no edges — the seed
+    /// for resampled copies.
+    pub(crate) fn empty_like(&self) -> Self {
+        Self {
+            interner: self.interner.clone(),
+            ..Self::default()
+        }
+    }
+
+    /// Appends one edge without the [`GraphDataset::push_ids`] range check;
+    /// only resampling may use it, where the ids come from `edges()` of a
+    /// dataset sharing this interner and so cannot be out of range.
+    pub(crate) fn push_edge_unchecked(&mut self, src: u32, dst: u32, weight: f32) {
+        self.src.push(src);
+        self.dst.push(dst);
+        self.weights.push(weight);
+    }
+
     pub fn len(&self) -> usize {
         self.src.len()
     }

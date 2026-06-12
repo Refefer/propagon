@@ -1,15 +1,15 @@
-//! Input parsing with v1 semantics: whitespace-separated `a b [weight]`
-//! rows, blank lines as batch boundaries (only honored with
-//! `--groups-are-separate`, exactly like v1's reader selection), and
-//! iterative `--min-count` filtering.
+//! Input parsing. Tournament files use the v2 games format
+//! (`side1<TAB>side2<TAB>threshold[<TAB>count]`); the other shapes are
+//! whitespace-separated rows. Blank lines mark batch boundaries (honored
+//! with `--groups-are-separate`).
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use propagon::{
-    AnnotatedPairsDataset, Error, GraphDataset, MatchupsDataset, PairwiseDataset, RankingsDataset,
-    Result, RewardsDataset,
+    AnnotatedPairsDataset, ContextualRewardsDataset, Error, GameOutcome, GamesDataset,
+    GraphDataset, MatchupsDataset, RankingsDataset, Result, RewardsDataset, TrajectoriesDataset,
 };
 
 fn rows(path: &Path) -> Result<impl Iterator<Item = std::io::Result<String>>> {
@@ -41,29 +41,66 @@ fn parse_row(line: &str, lineno: usize) -> Result<Option<(&str, &str, f32)>> {
     Ok(Some((a, b, w)))
 }
 
-/// Reads a pairwise edge file. `periods`: honor blank-line batch boundaries
-/// (v1 `--groups-are-separate`); otherwise everything is one period.
-pub fn read_pairwise(path: &Path, periods: bool, min_count: usize) -> Result<PairwiseDataset> {
-    let mut ds = PairwiseDataset::new();
+/// Reads a tournament games file: `side1 <TAB> side2 <TAB> threshold
+/// [<TAB> count]` per line — rosters space-separated within a side, signed
+/// threshold (`> 0`: side 1 wins by that margin, `< 0`: side 2 wins,
+/// `= 0`: tie), optional repeat count (default 1). `periods`: honor
+/// blank-line batch boundaries; otherwise everything is one period.
+pub fn read_games(path: &Path, periods: bool) -> Result<GamesDataset> {
+    let mut ds = GamesDataset::new();
     for (lineno, line) in rows(path)?.enumerate() {
         let line = line?;
-        match parse_row(&line, lineno + 1)? {
-            Some((w, l, x)) => ds.push(w, l, x),
-            None => {
-                if periods {
-                    ds.new_period();
-                }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if periods {
+                ds.new_period();
             }
+            continue;
         }
+
+        let fields: Vec<&str> = trimmed.split('\t').map(str::trim).collect();
+        if !(3..=4).contains(&fields.len()) {
+            return Err(Error::parse(
+                lineno + 1,
+                format!(
+                    "expected 'side1<TAB>side2<TAB>threshold[<TAB>count]', \
+                     found {} tab-separated fields: {trimmed:?}",
+                    fields.len()
+                ),
+            ));
+        }
+        let side1: Vec<&str> = fields[0].split_whitespace().collect();
+        let side2: Vec<&str> = fields[1].split_whitespace().collect();
+        let threshold: f32 = fields[2]
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad threshold {:?}: {e}", fields[2])))?;
+        if !threshold.is_finite() {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("threshold must be finite, got {threshold}"),
+            ));
+        }
+        let count: f32 = match fields.get(3) {
+            None => 1.0,
+            Some(c) => c
+                .parse()
+                .map_err(|e| Error::parse(lineno + 1, format!("bad count {c:?}: {e}")))?,
+        };
+
+        let outcome = if threshold > 0.0 {
+            GameOutcome::Side1Win(threshold)
+        } else if threshold < 0.0 {
+            GameOutcome::Side2Win(-threshold)
+        } else {
+            GameOutcome::Tie
+        };
+        ds.push_game(&side1, &side2, outcome, count)
+            .map_err(|e| Error::parse(lineno + 1, e.to_string()))?;
     }
     if ds.is_empty() {
         return Err(Error::EmptyDataset);
     }
-    Ok(if min_count > 1 {
-        ds.filter_min_count(min_count)
-    } else {
-        ds
-    })
+    Ok(ds)
 }
 
 /// Reads a graph edge file. `swap`: store each row `a b` as the edge
@@ -194,6 +231,133 @@ pub fn read_rewards(path: &Path) -> Result<RewardsDataset> {
             .parse()
             .map_err(|e| Error::parse(lineno + 1, format!("bad reward {reward:?}: {e}")))?;
         ds.push(arm, r);
+    }
+    if ds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(ds)
+}
+
+/// Reads teleport seeds for personalized PageRank: `name [weight]` per
+/// line, weight defaulting to 1.
+pub fn read_seeds(path: &Path) -> Result<Vec<(String, f64)>> {
+    let mut seeds = Vec::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let Some(name) = it.next() else {
+            continue;
+        };
+        let weight = match it.next() {
+            None => 1.0,
+            Some(t) => t
+                .parse::<f64>()
+                .map_err(|e| Error::parse(lineno + 1, format!("bad seed weight {t:?}: {e}")))?,
+        };
+        seeds.push((name.to_string(), weight));
+    }
+    if seeds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(seeds)
+}
+
+/// Reads an entity feature table for covariate models: `entity x1 x2 ... xd`
+/// per line, all rows sharing one dimensionality (validated by the fitter).
+pub fn read_features(path: &Path) -> Result<Vec<(String, Vec<f64>)>> {
+    let mut features = Vec::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let Some(name) = it.next() else {
+            continue;
+        };
+        let xs: Vec<f64> = it
+            .map(|v| {
+                v.parse::<f64>()
+                    .map_err(|e| Error::parse(lineno + 1, format!("bad feature {v:?}: {e}")))
+            })
+            .collect::<Result<_>>()?;
+        if xs.is_empty() {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("entity {name:?} has no feature values"),
+            ));
+        }
+        features.push((name.to_string(), xs));
+    }
+    if features.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(features)
+}
+
+/// Reads contextual bandit rows: `arm reward x1 x2 ... xd` per line, the
+/// dimensionality fixed by the first row.
+pub fn read_contextual(path: &Path) -> Result<ContextualRewardsDataset> {
+    let mut ds = ContextualRewardsDataset::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(arm), Some(reward)) = (it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'arm reward x1 ... xd': {line:?}"),
+            ));
+        };
+        let r: f32 = reward
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad reward {reward:?}: {e}")))?;
+        let x: Vec<f64> = it
+            .map(|v| {
+                v.parse::<f64>()
+                    .map_err(|e| Error::parse(lineno + 1, format!("bad feature {v:?}: {e}")))
+            })
+            .collect::<Result<_>>()?;
+        ds.push(arm, r, &x)
+            .map_err(|e| Error::parse(lineno + 1, e.to_string()))?;
+    }
+    if ds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(ds)
+}
+
+/// Reads reward-bearing episodes: `state reward` per line, a blank line
+/// ends the current episode.
+pub fn read_trajectories(path: &Path) -> Result<TrajectoriesDataset> {
+    let mut ds = TrajectoriesDataset::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            ds.end_episode();
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(state), Some(reward)) = (it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'state reward': {line:?}"),
+            ));
+        };
+        let r: f32 = reward
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad reward {reward:?}: {e}")))?;
+        ds.push_step(state, r)
+            .map_err(|e| Error::parse(lineno + 1, e.to_string()))?;
     }
     if ds.is_empty() {
         return Err(Error::EmptyDataset);

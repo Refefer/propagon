@@ -31,6 +31,40 @@ pub(crate) fn from_score_lines(lines: Vec<ScoreLine>) -> Result<(Interner, Vec<f
     Ok((names, scores))
 }
 
+/// One entity line for models that persist a score plus an observation
+/// count (mc-value, td-value, behavior-cloning).
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct ScoreCountLine {
+    pub id: String,
+    pub s: f64,
+    pub n: u64,
+}
+
+pub(crate) fn score_count_lines(
+    names: &Interner,
+    scores: &[f64],
+    counts: &[u64],
+) -> Vec<ScoreCountLine> {
+    names
+        .names()
+        .zip(scores.iter().zip(counts))
+        .map(|(id, (&s, &n))| ScoreCountLine {
+            id: id.to_string(),
+            s,
+            n,
+        })
+        .collect()
+}
+
+pub(crate) fn from_score_count_lines(
+    lines: Vec<ScoreCountLine>,
+) -> Result<(Interner, Vec<f64>, Vec<u64>)> {
+    let scores: Vec<f64> = lines.iter().map(|l| l.s).collect();
+    let counts: Vec<u64> = lines.iter().map(|l| l.n).collect();
+    let names = Interner::from_names(lines.iter().map(|l| l.id.as_str()))?;
+    Ok((names, scores, counts))
+}
+
 /// Implements [`RankModel`](crate::RankModel) for a model shaped as
 /// `{ params, names: Interner, scores: Vec<f64> }`.
 macro_rules! impl_simple_score_model {

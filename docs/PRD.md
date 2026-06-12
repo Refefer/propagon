@@ -256,8 +256,9 @@ Per-algorithm support matrix (v2.0 set):
 The v2 CLI makes a clean break from the v1 surface (owner decision: zero
 backward-compatibility requirements). Subcommands are grouped by input shape:
 
-- **FR-7.1** `propagon tournament <algo> <path>` — pairwise rankers over
-  `winner loser [weight]` rows: `win-rate`, `elo`, `glicko2`,
+- **FR-7.1** `propagon tournament <algo> <path>` — game rankers over
+  `side1<TAB>side2<TAB>threshold[<TAB>count]` rows (signed threshold:
+  margin for side 1, negative for side 2, zero for a tie): `win-rate`, `elo`, `glicko2`,
   `bradley-terry-model` (one command; `--estimator mm|sgd` selects the
   fitting method), `luce-spectral-ranking`, `rank-centrality`,
   `random-utility-model`, `kemeny`, `borda-count`, `copeland`. Names are

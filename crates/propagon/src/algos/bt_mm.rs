@@ -324,10 +324,13 @@ fn link_components(
     }
 }
 
-/// Hunter-style MM sweeps over one component. Faithful port of v1 `mm_opti`,
-/// including its denominator quirk: the sum runs over opponents the entity
-/// has *beaten* (with `n_ij` still counting games in both directions) rather
-/// than over all opponents played — preserved for output parity with v1.
+/// Hunter's MM sweeps over one component:
+/// `π_i ← W_i / Σ_{j played} n_ij / (π_i + π_j)`.
+///
+/// (v1 summed the denominator over opponents the entity had *beaten* rather
+/// than all opponents played, which biased the fixed point off the true MLE
+/// whenever an entity never beat someone it played; v2 is the textbook
+/// iteration.)
 fn mm_fit(
     rows: &[Row],
     component: &[u32],
@@ -338,7 +341,7 @@ fn mm_fit(
 ) -> Vec<(u32, f64)> {
     let members: HashSet<u32> = component.iter().copied().collect();
 
-    let mut beaten: HashMap<u32, HashSet<u32>> = HashMap::new();
+    let mut played: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut total_wins: HashMap<u32, f64> = HashMap::new();
     let mut n_ij: HashMap<(u32, u32), f64> = HashMap::new();
 
@@ -346,11 +349,18 @@ fn mm_fit(
         if !members.contains(&w) {
             continue;
         }
-        beaten.entry(w).or_default().insert(l);
+        played.entry(w).or_default().push(l);
+        played.entry(l).or_default().push(w);
         *total_wins.entry(w).or_default() += s;
         total_wins.entry(l).or_default();
         *n_ij.entry((w, l)).or_default() += s;
         *n_ij.entry((l, w)).or_default() += s;
+    }
+    // Sorted, deduplicated adjacency: the denominator accumulates in a
+    // fixed order, so refits are bit-stable across runs.
+    for adj in played.values_mut() {
+        adj.sort_unstable();
+        adj.dedup();
     }
 
     // Deterministic iteration order.
@@ -363,7 +373,9 @@ fn mm_fit(
         .iter()
         .map(|&id| (id, warm_score(id).unwrap_or(uniform)))
         .collect();
-    let warm_total: f64 = new_policy.values().sum();
+    // Sum in sorted-id order: HashMap iteration order varies per instance
+    // (and per thread), and float accumulation order changes the last ulp.
+    let warm_total: f64 = ids.iter().map(|id| new_policy[id]).sum();
     if warm_total > 0.0 {
         for v in new_policy.values_mut() {
             *v /= warm_total;
@@ -377,7 +389,7 @@ fn mm_fit(
 
         for &team in &ids {
             let pi = policy[&team];
-            let npi = if let Some(opponents) = beaten.get(&team) {
+            let npi = if let Some(opponents) = played.get(&team) {
                 let mut denom = 0.0;
                 for &other in opponents {
                     denom += n_ij[&(team, other)] / (pi + policy[&other]);
@@ -389,7 +401,9 @@ fn mm_fit(
             new_policy.insert(team, npi);
         }
 
-        let total: f64 = new_policy.values().sum();
+        // Sorted-id order again: an unordered sum here made fits differ in
+        // the last ulp across thread pools (per-element division is fine).
+        let total: f64 = ids.iter().map(|id| new_policy[id]).sum();
         for v in new_policy.values_mut() {
             *v /= total;
         }

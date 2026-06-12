@@ -22,6 +22,13 @@ run plackett-luce plackett-luce
 run mc4           markov-chain
 run borda-count   borda-count
 run kemeny        kemeny --passes 5
+run footrule         footrule
+run ilsr             i-luce-spectral-ranking
+
+# Mallows needs every ballot to rank the identical item set; F1 seasons
+# have DNFs, so it correctly refuses this data (shown here on purpose).
+echo "== mallows (expected to refuse partial ballots)" >&2
+"$BIN" rankings mallows "$DATA" > out/mallows.scores 2> out/mallows.err || true
 
 echo "== plackett-luce podium" >&2
 head -5 out/plackett-luce.scores >&2

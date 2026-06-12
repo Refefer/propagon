@@ -225,6 +225,7 @@ fn pagerank_matches_langville_meyer_example() -> TestResult {
         damping: 0.9,
         iterations: 200,
         sink: Sink::Uniform,
+        ..PageRank::default()
     };
     let model = pr.fit(&g)?;
     let scores: std::collections::HashMap<&str, f64> = model.scores().collect();

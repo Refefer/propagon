@@ -2,7 +2,7 @@
 
 **Ranking from revealed preferences** — turn match results, pairwise choices, ballots, interaction graphs, and reward logs into rankings.
 
-Propagon is a Rust library (`propagon`) and CLI (`propagon-cli`) implementing ~30 classical and modern ranking algorithms: Bradley-Terry (MM, SGD, Bayesian, crowd-annotated), Elo, Glicko-2, Weng-Lin/OpenSkill team ratings, Plackett-Luce, Luce spectral ranking, Rank Centrality, Massey, Colley, Keener, HodgeRank, Kemeny consensus, Borda, Copeland, MC4, PageRank, HITS, Katz, BiRank, k-core, and seven multi-armed-bandit policies. Six shared dataset shapes feed every algorithm; every fitted model serializes to human-readable JSONL and resumes incrementally where the math allows.
+Propagon is a Rust library (`propagon`) and CLI (`propagon-cli`) implementing ~50 classical and modern ranking algorithms: the Bradley-Terry family (MM, SGD, Bayesian, crowd-annotated, tie/home-aware, team, covariate), Elo (plain, margin-of-victory, multidimensional), Glicko-2, Whole-History Rating, Weng-Lin/OpenSkill team ratings, Plackett-Luce and I-LSR, Thurstone-Mosteller, Rank Centrality, SerialRank, random-walker rankings, Massey, Colley, Keener, offense-defense, HodgeRank, Nash averaging, Blade-Chest, Kemeny consensus, Mallows, footrule, Borda, Copeland, MC4, PageRank with personalized teleport, LeaderRank, HITS, Katz, harmonic centrality, BiRank, k-core, Monte Carlo and TD state values with bootstrap comparison, behavior cloning, nine multi-armed-bandit policies (plus dueling bandits as a library API), and a generic `--bootstrap` wrapper that puts score and rank intervals on any batch ranker. Nine shared dataset shapes feed every algorithm; every fitted model serializes to human-readable JSONL and resumes incrementally where the math allows.
 
 - **Survey**: [`docs/algorithms.md`](docs/algorithms.md) — what each method assumes, when to use which, with citations.
 - **Roadmap**: [`docs/PRD.md`](docs/PRD.md) — Python and WASM bindings are the next milestones.
@@ -23,7 +23,7 @@ Requires Rust 1.88+.
 
 ## Sixty-second tour (CLI)
 
-Input files are plain text, grouped by shape: tournament rows are `winner loser [weight]`; rankings files hold one ballot per line (best first); matchups hold one match per line (teams `|`-separated, `=` for ties); crowd votes are `annotator winner loser`; graph rows are `src dst [weight]`; bandit rows are `arm reward`. IDs are arbitrary strings — team names, model checkpoints, URLs.
+Input files are plain text, grouped by shape: tournament rows are `side1<TAB>side2<TAB>threshold[<TAB>count]` — rosters space-separated within a side, signed threshold (`3` = side 1 wins by 3, `-2` = side 2 wins by 2, `0` = tie), optional repeat count; rankings files hold one ballot per line (best first); matchups hold one match per line (teams `|`-separated, `=` for ties); crowd votes are `annotator winner loser`; graph rows are `src dst [weight]`; bandit rows are `arm reward` (LinUCB: `arm reward x1 ... xd`); trajectories are `state reward` rows with a blank line ending each episode. IDs are arbitrary strings — team names, model checkpoints, URLs.
 
 ```bash
 # Rank the 2018 MLB season three ways (data ships in the repo):
@@ -46,28 +46,28 @@ propagon graph page-rank links.txt
 propagon bandit thompson-beta --select 1 rewards.txt    # which arm to play next
 ```
 
-[`examples/`](examples/) ships six worked demos with real data (2018 MLB season, 2024 F1 season, a Wikipedia link graph) — each directory has a README and a `run.sh` exercising every relevant algorithm. Cross-cutting flags everywhere: `--threads N`, `--format tsv|jsonl`, `--save-state`, `--load-state`.
+[`examples/`](examples/) ships seven worked demos with real data (2018 MLB season, 2024 F1 season, a Wikipedia link graph, synthetic funnels) — each directory has a README and a `run.sh` exercising every relevant algorithm. Cross-cutting flags everywhere: `--threads N`, `--format tsv|jsonl`, `--save-state`, `--load-state`; every batch command also takes `--bootstrap N` for score and rank intervals.
 
 ## Sixty-second tour (library)
 
 ```rust
 use propagon::algos::{BradleyTerryMM, Glicko2};
-use propagon::{OnlineRanker, PairwiseDataset, RankModel, Ranker};
+use propagon::{GamesDataset, OnlineRanker, RankModel, Ranker, TiePolicy};
 
 fn rank() -> propagon::Result<()> {
     // One dataset, string ids interned for you, feeds many algorithms.
     // (Bradley-Terry needs everyone to have at least one win and one loss —
     //  undefeated/winless entities get sectioned out; see the survey §0.2.)
-    let mut games = PairwiseDataset::new();
-    games.push("alice", "bob", 2.0); // alice beat bob twice
-    games.push("bob", "carol", 2.0);
-    games.push("alice", "carol", 1.0);
-    games.push("carol", "alice", 1.0);
-    games.push("bob", "alice", 1.0);
-    games.push("carol", "bob", 1.0);
+    let mut games = GamesDataset::new();
+    games.push_pair("alice", "bob", 2.0)?; // alice beat bob twice
+    games.push_pair("bob", "carol", 2.0)?;
+    games.push_pair("alice", "carol", 1.0)?;
+    games.push_pair("carol", "alice", 1.0)?;
+    games.push_pair("bob", "alice", 1.0)?;
+    games.push_pair("carol", "bob", 1.0)?;
 
-    // Batch maximum likelihood:
-    let bt = BradleyTerryMM::default().fit(&games)?;
+    // Batch maximum likelihood (lower the games to win/loss pairs):
+    let bt = BradleyTerryMM::default().fit(&games.to_pairwise(TiePolicy::Error)?)?;
     println!("{:?}", bt.sorted_scores());
 
     // Incremental ratings with resumable, human-readable state:
@@ -78,6 +78,68 @@ fn rank() -> propagon::Result<()> {
     Ok(())
 }
 ```
+
+## Algorithm reference
+
+Every implemented algorithm, by input shape (survey § references point into [`docs/algorithms.md`](docs/algorithms.md)):
+
+| Group | Algorithm (survey §) | Command |
+|---|---|---|
+| `tournament` | Bradley-Terry, MM or logistic SGD (§1.1) | `bradley-terry-model` (`btm`) |
+| | Elo (§2.1) | `elo` |
+| | Glicko-2 (§2.3) | `glicko2` |
+| | Luce Spectral Ranking (§3.2) | `luce-spectral-ranking` (`lsr`) |
+| | Rank Centrality (§3.1) | `rank-centrality` |
+| | Gaussian RUM via evolution strategies (§1.5) | `random-utility-model` (`rum`) |
+| | Keener (§3.3) | `keener` |
+| | HodgeRank (§3.6) | `hodge-rank` (`hodge`) |
+| | Massey (§5.1) | `massey` |
+| | Colley (§5.2) | `colley` |
+| | Borda count (§6.1) | `borda-count` (`borda`) |
+| | Copeland (§6.2) | `copeland` |
+| | Kemeny consensus, heuristic (§6.3) | `kemeny` |
+| | Wilson-score win rate (§7.1) | `win-rate` |
+| | Bayesian Bradley-Terry (§11.1) | `bayesian-bradley-terry` (`bayes-bt`) |
+| | Thurstone-Mosteller Case V (§1.3) | `thurstone-mosteller` (`tm`) |
+| | Generalized BT: ties + home advantage (§1.2) | `generalized-bradley-terry` (`gbt`) |
+| | Team BT, player strengths from team games (§1.2) | `team-bradley-terry` (`team-bt`) |
+| | Margin-of-victory Elo (§2.1) | `elo --margin-of-victory` |
+| | I-LSR, exact Plackett-Luce MLE (§3.2) | `i-luce-spectral-ranking` (`ilsr`) |
+| | SerialRank (§3.5) | `serial-rank` |
+| | Random-walker rankings (§3.4) | `random-walker` |
+| | Offense-defense Sinkhorn ratings (§5.3) | `offense-defense` (`od`) |
+| | Whole-History Rating (§2.6) | `whole-history-rating` (`whr`) |
+| | Multidimensional Elo, mElo (§9.2) | `melo` |
+| | Nash averaging (§9.2) | `nash-averaging` (`nash`) |
+| | Blade-Chest intransitivity embeddings (§9.1) | `blade-chest` |
+| | Covariate BT / conditional logit (§10.1) | `covariate-bradley-terry` (`cbt`) |
+| `rankings` | Plackett-Luce (§1.4) | `plackett-luce` (`pl`) |
+| | I-LSR on ballots (§3.2) | `i-luce-spectral-ranking` (`ilsr`) |
+| | Mallows dispersion φ (§1.7) | `mallows` |
+| | Footrule-optimal aggregation (§6.5) | `footrule` |
+| | Markov-chain aggregation, MC4 (§6.4) | `markov-chain` (`mc4`) |
+| | Borda count (§6.1) | `borda-count` (`borda`) |
+| | Kemeny consensus (§6.3) | `kemeny` |
+| `crowd` | Crowd-BT, annotator-aware (§11.2) | `bradley-terry` (`crowd-bt`) |
+| `matchups` | Weng-Lin / OpenSkill (§2.5) | `weng-lin` (`openskill`) |
+| `graph` | PageRank / personalized PageRank (§4.4) | `page-rank` (`--seeds` for PPR/RWR) |
+| | LeaderRank (§4.9) | `leader-rank` |
+| | Harmonic centrality (§4.10) | `harmonic` |
+| | BiRank (§4.7) | `birank` |
+| | HITS (§4.5) | `hits` |
+| | Katz centrality (§4.3) | `katz-centrality` (`katz`) |
+| | Degree/strength (§4.1) | `degree` |
+| | k-core decomposition (§4.11) | `k-core` (`kcore`) |
+| | Connected components (utility, §14.1) | `components` |
+| `bandit` | greedy, ε-greedy, UCB1, KL-UCB, EXP3, Thompson Beta/Gaussian (§8.1) | `greedy`, `epsilon-greedy`, `ucb1`, `kl-ucb`, `exp3`, `ts-beta`, `ts-gaussian` |
+| | Sliding-window UCB (§8.1) | `sliding-window-ucb` (`sw-ucb`) |
+| | LinUCB, contextual (§8.1) | `linucb` |
+| | Dueling bandits: RUCB, Double Thompson Sampling (§8.2) | library API (`DuelingBandit`), no CLI yet |
+| `trajectories` | Monte Carlo state values (§13.1) | `monte-carlo` (`mc`) |
+| | TD(0) state values (§13.3) | `td` |
+| | Bootstrap value comparison (§13.2) | `compare` |
+| | Counting behavior cloning (§13.6) | `behavior-cloning` (`bc`) |
+| *(any batch)* | Bootstrap intervals on scores and ranks (§11.4) | `--bootstrap N` on every batch command |
 
 ## Choosing an algorithm
 

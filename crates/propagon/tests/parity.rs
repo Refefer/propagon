@@ -74,20 +74,36 @@ fn golden(name: &str) -> Result<HashMap<String, Vec<f64>>, Box<dyn std::error::E
 }
 
 #[test]
-fn btm_mm_matches_v1_golden() -> TestResult {
-    let model = BradleyTerryMM::default().fit(&baseball()?)?;
-    let want = golden("btm-mm.out")?;
+fn btm_mm_matches_the_exact_mle() -> TestResult {
+    // v1's golden embodied a denominator quirk (summing over beaten
+    // opponents only), fixed in v2 — so the truth here is the exact PL/BT
+    // MLE, cross-checked against the independent I-LSR implementation.
+    let data = baseball()?;
+    let model = BradleyTerryMM {
+        iterations: 50_000,
+        tolerance: 1e-13,
+        ..Default::default()
+    }
+    .fit(&data)?;
+    let ilsr = propagon::algos::ILsr::default().fit(&data)?;
 
     let ranked = &model.sections()[0];
     assert_eq!(ranked.kind, SectionKind::Ranked);
-    assert_eq!(ranked.entries.len(), want.len(), "entity count");
+    assert_eq!(ranked.entries.len(), 30, "all 30 MLB teams ranked");
 
-    for &(id, score) in &ranked.entries {
-        let name = model.name(id).ok_or("model id resolves")?;
-        let expected = want.get(name).ok_or_else(|| format!("missing {name}"))?[0];
+    let il: HashMap<&str, f64> = ilsr.scores().collect();
+    let mm: HashMap<&str, f64> = ranked
+        .entries
+        .iter()
+        .map(|&(id, s)| (model.name(id).unwrap_or("<unresolved>"), s))
+        .collect();
+    let anchor = *mm.keys().next().ok_or("non-empty")?;
+    for (name, &s) in &mm {
+        let gap_mm = (s / mm[anchor]).ln();
+        let gap_il = il[name] - il[anchor];
         assert!(
-            (score - expected).abs() < 1e-4,
-            "{name}: v2 {score} vs v1 {expected}"
+            (gap_mm - gap_il).abs() < 1e-4,
+            "{name}: mm gap {gap_mm} vs ilsr gap {gap_il}"
         );
     }
 
@@ -98,7 +114,10 @@ fn btm_mm_matches_v1_golden() -> TestResult {
 fn glicko2_matches_v1_golden() -> TestResult {
     let algo = Glicko2::default();
     let mut model = algo.init();
-    algo.update(&mut model, &baseball()?)?;
+    algo.update(
+        &mut model,
+        &propagon::GamesDataset::from_pairwise(&baseball()?),
+    )?;
     let want = golden("glicko2.out")?;
 
     let mut checked = 0;

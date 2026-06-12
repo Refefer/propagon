@@ -39,6 +39,23 @@ impl RewardsDataset {
         Ok(())
     }
 
+    /// Same interner (so the same arm universe) with no rows — the seed for
+    /// resampled copies.
+    pub(crate) fn empty_like(&self) -> Self {
+        Self {
+            interner: self.interner.clone(),
+            ..Self::default()
+        }
+    }
+
+    /// Appends one row without the [`RewardsDataset::push_ids`] range check;
+    /// only resampling may use it, where the ids come from `rows()` of a
+    /// dataset sharing this interner and so cannot be out of range.
+    pub(crate) fn push_row_unchecked(&mut self, arm: u32, reward: f32) {
+        self.arms.push(arm);
+        self.rewards.push(reward);
+    }
+
     pub fn len(&self) -> usize {
         self.arms.len()
     }

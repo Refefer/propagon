@@ -1,2431 +1,2431 @@
-"ARI"	"COL"
-"ATL"	"PHI"
-"SFN"	"LAN"
-"CHN"	"MIA"
-"NYN"	"SLN"
-"MIL"	"SDN"
-"BAL"	"MIN"
-"CHA"	"KCA"
-"OAK"	"ANA"
-"SEA"	"CLE"
-"TBA"	"BOS"
-"HOU"	"TEX"
-"NYA"	"TOR"
-"ARI"	"COL"
-"PHI"	"ATL"
-"WAS"	"CIN"
-"SFN"	"LAN"
-"MIA"	"CHN"
-"MIL"	"SDN"
-"PIT"	"DET"
-"ANA"	"OAK"
-"BOS"	"TBA"
-"TEX"	"HOU"
-"NYA"	"TOR"
-"COL"	"ARI"
-"ATL"	"PHI"
-"WAS"	"CIN"
-"LAN"	"SFN"
-"CHN"	"MIA"
-"NYN"	"SLN"
-"MIL"	"SDN"
-"MIN"	"BAL"
-"CHA"	"KCA"
-"ANA"	"OAK"
-"CLE"	"SEA"
-"BOS"	"TBA"
-"HOU"	"TEX"
-"TOR"	"NYA"
-"WAS"	"CIN"
-"LAN"	"SFN"
-"MIA"	"CHN"
-"SLN"	"NYN"
-"MIN"	"BAL"
-"PIT"	"DET"
-"PIT"	"DET"
-"ANA"	"OAK"
-"SEA"	"CLE"
-"BOS"	"TBA"
-"HOU"	"TEX"
-"TOR"	"NYA"
-"ARI"	"LAN"
-"WAS"	"ATL"
-"CIN"	"CHN"
-"BOS"	"MIA"
-"SLN"	"MIL"
-"PIT"	"MIN"
-"COL"	"SDN"
-"CLE"	"ANA"
-"DET"	"KCA"
-"HOU"	"BAL"
-"OAK"	"TEX"
-"TOR"	"CHA"
-"ARI"	"LAN"
-"ATL"	"WAS"
-"BOS"	"MIA"
-"MIL"	"SLN"
-"NYN"	"PHI"
-"SDN"	"COL"
-"SEA"	"SFN"
-"ANA"	"CLE"
-"KCA"	"DET"
-"HOU"	"BAL"
-"NYA"	"TBA"
-"TEX"	"OAK"
-"TOR"	"CHA"
-"ARI"	"LAN"
-"ATL"	"WAS"
-"SLN"	"MIL"
-"NYN"	"PHI"
-"MIN"	"PIT"
-"COL"	"SDN"
-"SFN"	"SEA"
-"ANA"	"CLE"
-"HOU"	"BAL"
-"NYA"	"TBA"
-"OAK"	"TEX"
-"CHA"	"TOR"
-"CHN"	"MIL"
-"PHI"	"MIA"
-"PIT"	"CIN"
-"COL"	"SDN"
-"ARI"	"SLN"
-"NYN"	"WAS"
-"BOS"	"TBA"
-"DET"	"CHA"
-"MIN"	"SEA"
-"BAL"	"NYA"
-"TEX"	"OAK"
-"ATL"	"COL"
-"MIL"	"CHN"
-"PIT"	"CIN"
-"ANA"	"OAK"
-"CLE"	"KCA"
-"SDN"	"HOU"
-"BAL"	"NYA"
-"TOR"	"TEX"
-"COL"	"ATL"
-"CHN"	"MIL"
-"PHI"	"MIA"
-"CIN"	"PIT"
-"SFN"	"LAN"
-"SLN"	"ARI"
-"NYN"	"WAS"
-"OAK"	"ANA"
-"BOS"	"TBA"
-"DET"	"CHA"
-"KCA"	"CLE"
-"HOU"	"SDN"
-"SEA"	"MIN"
-"NYA"	"BAL"
-"TEX"	"TOR"
-"ATL"	"COL"
-"CHN"	"MIL"
-"MIA"	"PHI"
-"PIT"	"CIN"
-"LAN"	"SFN"
-"ARI"	"SLN"
-"NYN"	"WAS"
-"ANA"	"OAK"
-"BOS"	"TBA"
-"DET"	"CHA"
-"CLE"	"KCA"
-"HOU"	"SDN"
-"BAL"	"NYA"
-"TOR"	"TEX"
-"SDN"	"COL"
-"NYN"	"MIA"
-"PHI"	"CIN"
-"ARI"	"SFN"
-"MIL"	"SLN"
-"WAS"	"ATL"
-"TOR"	"BAL"
-"TBA"	"CHA"
-"CLE"	"DET"
-"KCA"	"SEA"
-"HOU"	"MIN"
-"ANA"	"TEX"
-"PIT"	"CHN"
-"SDN"	"COL"
-"LAN"	"OAK"
-"NYN"	"MIA"
-"PHI"	"CIN"
-"SFN"	"ARI"
-"SLN"	"MIL"
-"WAS"	"ATL"
-"TOR"	"BAL"
-"BOS"	"NYA"
-"TBA"	"CHA"
-"CLE"	"DET"
-"SEA"	"KCA"
-"MIN"	"HOU"
-"ANA"	"TEX"
-"CHN"	"PIT"
-"COL"	"SDN"
-"OAK"	"LAN"
-"NYN"	"MIA"
-"PHI"	"CIN"
-"ARI"	"SFN"
-"MIL"	"SLN"
-"ATL"	"WAS"
-"BAL"	"TOR"
-"NYA"	"BOS"
-"CHA"	"TBA"
-"CLE"	"DET"
-"SEA"	"KCA"
-"MIN"	"HOU"
-"ANA"	"TEX"
-"PIT"	"CHN"
-"SLN"	"CIN"
-"SFN"	"SDN"
-"COL"	"WAS"
-"BOS"	"NYA"
-"CLE"	"DET"
-"ANA"	"KCA"
-"MIN"	"CHA"
-"ATL"	"CHN"
-"SLN"	"CIN"
-"ARI"	"LAN"
-"MIA"	"PIT"
-"NYN"	"MIL"
-"SDN"	"SFN"
-"COL"	"WAS"
-"BOS"	"BAL"
-"TOR"	"CLE"
-"NYA"	"DET"
-"HOU"	"TEX"
-"ANA"	"KCA"
-"SEA"	"OAK"
-"PHI"	"TBA"
-"CHN"	"ATL"
-"SLN"	"CIN"
-"ARI"	"LAN"
-"PIT"	"MIA"
-"MIL"	"NYN"
-"SDN"	"SFN"
-"WAS"	"COL"
-"BOS"	"BAL"
-"TEX"	"HOU"
-"ANA"	"KCA"
-"SEA"	"OAK"
-"PHI"	"TBA"
-"SLN"	"CIN"
-"LAN"	"ARI"
-"PIT"	"MIA"
-"NYN"	"MIL"
-"SDN"	"SFN"
-"COL"	"WAS"
-"BOS"	"BAL"
-"TEX"	"HOU"
-"OAK"	"SEA"
-"PHI"	"TBA"
-"ATL"	"PHI"
-"CIN"	"MIL"
-"WAS"	"NYN"
-"COL"	"PIT"
-"LAN"	"SDN"
-"NYA"	"MIA"
-"OAK"	"CHA"
-"SEA"	"HOU"
-"TBA"	"TEX"
-"ARI"	"SFN"
-"PHI"	"ATL"
-"SLN"	"CHN"
-"MIL"	"CIN"
-"WAS"	"NYN"
-"COL"	"PIT"
-"LAN"	"SDN"
-"BOS"	"ANA"
-"DET"	"BAL"
-"CLE"	"MIN"
-"MIA"	"NYA"
-"OAK"	"CHA"
-"HOU"	"SEA"
-"TEX"	"TBA"
-"TOR"	"KCA"
-"TOR"	"KCA"
-"SFN"	"ARI"
-"ATL"	"PHI"
-"MIL"	"CIN"
-"NYN"	"WAS"
-"PIT"	"COL"
-"LAN"	"SDN"
-"BOS"	"ANA"
-"DET"	"BAL"
-"MIN"	"CLE"
-"OAK"	"CHA"
-"HOU"	"SEA"
-"TBA"	"TEX"
-"TOR"	"KCA"
-"ARI"	"SFN"
-"ATL"	"NYN"
-"CHN"	"SLN"
-"MIL"	"MIA"
-"PHI"	"PIT"
-"BOS"	"ANA"
-"DET"	"BAL"
-"NYA"	"TOR"
-"HOU"	"SEA"
-"SDN"	"ARI"
-"NYN"	"ATL"
-"CHN"	"COL"
-"WAS"	"LAN"
-"MIL"	"MIA"
-"PHI"	"PIT"
-"SLN"	"CIN"
-"SFN"	"ANA"
-"BAL"	"CLE"
-"HOU"	"CHA"
-"DET"	"KCA"
-"KCA"	"DET"
-"TOR"	"NYA"
-"BOS"	"OAK"
-"TBA"	"MIN"
-"SEA"	"TEX"
-"ARI"	"SDN"
-"ATL"	"NYN"
-"COL"	"CHN"
-"LAN"	"WAS"
-"MIL"	"MIA"
-"PHI"	"PIT"
-"SLN"	"CIN"
-"ANA"	"SFN"
-"CLE"	"BAL"
-"HOU"	"CHA"
-"DET"	"KCA"
-"NYA"	"TOR"
-"OAK"	"BOS"
-"TBA"	"MIN"
-"SEA"	"TEX"
-"ARI"	"SDN"
-"CHN"	"COL"
-"LAN"	"WAS"
-"MIL"	"MIA"
-"PHI"	"PIT"
-"SLN"	"CIN"
-"SFN"	"ANA"
-"CLE"	"BAL"
-"HOU"	"CHA"
-"KCA"	"DET"
-"NYA"	"TOR"
-"OAK"	"BOS"
-"TBA"	"MIN"
-"TEX"	"SEA"
-"CIN"	"ATL"
-"SDN"	"COL"
-"LAN"	"MIA"
-"SFN"	"WAS"
-"CLE"	"BAL"
-"CHA"	"SEA"
-"ANA"	"HOU"
-"NYA"	"MIN"
-"OAK"	"TEX"
-"CIN"	"ATL"
-"COL"	"SDN"
-"MIA"	"LAN"
-"ARI"	"PHI"
-"SFN"	"WAS"
-"NYN"	"SLN"
-"SEA"	"CHA"
-"CHN"	"CLE"
-"ANA"	"HOU"
-"MIL"	"KCA"
-"NYA"	"MIN"
-"OAK"	"TEX"
-"TOR"	"BOS"
-"ATL"	"CIN"
-"COL"	"SDN"
-"MIA"	"LAN"
-"PHI"	"ARI"
-"DET"	"PIT"
-"PIT"	"DET"
-"WAS"	"SFN"
-"SLN"	"NYN"
-"TBA"	"BAL"
-"SEA"	"CHA"
-"CLE"	"CHN"
-"HOU"	"ANA"
-"MIL"	"KCA"
-"NYA"	"MIN"
-"TEX"	"OAK"
-"BOS"	"TOR"
-"CHN"	"MIL"
-"ATL"	"CIN"
-"ARI"	"PHI"
-"PIT"	"DET"
-"SLN"	"NYN"
-"TBA"	"BAL"
-"SEA"	"CLE"
-"CHA"	"KCA"
-"NYA"	"MIN"
-"BOS"	"TOR"
-"CHN"	"MIL"
-"COL"	"MIA"
-"PHI"	"ATL"
-"PIT"	"SLN"
-"NYN"	"SDN"
-"SFN"	"LAN"
-"ARI"	"WAS"
-"NYA"	"ANA"
-"BAL"	"DET"
-"TBA"	"BOS"
-"CLE"	"SEA"
-"OAK"	"HOU"
-"CHA"	"KCA"
-"CIN"	"MIN"
-"TEX"	"TOR"
-"CHN"	"MIL"
-"MIA"	"COL"
-"ATL"	"PHI"
-"PIT"	"SLN"
-"SDN"	"NYN"
-"LAN"	"SFN"
-"SFN"	"LAN"
-"ARI"	"WAS"
-"NYA"	"ANA"
-"DET"	"BAL"
-"TBA"	"BOS"
-"SEA"	"CLE"
-"HOU"	"OAK"
-"CHA"	"KCA"
-"KCA"	"CHA"
-"MIN"	"CIN"
-"TEX"	"TOR"
-"CHN"	"MIL"
-"MIA"	"COL"
-"ATL"	"PHI"
-"PIT"	"SLN"
-"NYN"	"SDN"
-"SFN"	"LAN"
-"WAS"	"ARI"
-"NYA"	"ANA"
-"BAL"	"DET"
-"BOS"	"TBA"
-"SEA"	"CLE"
-"HOU"	"OAK"
-"KCA"	"CHA"
-"CIN"	"MIN"
-"TOR"	"TEX"
-"ARI"	"LAN"
-"CHN"	"COL"
-"MIL"	"CIN"
-"MIA"	"PHI"
-"SFN"	"SDN"
-"WAS"	"PIT"
-"BOS"	"KCA"
-"CLE"	"TEX"
-"TBA"	"DET"
-"HOU"	"NYA"
-"TOR"	"MIN"
-"ARI"	"LAN"
-"COL"	"CHN"
-"MIL"	"CIN"
-"MIA"	"PHI"
-"ATL"	"NYN"
-"SDN"	"SFN"
-"SLN"	"CHA"
-"WAS"	"PIT"
-"ANA"	"BAL"
-"KCA"	"BOS"
-"TEX"	"CLE"
-"DET"	"TBA"
-"NYA"	"HOU"
-"TOR"	"MIN"
-"SEA"	"OAK"
-"LAN"	"ARI"
-"COL"	"CHN"
-"MIL"	"CIN"
-"PHI"	"MIA"
-"ATL"	"NYN"
-"SFN"	"SDN"
-"SLN"	"CHA"
-"WAS"	"PIT"
-"ANA"	"BAL"
-"BOS"	"KCA"
-"CLE"	"TEX"
-"DET"	"TBA"
-"NYA"	"HOU"
-"MIN"	"TOR"
-"OAK"	"SEA"
-"LAN"	"ARI"
-"ATL"	"NYN"
-"WAS"	"PIT"
-"ANA"	"BAL"
-"CHA"	"MIN"
-"TOR"	"CLE"
-"CLE"	"TOR"
-"NYA"	"HOU"
-"KCA"	"DET"
-"SEA"	"OAK"
-"TEX"	"BOS"
-"HOU"	"ARI"
-"SFN"	"ATL"
-"CIN"	"MIA"
-"PIT"	"MIL"
-"COL"	"NYN"
-"LAN"	"SDN"
-"SLN"	"CHN"
-"WAS"	"PHI"
-"MIN"	"CHA"
-"KCA"	"DET"
-"NYA"	"CLE"
-"OAK"	"BAL"
-"ANA"	"SEA"
-"TBA"	"TOR"
-"BOS"	"TEX"
-"ARI"	"HOU"
-"SFN"	"ATL"
-"MIA"	"CIN"
-"MIL"	"PIT"
-"COL"	"NYN"
-"SDN"	"LAN"
-"SLN"	"CHN"
-"PHI"	"WAS"
-"MIN"	"CHA"
-"DET"	"KCA"
-"NYA"	"CLE"
-"OAK"	"BAL"
-"SEA"	"ANA"
-"TBA"	"TOR"
-"BOS"	"TEX"
-"ARI"	"HOU"
-"SFN"	"ATL"
-"MIA"	"CIN"
-"PIT"	"MIL"
-"COL"	"NYN"
-"SDN"	"LAN"
-"SLN"	"CHN"
-"WAS"	"PHI"
-"MIN"	"CHA"
-"KCA"	"DET"
-"NYA"	"CLE"
-"OAK"	"BAL"
-"ANA"	"SEA"
-"TOR"	"TBA"
-"BOS"	"TEX"
-"CHN"	"MIA"
-"NYN"	"CIN"
-"PHI"	"SFN"
-"WAS"	"SDN"
-"MIN"	"SLN"
-"HOU"	"OAK"
-"TEX"	"DET"
-"CHN"	"MIA"
-"CIN"	"NYN"
-"COL"	"ANA"
-"ARI"	"LAN"
-"MIL"	"CLE"
-"PHI"	"SFN"
-"WAS"	"SDN"
-"MIN"	"SLN"
-"KCA"	"BAL"
-"PIT"	"CHA"
-"NYA"	"BOS"
-"HOU"	"OAK"
-"ATL"	"TBA"
-"DET"	"TEX"
-"SEA"	"TOR"
-"CHN"	"MIA"
-"CIN"	"NYN"
-"ANA"	"COL"
-"LAN"	"ARI"
-"CLE"	"MIL"
-"PHI"	"SFN"
-"SDN"	"WAS"
-"BAL"	"KCA"
-"PIT"	"CHA"
-"NYA"	"BOS"
-"HOU"	"OAK"
-"ATL"	"TBA"
-"TEX"	"DET"
-"TOR"	"SEA"
-"WAS"	"ARI"
-"MIL"	"COL"
-"CIN"	"LAN"
-"ATL"	"MIA"
-"PHI"	"SFN"
-"SLN"	"SDN"
-"ANA"	"MIN"
-"BAL"	"KCA"
-"BOS"	"NYA"
-"SEA"	"TOR"
-"WAS"	"ARI"
-"CHN"	"CHA"
-"MIL"	"COL"
-"CIN"	"LAN"
-"MIA"	"ATL"
-"NYN"	"PHI"
-"PIT"	"SFN"
-"SLN"	"SDN"
-"MIN"	"ANA"
-"BAL"	"TBA"
-"KCA"	"CLE"
-"TEX"	"HOU"
-"OAK"	"NYA"
-"TOR"	"BOS"
-"WAS"	"ARI"
-"CHN"	"CHA"
-"COL"	"MIL"
-"CIN"	"LAN"
-"ATL"	"MIA"
-"PIT"	"SFN"
-"SDN"	"SLN"
-"MIN"	"ANA"
-"BAL"	"TBA"
-"TBA"	"BAL"
-"CLE"	"KCA"
-"DET"	"SEA"
-"SEA"	"DET"
-"HOU"	"TEX"
-"NYA"	"OAK"
-"BOS"	"TOR"
-"WAS"	"ARI"
-"CHA"	"CHN"
-"MIL"	"COL"
-"CIN"	"LAN"
-"ATL"	"MIA"
-"PHI"	"NYN"
-"SFN"	"PIT"
-"SDN"	"SLN"
-"ANA"	"MIN"
-"BAL"	"TBA"
-"CLE"	"KCA"
-"DET"	"SEA"
-"HOU"	"TEX"
-"NYA"	"OAK"
-"BOS"	"TOR"
-"MIL"	"ARI"
-"ATL"	"CHN"
-"COL"	"SDN"
-"SFN"	"CIN"
-"ANA"	"HOU"
-"OAK"	"BOS"
-"DET"	"CLE"
-"TBA"	"KCA"
-"SEA"	"MIN"
-"ARI"	"MIL"
-"CHN"	"ATL"
-"MIA"	"LAN"
-"NYN"	"TOR"
-"PIT"	"CHA"
-"SDN"	"COL"
-"SFN"	"CIN"
-"WAS"	"NYA"
-"HOU"	"ANA"
-"OAK"	"BOS"
-"DET"	"CLE"
-"TBA"	"KCA"
-"MIN"	"SLN"
-"SEA"	"TEX"
-"MIL"	"ARI"
-"ATL"	"CHN"
-"MIA"	"LAN"
-"TOR"	"NYN"
-"PIT"	"CHA"
-"CIN"	"SFN"
-"HOU"	"ANA"
-"PHI"	"BAL"
-"BOS"	"OAK"
-"CLE"	"DET"
-"TBA"	"KCA"
-"SLN"	"MIN"
-"TEX"	"SEA"
-"LAN"	"MIA"
-"PIT"	"SDN"
-"COL"	"SFN"
-"PHI"	"SLN"
-"TBA"	"ANA"
-"BOS"	"BAL"
-"CHA"	"TEX"
-"DET"	"SEA"
-"OAK"	"TOR"
-"MIA"	"ATL"
-"CHN"	"CIN"
-"NYN"	"ARI"
-"SDN"	"PIT"
-"COL"	"SFN"
-"SLN"	"PHI"
-"TBA"	"ANA"
-"BAL"	"BOS"
-"TEX"	"CHA"
-"HOU"	"CLE"
-"KCA"	"NYA"
-"MIL"	"MIN"
-"SEA"	"DET"
-"OAK"	"TOR"
-"ATL"	"MIA"
-"CIN"	"CHN"
-"CHN"	"CIN"
-"NYN"	"ARI"
-"SDN"	"PIT"
-"SFN"	"COL"
-"PHI"	"SLN"
-"LAN"	"WAS"
-"LAN"	"WAS"
-"TBA"	"ANA"
-"BOS"	"BAL"
-"CHA"	"TEX"
-"CLE"	"HOU"
-"NYA"	"KCA"
-"MIL"	"MIN"
-"SEA"	"DET"
-"OAK"	"TOR"
-"ATL"	"MIA"
-"CHN"	"CIN"
-"NYN"	"ARI"
-"SDN"	"PIT"
-"SFN"	"COL"
-"SLN"	"PHI"
-"LAN"	"WAS"
-"ANA"	"TBA"
-"BOS"	"BAL"
-"CHA"	"TEX"
-"HOU"	"CLE"
-"NYA"	"KCA"
-"MIN"	"MIL"
-"SEA"	"DET"
-"OAK"	"TOR"
-"COL"	"LAN"
-"MIL"	"ARI"
-"NYN"	"MIA"
-"PHI"	"ATL"
-"SLN"	"KCA"
-"WAS"	"SDN"
-"BAL"	"CHA"
-"MIN"	"DET"
-"NYA"	"TEX"
-"CLE"	"CHN"
-"CIN"	"PIT"
-"LAN"	"COL"
-"MIL"	"ARI"
-"MIA"	"NYN"
-"ATL"	"PHI"
-"KCA"	"SLN"
-"WAS"	"SDN"
-"CHA"	"BAL"
-"HOU"	"SFN"
-"MIN"	"DET"
-"SEA"	"OAK"
-"BOS"	"TBA"
-"TEX"	"NYA"
-"TOR"	"ANA"
-"CLE"	"CHN"
-"PIT"	"CIN"
-"LAN"	"COL"
-"MIL"	"ARI"
-"MIA"	"NYN"
-"PHI"	"ATL"
-"KCA"	"SLN"
-"SDN"	"WAS"
-"CHA"	"BAL"
-"HOU"	"SFN"
-"DET"	"MIN"
-"SEA"	"OAK"
-"BOS"	"TBA"
-"TEX"	"NYA"
-"ANA"	"TOR"
-"CIN"	"PIT"
-"NYN"	"MIL"
-"BAL"	"CHA"
-"HOU"	"CLE"
-"OAK"	"SEA"
-"TBA"	"BOS"
-"KCA"	"TEX"
-"ANA"	"TOR"
-"CHN"	"SFN"
-"COL"	"CIN"
-"LAN"	"SDN"
-"WAS"	"MIA"
-"MIL"	"NYN"
-"TOR"	"PHI"
-"PIT"	"SLN"
-"BOS"	"ATL"
-"HOU"	"CLE"
-"DET"	"CHA"
-"NYA"	"ANA"
-"ARI"	"OAK"
-"SEA"	"MIN"
-"BAL"	"TBA"
-"TEX"	"KCA"
-"SFN"	"CHN"
-"CIN"	"COL"
-"SDN"	"LAN"
-"WAS"	"MIA"
-"MIL"	"NYN"
-"PHI"	"TOR"
-"SLN"	"PIT"
-"BOS"	"ATL"
-"CLE"	"HOU"
-"CHA"	"DET"
-"ANA"	"NYA"
-"OAK"	"ARI"
-"SEA"	"MIN"
-"TBA"	"BAL"
-"TEX"	"KCA"
-"CHN"	"SFN"
-"COL"	"CIN"
-"LAN"	"SDN"
-"WAS"	"MIA"
-"MIL"	"NYN"
-"TOR"	"PHI"
-"SLN"	"PIT"
-"ATL"	"BOS"
-"CLE"	"HOU"
-"DET"	"CHA"
-"NYA"	"ANA"
-"OAK"	"ARI"
-"SEA"	"MIN"
-"TBA"	"BAL"
-"KCA"	"TEX"
-"ARI"	"CIN"
-"ATL"	"NYN"
-"NYN"	"ATL"
-"COL"	"SFN"
-"LAN"	"PHI"
-"MIL"	"SLN"
-"CHN"	"PIT"
-"MIA"	"SDN"
-"WAS"	"BAL"
-"BOS"	"TOR"
-"CLE"	"CHA"
-"DET"	"ANA"
-"MIN"	"KCA"
-"HOU"	"NYA"
-"TBA"	"OAK"
-"SEA"	"TEX"
-"ARI"	"CIN"
-"ATL"	"NYN"
-"COL"	"SFN"
-"PHI"	"LAN"
-"SLN"	"MIL"
-"CHN"	"PIT"
-"SDN"	"MIA"
-"WAS"	"BAL"
-"BOS"	"TOR"
-"CLE"	"CHA"
-"ANA"	"DET"
-"KCA"	"MIN"
-"NYA"	"HOU"
-"TBA"	"OAK"
-"TEX"	"SEA"
-"CIN"	"ARI"
-"NYN"	"ATL"
-"SFN"	"COL"
-"LAN"	"PHI"
-"MIL"	"SLN"
-"PIT"	"CHN"
-"SDN"	"MIA"
-"WAS"	"BAL"
-"BOS"	"TOR"
-"CLE"	"CHA"
-"DET"	"ANA"
-"KCA"	"MIN"
-"NYA"	"HOU"
-"TBA"	"OAK"
-"TEX"	"SEA"
-"ATL"	"WAS"
-"PHI"	"LAN"
-"CHN"	"NYN"
-"SDN"	"MIA"
-"SLN"	"PIT"
-"DET"	"ANA"
-"HOU"	"BOS"
-"CLE"	"MIN"
-"OAK"	"TBA"
-"SEA"	"TEX"
-"ARI"	"MIA"
-"ATL"	"WAS"
-"LAN"	"COL"
-"CHN"	"NYN"
-"CIN"	"SDN"
-"SFN"	"PHI"
-"PIT"	"SLN"
-"ANA"	"TEX"
-"NYA"	"BAL"
-"CHA"	"MIL"
-"DET"	"TOR"
-"HOU"	"BOS"
-"OAK"	"KCA"
-"MIN"	"CLE"
-"SEA"	"TBA"
-"ARI"	"MIA"
-"WAS"	"ATL"
-"LAN"	"COL"
-"CHN"	"NYN"
-"SDN"	"CIN"
-"SFN"	"PHI"
-"SLN"	"PIT"
-"TEX"	"ANA"
-"NYA"	"BAL"
-"MIL"	"CHA"
-"DET"	"TOR"
-"BOS"	"HOU"
-"KCA"	"OAK"
-"MIN"	"CLE"
-"SEA"	"TBA"
-"ARI"	"MIA"
-"ATL"	"WAS"
-"LAN"	"COL"
-"CHN"	"NYN"
-"SDN"	"CIN"
-"SFN"	"PHI"
-"SLN"	"PIT"
-"ANA"	"TEX"
-"CHA"	"MIL"
-"TOR"	"DET"
-"BOS"	"HOU"
-"OAK"	"KCA"
-"MIN"	"CLE"
-"SEA"	"TBA"
-"SDN"	"ATL"
-"SFN"	"ARI"
-"ANA"	"KCA"
-"NYA"	"DET"
-"DET"	"NYA"
-"PHI"	"CHN"
-"COL"	"CIN"
-"BAL"	"NYN"
-"LAN"	"PIT"
-"ATL"	"SDN"
-"ARI"	"SFN"
-"MIA"	"SLN"
-"WAS"	"TBA"
-"ANA"	"KCA"
-"BOS"	"DET"
-"CLE"	"MIL"
-"SEA"	"HOU"
-"MIN"	"CHA"
-"CHA"	"MIN"
-"TEX"	"OAK"
-"NYA"	"TOR"
-"CHN"	"PHI"
-"COL"	"CIN"
-"BAL"	"NYN"
-"PIT"	"LAN"
-"SDN"	"ATL"
-"SFN"	"ARI"
-"MIA"	"SLN"
-"WAS"	"TBA"
-"ANA"	"KCA"
-"BOS"	"DET"
-"CLE"	"MIL"
-"HOU"	"SEA"
-"CHA"	"MIN"
-"TEX"	"OAK"
-"NYA"	"TOR"
-"CHN"	"PHI"
-"CIN"	"COL"
-"LAN"	"PIT"
-"SLN"	"MIA"
-"DET"	"BOS"
-"MIN"	"CHA"
-"OAK"	"KCA"
-"SEA"	"TBA"
-"HOU"	"TEX"
-"TOR"	"BAL"
-"CHN"	"PIT"
-"SLN"	"CIN"
-"ARI"	"COL"
-"LAN"	"ATL"
-"MIA"	"SDN"
-"NYA"	"NYN"
-"MIL"	"PHI"
-"SFN"	"WAS"
-"CHA"	"BOS"
-"CLE"	"DET"
-"ANA"	"MIN"
-"OAK"	"KCA"
-"SEA"	"TBA"
-"HOU"	"TEX"
-"TOR"	"BAL"
-"CHN"	"PIT"
-"SLN"	"CIN"
-"ARI"	"COL"
-"ATL"	"LAN"
-"SDN"	"MIA"
-"NYA"	"NYN"
-"MIL"	"PHI"
-"WAS"	"SFN"
-"BOS"	"CHA"
-"DET"	"CLE"
-"ANA"	"MIN"
-"KCA"	"OAK"
-"TBA"	"SEA"
-"HOU"	"TEX"
-"TOR"	"BAL"
-"PIT"	"CHN"
-"CIN"	"SLN"
-"ARI"	"COL"
-"LAN"	"ATL"
-"SDN"	"MIA"
-"NYN"	"NYA"
-"PHI"	"MIL"
-"SFN"	"WAS"
-"CHA"	"BOS"
-"CLE"	"DET"
-"MIN"	"ANA"
-"OAK"	"KCA"
-"SEA"	"TBA"
-"HOU"	"TEX"
-"TOR"	"BAL"
-"ARI"	"PIT"
-"MIA"	"SFN"
-"CHN"	"MIL"
-"SLN"	"SDN"
-"BOS"	"BAL"
-"CLE"	"CHA"
-"SEA"	"ANA"
-"TBA"	"TOR"
-"ARI"	"PIT"
-"ATL"	"NYN"
-"LAN"	"TEX"
-"MIA"	"SFN"
-"MIL"	"CHN"
-"PHI"	"COL"
-"SDN"	"SLN"
-"BOS"	"BAL"
-"CHA"	"CLE"
-"MIN"	"DET"
-"CIN"	"KCA"
-"NYA"	"WAS"
-"HOU"	"OAK"
-"SEA"	"ANA"
-"TBA"	"TOR"
-"PIT"	"ARI"
-"ATL"	"NYN"
-"LAN"	"TEX"
-"MIA"	"SFN"
-"MIL"	"CHN"
-"COL"	"PHI"
-"SDN"	"SLN"
-"BOS"	"BAL"
-"CHA"	"CLE"
-"DET"	"MIN"
-"CIN"	"KCA"
-"WAS"	"NYA"
-"HOU"	"OAK"
-"SEA"	"ANA"
-"TBA"	"TOR"
-"ARI"	"NYN"
-"ATL"	"SDN"
-"SFN"	"MIA"
-"PHI"	"COL"
-"CLE"	"CHA"
-"DET"	"MIN"
-"NYA"	"TBA"
-"HOU"	"OAK"
-"BOS"	"SEA"
-"ARI"	"NYN"
-"SDN"	"ATL"
-"LAN"	"SFN"
-"MIL"	"PHI"
-"PIT"	"CIN"
-"CHN"	"SLN"
-"MIA"	"BAL"
-"DET"	"CHA"
-"MIN"	"CLE"
-"HOU"	"KCA"
-"NYA"	"TBA"
-"ANA"	"OAK"
-"SEA"	"BOS"
-"COL"	"TEX"
-"TOR"	"WAS"
-"NYN"	"ARI"
-"ATL"	"SDN"
-"LAN"	"SFN"
-"PHI"	"MIL"
-"PIT"	"CIN"
-"CHN"	"SLN"
-"MIA"	"BAL"
-"DET"	"CHA"
-"MIN"	"CLE"
-"HOU"	"KCA"
-"NYA"	"TBA"
-"OAK"	"ANA"
-"SEA"	"BOS"
-"TEX"	"COL"
-"TOR"	"WAS"
-"NYN"	"ARI"
-"ATL"	"SDN"
-"SFN"	"LAN"
-"PHI"	"MIL"
-"CIN"	"PIT"
-"SLN"	"CHN"
-"BAL"	"MIA"
-"DET"	"CHA"
-"CLE"	"MIN"
-"HOU"	"KCA"
-"TBA"	"NYA"
-"OAK"	"ANA"
-"BOS"	"SEA"
-"TEX"	"COL"
-"TOR"	"WAS"
-"NYN"	"COL"
-"PHI"	"SLN"
-"PIT"	"MIL"
-"MIA"	"SFN"
-"NYA"	"WAS"
-"ARI"	"ANA"
-"CLE"	"CHA"
-"HOU"	"TBA"
-"TEX"	"KCA"
-"LAN"	"CHN"
-"CHN"	"LAN"
-"CIN"	"DET"
-"COL"	"NYN"
-"SLN"	"PHI"
-"MIL"	"PIT"
-"OAK"	"SDN"
-"SFN"	"MIA"
-"WAS"	"BAL"
-"ANA"	"ARI"
-"CLE"	"CHA"
-"TBA"	"HOU"
-"TEX"	"KCA"
-"MIN"	"BOS"
-"NYA"	"SEA"
-"ATL"	"TOR"
-"CHN"	"LAN"
-"CIN"	"DET"
-"COL"	"NYN"
-"PHI"	"SLN"
-"OAK"	"SDN"
-"SFN"	"MIA"
-"BAL"	"WAS"
-"CLE"	"CHA"
-"HOU"	"TBA"
-"TEX"	"KCA"
-"MIN"	"BOS"
-"NYA"	"SEA"
-"TOR"	"ATL"
-"CIN"	"CHN"
-"COL"	"NYN"
-"MIL"	"SLN"
-"ARI"	"PIT"
-"SFN"	"SDN"
-"WAS"	"BAL"
-"ANA"	"TOR"
-"BOS"	"MIN"
-"NYA"	"SEA"
-"BAL"	"ATL"
-"CIN"	"CHN"
-"COL"	"MIA"
-"MIL"	"SLN"
-"LAN"	"NYN"
-"ARI"	"PIT"
-"SDN"	"SFN"
-"PHI"	"WAS"
-"ANA"	"TOR"
-"BOS"	"SEA"
-"OAK"	"CHA"
-"CHA"	"OAK"
-"CLE"	"DET"
-"KCA"	"HOU"
-"TEX"	"MIN"
-"TBA"	"NYA"
-"BAL"	"ATL"
-"CIN"	"CHN"
-"MIA"	"COL"
-"SLN"	"MIL"
-"LAN"	"NYN"
-"ARI"	"PIT"
-"SFN"	"SDN"
-"PHI"	"WAS"
-"TOR"	"ANA"
-"SEA"	"BOS"
-"OAK"	"CHA"
-"CLE"	"DET"
-"HOU"	"KCA"
-"TEX"	"MIN"
-"TBA"	"NYA"
-"ATL"	"BAL"
-"CIN"	"CHN"
-"MIA"	"COL"
-"SLN"	"MIL"
-"LAN"	"NYN"
-"ARI"	"PIT"
-"SFN"	"SDN"
-"WAS"	"PHI"
-"TOR"	"ANA"
-"BOS"	"SEA"
-"CHA"	"OAK"
-"CLE"	"DET"
-"HOU"	"KCA"
-"MIN"	"TEX"
-"TBA"	"NYA"
-"ATL"	"CIN"
-"LAN"	"CHN"
-"MIA"	"ARI"
-"PIT"	"NYN"
-"NYA"	"PHI"
-"SLN"	"CLE"
-"SEA"	"BAL"
-"OAK"	"DET"
-"TOR"	"HOU"
-"KCA"	"ANA"
-"TBA"	"WAS"
-"TEX"	"SDN"
-"CIN"	"ATL"
-"CHN"	"LAN"
-"ARI"	"MIA"
-"MIL"	"KCA"
-"NYN"	"PIT"
-"NYA"	"PHI"
-"SFN"	"COL"
-"SLN"	"CLE"
-"SEA"	"BAL"
-"BOS"	"ANA"
-"CHA"	"MIN"
-"OAK"	"DET"
-"HOU"	"TOR"
-"TBA"	"WAS"
-"SDN"	"TEX"
-"CIN"	"ATL"
-"LAN"	"CHN"
-"ARI"	"MIA"
-"KCA"	"MIL"
-"PIT"	"NYN"
-"PHI"	"NYA"
-"SFN"	"COL"
-"CLE"	"SLN"
-"SEA"	"BAL"
-"BOS"	"ANA"
-"CHA"	"MIN"
-"OAK"	"DET"
-"HOU"	"TOR"
-"TEX"	"SDN"
-"MIL"	"CIN"
-"CHN"	"LAN"
-"ARI"	"MIA"
-"PHI"	"WAS"
-"COL"	"SFN"
-"SEA"	"BAL"
-"BOS"	"ANA"
-"MIN"	"CHA"
-"OAK"	"DET"
-"HOU"	"TBA"
-"SFN"	"ARI"
-"CHN"	"MIN"
-"MIL"	"CIN"
-"COL"	"LAN"
-"MIA"	"NYN"
-"WAS"	"PHI"
-"PIT"	"SDN"
-"ATL"	"SLN"
-"ANA"	"BAL"
-"NYA"	"BOS"
-"OAK"	"CLE"
-"SEA"	"KCA"
-"TBA"	"HOU"
-"TEX"	"CHA"
-"TOR"	"DET"
-"SFN"	"ARI"
-"CHN"	"MIN"
-"CIN"	"MIL"
-"COL"	"LAN"
-"MIA"	"NYN"
-"PHI"	"WAS"
-"SDN"	"PIT"
-"ATL"	"SLN"
-"ANA"	"BAL"
-"BOS"	"NYA"
-"OAK"	"CLE"
-"SEA"	"KCA"
-"TBA"	"HOU"
-"TEX"	"CHA"
-"TOR"	"DET"
-"SFN"	"ARI"
-"CHN"	"MIN"
-"CIN"	"MIL"
-"LAN"	"COL"
-"NYN"	"MIA"
-"PHI"	"WAS"
-"PIT"	"SDN"
-"ATL"	"SLN"
-"BAL"	"ANA"
-"NYA"	"BOS"
-"CLE"	"OAK"
-"SEA"	"KCA"
-"TBA"	"HOU"
-"CHA"	"TEX"
-"DET"	"TOR"
-"SLN"	"ARI"
-"CIN"	"CHA"
-"COL"	"SFN"
-"LAN"	"PIT"
-"MIA"	"TBA"
-"MIL"	"MIN"
-"BOS"	"WAS"
-"CLE"	"KCA"
-"ATL"	"NYA"
-"DET"	"TOR"
-"ARI"	"SLN"
-"CHN"	"DET"
-"CHA"	"CIN"
-"COL"	"SFN"
-"LAN"	"PIT"
-"TBA"	"MIA"
-"MIL"	"MIN"
-"PHI"	"BAL"
-"BOS"	"WAS"
-"CLE"	"KCA"
-"NYA"	"ATL"
-"OAK"	"SDN"
-"SEA"	"ANA"
-"HOU"	"TEX"
-"TOR"	"NYN"
-"SLN"	"ARI"
-"CHN"	"DET"
-"CIN"	"CHA"
-"COL"	"SFN"
-"LAN"	"PIT"
-"MIA"	"TBA"
-"MIL"	"MIN"
-"PHI"	"BAL"
-"BOS"	"WAS"
-"CLE"	"KCA"
-"NYA"	"ATL"
-"OAK"	"SDN"
-"ANA"	"SEA"
-"HOU"	"TEX"
-"NYN"	"TOR"
-"SDN"	"ARI"
-"MIL"	"ATL"
-"SLN"	"SFN"
-"WAS"	"MIA"
-"TEX"	"DET"
-"HOU"	"CHA"
-"MIN"	"BAL"
-"SEA"	"ANA"
-"ARI"	"SDN"
-"CIN"	"CHN"
-"MIL"	"ATL"
-"NYN"	"TBA"
-"PHI"	"PIT"
-"SFN"	"SLN"
-"WAS"	"MIA"
-"ANA"	"LAN"
-"CLE"	"OAK"
-"DET"	"TEX"
-"HOU"	"CHA"
-"BOS"	"KCA"
-"MIN"	"BAL"
-"COL"	"SEA"
-"TOR"	"NYA"
-"ARI"	"SDN"
-"CHN"	"CIN"
-"ATL"	"MIL"
-"TBA"	"NYN"
-"PHI"	"PIT"
-"SLN"	"SFN"
-"WAS"	"MIA"
-"LAN"	"ANA"
-"OAK"	"CLE"
-"DET"	"TEX"
-"HOU"	"CHA"
-"BOS"	"KCA"
-"MIN"	"BAL"
-"COL"	"SEA"
-"NYA"	"TOR"
-"SDN"	"ARI"
-"CHN"	"CIN"
-"MIL"	"ATL"
-"TBA"	"NYN"
-"PIT"	"PHI"
-"SFN"	"SLN"
-"MIA"	"WAS"
-"ANA"	"LAN"
-"OAK"	"CLE"
-"TEX"	"DET"
-"HOU"	"CHA"
-"BOS"	"KCA"
-"MIN"	"BAL"
-"SEA"	"COL"
-"NYA"	"TOR"
-"MIA"	"MIL"
-"NYN"	"PHI"
-"PHI"	"NYN"
-"PIT"	"WAS"
-"LAN"	"SDN"
-"SFN"	"CHN"
-"BAL"	"NYA"
-"NYA"	"BAL"
-"BOS"	"TEX"
-"CIN"	"CLE"
-"OAK"	"HOU"
-"MIN"	"KCA"
-"TBA"	"DET"
-"TOR"	"ATL"
-"ARI"	"COL"
-"MIL"	"MIA"
-"PHI"	"NYN"
-"WAS"	"PIT"
-"SDN"	"LAN"
-"CHN"	"SFN"
-"ANA"	"SEA"
-"BAL"	"NYA"
-"BOS"	"TEX"
-"SLN"	"CHA"
-"CIN"	"CLE"
-"HOU"	"OAK"
-"KCA"	"MIN"
-"TBA"	"DET"
-"ATL"	"TOR"
-"COL"	"ARI"
-"MIA"	"MIL"
-"NYN"	"PHI"
-"PIT"	"WAS"
-"LAN"	"SDN"
-"SFN"	"CHN"
-"SEA"	"ANA"
-"NYA"	"BAL"
-"BOS"	"TEX"
-"CHA"	"SLN"
-"CLE"	"CIN"
-"OAK"	"HOU"
-"MIN"	"KCA"
-"TBA"	"DET"
-"COL"	"ARI"
-"WAS"	"NYN"
-"PIT"	"MIL"
-"LAN"	"SDN"
-"ANA"	"SEA"
-"PHI"	"BAL"
-"BOS"	"TOR"
-"NYA"	"CLE"
-"OAK"	"HOU"
-"MIN"	"TBA"
-"ARI"	"ATL"
-"COL"	"SEA"
-"LAN"	"ANA"
-"PHI"	"MIA"
-"NYN"	"WAS"
-"PIT"	"MIL"
-"CHN"	"SDN"
-"SFN"	"OAK"
-"CIN"	"SLN"
-"TEX"	"BAL"
-"TOR"	"BOS"
-"CHA"	"KCA"
-"CLE"	"NYA"
-"HOU"	"DET"
-"MIN"	"TBA"
-"ARI"	"ATL"
-"COL"	"SEA"
-"ANA"	"LAN"
-"MIA"	"PHI"
-"NYN"	"WAS"
-"PIT"	"MIL"
-"PIT"	"MIL"
-"CHN"	"SDN"
-"OAK"	"SFN"
-"CIN"	"SLN"
-"BAL"	"TEX"
-"BOS"	"TOR"
-"KCA"	"CHA"
-"NYA"	"CLE"
-"HOU"	"DET"
-"TBA"	"MIN"
-"ATL"	"ARI"
-"COL"	"SEA"
-"LAN"	"ANA"
-"MIA"	"PHI"
-"WAS"	"NYN"
-"PIT"	"MIL"
-"CHN"	"SDN"
-"OAK"	"SFN"
-"SLN"	"CIN"
-"BAL"	"TEX"
-"BOS"	"TOR"
-"CHA"	"KCA"
-"CLE"	"NYA"
-"DET"	"HOU"
-"MIN"	"TBA"
-"CHN"	"SLN"
-"COL"	"ARI"
-"SLN"	"CHN"
-"PIT"	"CIN"
-"LAN"	"MIL"
-"PHI"	"SDN"
-"ATL"	"WAS"
-"HOU"	"ANA"
-"BOS"	"DET"
-"KCA"	"MIN"
-"NYN"	"NYA"
-"SFN"	"OAK"
-"SEA"	"CHA"
-"MIA"	"TBA"
-"CLE"	"TEX"
-"TOR"	"BAL"
-"COL"	"ARI"
-"CHN"	"SLN"
-"SLN"	"CHN"
-"PIT"	"CIN"
-"MIL"	"LAN"
-"HOU"	"ANA"
-"DET"	"BOS"
-"KCA"	"MIN"
-"NYA"	"NYN"
-"OAK"	"SFN"
-"CHA"	"SEA"
-"MIA"	"TBA"
-"CLE"	"TEX"
-"TOR"	"BAL"
-"ARI"	"COL"
-"CHN"	"SLN"
-"PIT"	"CIN"
-"LAN"	"MIL"
-"SDN"	"PHI"
-"PHI"	"SDN"
-"WAS"	"ATL"
-"ANA"	"HOU"
-"BOS"	"DET"
-"KCA"	"MIN"
-"OAK"	"SFN"
-"SEA"	"CHA"
-"TBA"	"MIA"
-"TEX"	"CLE"
-"TOR"	"BAL"
-"ARI"	"CHN"
-"CIN"	"SLN"
-"ATL"	"MIA"
-"MIL"	"WAS"
-"SDN"	"NYN"
-"LAN"	"PHI"
-"CHA"	"ANA"
-"BOS"	"BAL"
-"PIT"	"CLE"
-"DET"	"KCA"
-"TBA"	"NYA"
-"OAK"	"TEX"
-"MIN"	"TOR"
-"ARI"	"CHN"
-"SLN"	"CIN"
-"HOU"	"COL"
-"MIA"	"ATL"
-"MIL"	"WAS"
-"NYN"	"SDN"
-"PHI"	"LAN"
-"CHA"	"ANA"
-"BAL"	"BOS"
-"PIT"	"CLE"
-"KCA"	"DET"
-"SFN"	"SEA"
-"NYA"	"TBA"
-"OAK"	"TEX"
-"MIN"	"TOR"
-"CHN"	"ARI"
-"CIN"	"SLN"
-"COL"	"HOU"
-"WAS"	"MIL"
-"NYN"	"SDN"
-"PHI"	"LAN"
-"ANA"	"CHA"
-"CLE"	"PIT"
-"DET"	"KCA"
-"SEA"	"SFN"
-"TBA"	"NYA"
-"OAK"	"TEX"
-"MIN"	"TOR"
-"LAN"	"ATL"
-"CHN"	"ARI"
-"PHI"	"CIN"
-"WAS"	"MIA"
-"NYN"	"PIT"
-"MIL"	"SFN"
-"ANA"	"CHA"
-"TBA"	"BAL"
-"MIN"	"BOS"
-"NYA"	"KCA"
-"OAK"	"TEX"
-"LAN"	"ATL"
-"CIN"	"PHI"
-"COL"	"OAK"
-"WAS"	"MIA"
-"PIT"	"NYN"
-"ARI"	"SDN"
-"MIL"	"SFN"
-"SLN"	"CHN"
-"ANA"	"SEA"
-"BAL"	"TBA"
-"BOS"	"MIN"
-"TOR"	"CHA"
-"CLE"	"DET"
-"TEX"	"HOU"
-"LAN"	"ATL"
-"CIN"	"PHI"
-"COL"	"OAK"
-"MIA"	"WAS"
-"PIT"	"NYN"
-"ARI"	"SDN"
-"MIL"	"SFN"
-"SLN"	"CHN"
-"ANA"	"SEA"
-"BAL"	"TBA"
-"BOS"	"MIN"
-"CHA"	"TOR"
-"DET"	"CLE"
-"TEX"	"HOU"
-"KCA"	"NYA"
-"NYA"	"KCA"
-"ATL"	"LAN"
-"CIN"	"PHI"
-"COL"	"OAK"
-"MIA"	"WAS"
-"NYN"	"PIT"
-"ARI"	"SDN"
-"SFN"	"MIL"
-"CHN"	"SLN"
-"SEA"	"ANA"
-"BAL"	"TBA"
-"BOS"	"MIN"
-"TOR"	"CHA"
-"CLE"	"DET"
-"TEX"	"HOU"
-"NYA"	"KCA"
-"TEX"	"ARI"
-"ATL"	"MIA"
-"MIL"	"LAN"
-"SFN"	"SDN"
-"SLN"	"COL"
-"BOS"	"PHI"
-"MIN"	"CLE"
-"OAK"	"TOR"
-"SEA"	"HOU"
-"ARI"	"TEX"
-"ATL"	"MIA"
-"MIL"	"LAN"
-"PIT"	"CHN"
-"SFN"	"SDN"
-"COL"	"SLN"
-"WAS"	"NYN"
-"PHI"	"BOS"
-"KCA"	"CHA"
-"DET"	"CIN"
-"CLE"	"MIN"
-"NYA"	"BAL"
-"OAK"	"TOR"
-"HOU"	"SEA"
-"TBA"	"ANA"
-"LAN"	"MIL"
-"CHN"	"PIT"
-"SLN"	"COL"
-"WAS"	"NYN"
-"KCA"	"CHA"
-"DET"	"CIN"
-"CLE"	"MIN"
-"BAL"	"NYA"
-"OAK"	"TOR"
-"HOU"	"SEA"
-"TBA"	"ANA"
-"SFN"	"ARI"
-"SDN"	"CHN"
-"LAN"	"MIL"
-"ATL"	"NYN"
-"PHI"	"MIA"
-"SLN"	"COL"
-"WAS"	"CIN"
-"BOS"	"NYA"
-"CHA"	"KCA"
-"TOR"	"SEA"
-"TBA"	"ANA"
-"TEX"	"BAL"
-"ARI"	"SFN"
-"CHN"	"SDN"
-"HOU"	"LAN"
-"MIL"	"COL"
-"ATL"	"NYN"
-"PHI"	"MIA"
-"PIT"	"SLN"
-"BOS"	"NYA"
-"ANA"	"CLE"
-"MIN"	"KCA"
-"OAK"	"DET"
-"TOR"	"SEA"
-"CHA"	"TBA"
-"TEX"	"BAL"
-"ARI"	"SFN"
-"CHN"	"SDN"
-"HOU"	"LAN"
-"MIL"	"COL"
-"NYN"	"ATL"
-"PHI"	"MIA"
-"SLN"	"PIT"
-"CIN"	"WAS"
-"WAS"	"CIN"
-"BOS"	"NYA"
-"CLE"	"ANA"
-"MIN"	"KCA"
-"OAK"	"DET"
-"TOR"	"SEA"
-"CHA"	"TBA"
-"TEX"	"BAL"
-"SFN"	"ARI"
-"SDN"	"CHN"
-"LAN"	"HOU"
-"COL"	"MIL"
-"ATL"	"NYN"
-"PHI"	"MIA"
-"SLN"	"PIT"
-"WAS"	"CIN"
-"BOS"	"NYA"
-"CLE"	"ANA"
-"MIN"	"KCA"
-"OAK"	"DET"
-"SEA"	"TOR"
-"CHA"	"TBA"
-"BAL"	"TEX"
-"ARI"	"PHI"
-"COL"	"PIT"
-"MIA"	"SLN"
-"NYN"	"CIN"
-"HOU"	"SFN"
-"ANA"	"DET"
-"NYA"	"CHA"
-"CLE"	"MIN"
-"CHN"	"KCA"
-"SEA"	"TEX"
-"PHI"	"ARI"
-"PIT"	"COL"
-"SLN"	"MIA"
-"SDN"	"MIL"
-"CIN"	"NYN"
-"HOU"	"SFN"
-"WAS"	"ATL"
-"ATL"	"WAS"
-"ANA"	"DET"
-"NYA"	"CHA"
-"MIN"	"CLE"
-"CHN"	"KCA"
-"LAN"	"OAK"
-"TBA"	"BAL"
-"TEX"	"SEA"
-"BOS"	"TOR"
-"ARI"	"PHI"
-"PIT"	"COL"
-"SLN"	"MIA"
-"MIL"	"SDN"
-"NYN"	"CIN"
-"ATL"	"WAS"
-"ANA"	"DET"
-"NYA"	"CHA"
-"CLE"	"MIN"
-"KCA"	"CHN"
-"OAK"	"LAN"
-"BAL"	"TBA"
-"TEX"	"SEA"
-"BOS"	"TOR"
-"LAN"	"COL"
-"SDN"	"MIL"
-"PIT"	"SFN"
-"WAS"	"ATL"
-"CLE"	"MIN"
-"SEA"	"HOU"
-"NYA"	"TEX"
-"TBA"	"BAL"
-"TOR"	"BOS"
-"ATL"	"MIL"
-"CHN"	"WAS"
-"CIN"	"ARI"
-"COL"	"LAN"
-"NYN"	"MIA"
-"SDN"	"PHI"
-"SFN"	"PIT"
-"ANA"	"OAK"
-"BOS"	"BAL"
-"CHA"	"CLE"
-"DET"	"MIN"
-"SEA"	"HOU"
-"SLN"	"KCA"
-"TEX"	"NYA"
-"TBA"	"TOR"
-"MIL"	"ATL"
-"WAS"	"CHN"
-"CIN"	"ARI"
-"COL"	"LAN"
-"MIA"	"NYN"
-"PHI"	"SDN"
-"PIT"	"SFN"
-"OAK"	"ANA"
-"BOS"	"BAL"
-"BOS"	"BAL"
-"CLE"	"CHA"
-"MIN"	"DET"
-"SEA"	"HOU"
-"SLN"	"KCA"
-"NYA"	"TEX"
-"TBA"	"TOR"
-"ATL"	"MIL"
-"CHN"	"WAS"
-"ARI"	"CIN"
-"COL"	"LAN"
-"NYN"	"MIA"
-"SDN"	"PHI"
-"SFN"	"PIT"
-"OAK"	"ANA"
-"BOS"	"BAL"
-"CLE"	"CHA"
-"DET"	"MIN"
-"SEA"	"HOU"
-"SLN"	"KCA"
-"NYA"	"TEX"
-"TOR"	"TBA"
-"ATL"	"MIA"
-"ATL"	"MIA"
-"CLE"	"CIN"
-"SFN"	"LAN"
-"ANA"	"SDN"
-"SLN"	"WAS"
-"DET"	"CHA"
-"KCA"	"TOR"
-"NYN"	"NYA"
-"OAK"	"SEA"
-"TEX"	"ARI"
-"ATL"	"MIA"
-"MIL"	"CHN"
-"CLE"	"CIN"
-"SFN"	"LAN"
-"BOS"	"PHI"
-"ANA"	"SDN"
-"SLN"	"WAS"
-"BAL"	"NYN"
-"CHA"	"DET"
-"COL"	"HOU"
-"TOR"	"KCA"
-"MIN"	"PIT"
-"NYA"	"TBA"
-"OAK"	"SEA"
-"ARI"	"TEX"
-"ATL"	"MIA"
-"CHN"	"MIL"
-"CLE"	"CIN"
-"LAN"	"SFN"
-"PHI"	"BOS"
-"ANA"	"SDN"
-"SLN"	"WAS"
-"NYN"	"BAL"
-"CHA"	"DET"
-"HOU"	"COL"
-"TOR"	"KCA"
-"MIN"	"PIT"
-"TBA"	"NYA"
-"SEA"	"OAK"
-"COL"	"ATL"
-"NYN"	"PHI"
-"PHI"	"NYN"
-"CHN"	"PIT"
-"ARI"	"SDN"
-"WAS"	"SLN"
-"KCA"	"TOR"
-"MIN"	"DET"
-"TBA"	"NYA"
-"TEX"	"ANA"
-"COL"	"ATL"
-"CIN"	"SFN"
-"PHI"	"NYN"
-"CHN"	"PIT"
-"ARI"	"SDN"
-"SLN"	"MIL"
-"WAS"	"MIA"
-"BOS"	"TBA"
-"CHA"	"KCA"
-"CLE"	"BAL"
-"MIN"	"DET"
-"NYA"	"TOR"
-"OAK"	"HOU"
-"LAN"	"SEA"
-"TEX"	"ANA"
-"COL"	"ATL"
-"CIN"	"SFN"
-"NYN"	"PHI"
-"PIT"	"CHN"
-"SDN"	"ARI"
-"SLN"	"MIL"
-"MIA"	"WAS"
-"BOS"	"TBA"
-"KCA"	"CHA"
-"BAL"	"CLE"
-"DET"	"MIN"
-"NYA"	"TOR"
-"OAK"	"HOU"
-"SEA"	"LAN"
-"ANA"	"TEX"
-"COL"	"ATL"
-"CIN"	"SFN"
-"NYN"	"PHI"
-"PIT"	"CHN"
-"ARI"	"SDN"
-"MIL"	"SLN"
-"MIA"	"WAS"
-"TBA"	"BOS"
-"CHA"	"KCA"
-"CLE"	"BAL"
-"MIN"	"DET"
-"NYA"	"TOR"
-"HOU"	"OAK"
-"LAN"	"SEA"
-"TEX"	"ANA"
-"SLN"	"LAN"
-"MIL"	"CIN"
-"SFN"	"NYN"
-"ATL"	"PIT"
-"CLE"	"BOS"
-"CHA"	"MIN"
-"OAK"	"TEX"
-"SEA"	"HOU"
-"TBA"	"KCA"
-"TOR"	"BAL"
-"ARI"	"ANA"
-"SDN"	"COL"
-"SLN"	"LAN"
-"NYA"	"MIA"
-"CIN"	"MIL"
-"NYN"	"SFN"
-"ATL"	"PIT"
-"WAS"	"PHI"
-"CLE"	"BOS"
-"MIN"	"CHA"
-"DET"	"CHN"
-"OAK"	"TEX"
-"HOU"	"SEA"
-"TBA"	"KCA"
-"TOR"	"BAL"
-"ARI"	"ANA"
-"COL"	"SDN"
-"SLN"	"LAN"
-"MIA"	"NYA"
-"MIL"	"CIN"
-"NYN"	"SFN"
-"ATL"	"PIT"
-"WAS"	"PHI"
-"BOS"	"CLE"
-"CHA"	"MIN"
-"CHN"	"DET"
-"TEX"	"OAK"
-"HOU"	"SEA"
-"TBA"	"KCA"
-"TOR"	"BAL"
-"CHN"	"CIN"
-"COL"	"SDN"
-"ATL"	"MIA"
-"SFN"	"NYN"
-"PHI"	"WAS"
-"BOS"	"CLE"
-"DET"	"CHA"
-"MIN"	"OAK"
-"TBA"	"KCA"
-"SEA"	"ARI"
-"CHN"	"CIN"
-"SLN"	"COL"
-"LAN"	"SDN"
-"MIA"	"ATL"
-"MIL"	"PIT"
-"NYN"	"WAS"
-"TEX"	"SFN"
-"HOU"	"ANA"
-"NYA"	"BAL"
-"CHA"	"DET"
-"KCA"	"CLE"
-"OAK"	"MIN"
-"TBA"	"BOS"
-"TOR"	"PHI"
-"SEA"	"ARI"
-"CHN"	"CIN"
-"COL"	"SLN"
-"LAN"	"SDN"
-"MIA"	"ATL"
-"PIT"	"MIL"
-"NYN"	"WAS"
-"SFN"	"TEX"
-"HOU"	"ANA"
-"NYA"	"BAL"
-"NYA"	"BAL"
-"CHA"	"DET"
-"KCA"	"CLE"
-"OAK"	"MIN"
-"TBA"	"BOS"
-"TOR"	"PHI"
-"ARI"	"SEA"
-"CHN"	"CIN"
-"SLN"	"COL"
-"LAN"	"SDN"
-"ATL"	"MIA"
-"MIL"	"PIT"
-"WAS"	"NYN"
-"SFN"	"TEX"
-"HOU"	"ANA"
-"NYA"	"BAL"
-"CHA"	"DET"
-"CLE"	"KCA"
-"OAK"	"MIN"
-"TBA"	"BOS"
-"PHI"	"TOR"
-"CHN"	"NYN"
-"WAS"	"PHI"
-"SFN"	"ARI"
-"ANA"	"COL"
-"BAL"	"TOR"
-"HOU"	"OAK"
-"CHA"	"NYA"
-"ATL"	"TBA"
-"CHN"	"NYN"
-"CIN"	"MIL"
-"WAS"	"PHI"
-"SDN"	"SEA"
-"SFN"	"ARI"
-"SLN"	"PIT"
-"COL"	"ANA"
-"BAL"	"TOR"
-"BOS"	"MIA"
-"CLE"	"MIN"
-"OAK"	"HOU"
-"KCA"	"DET"
-"NYA"	"CHA"
-"LAN"	"TEX"
-"TBA"	"ATL"
-"NYN"	"CHN"
-"MIL"	"CIN"
-"PHI"	"WAS"
-"SDN"	"SEA"
-"ARI"	"SFN"
-"PIT"	"SLN"
-"BAL"	"TOR"
-"BOS"	"MIA"
-"MIN"	"CLE"
-"HOU"	"OAK"
-"KCA"	"DET"
-"CHA"	"NYA"
-"LAN"	"TEX"
-"CHN"	"ATL"
-"MIL"	"CIN"
-"ARI"	"LAN"
-"SDN"	"COL"
-"SLN"	"PIT"
-"BOS"	"CHA"
-"CLE"	"MIN"
-"ANA"	"HOU"
-"DET"	"NYA"
-"SEA"	"OAK"
-"PIT"	"ATL"
-"LAN"	"ARI"
-"TOR"	"MIA"
-"PHI"	"CHN"
-"SDN"	"COL"
-"SFN"	"NYN"
-"SLN"	"CIN"
-"MIL"	"WAS"
-"CHA"	"BOS"
-"CLE"	"TBA"
-"ANA"	"HOU"
-"KCA"	"BAL"
-"NYA"	"DET"
-"OAK"	"SEA"
-"MIN"	"TEX"
-"ATL"	"PIT"
-"LAN"	"ARI"
-"MIA"	"TOR"
-"CHN"	"PHI"
-"COL"	"SDN"
-"NYN"	"SFN"
-"CIN"	"SLN"
-"WAS"	"MIL"
-"BOS"	"CHA"
-"TBA"	"CLE"
-"HOU"	"ANA"
-"KCA"	"BAL"
-"NYA"	"DET"
-"SEA"	"OAK"
-"TEX"	"MIN"
-"ATL"	"PIT"
-"LAN"	"ARI"
-"TOR"	"MIA"
-"CHN"	"PHI"
-"COL"	"SDN"
-"NYN"	"SFN"
-"CIN"	"SLN"
-"MIL"	"WAS"
-"CHA"	"BOS"
-"TBA"	"CLE"
-"HOU"	"ANA"
-"KCA"	"BAL"
-"DET"	"NYA"
-"OAK"	"SEA"
-"TEX"	"MIN"
-"SDN"	"ARI"
-"BOS"	"ATL"
-"COL"	"SFN"
-"NYN"	"LAN"
-"MIA"	"PHI"
-"MIL"	"CHN"
-"PIT"	"CIN"
-"WAS"	"SLN"
-"CHA"	"DET"
-"KCA"	"CLE"
-"HOU"	"MIN"
-"OAK"	"NYA"
-"SEA"	"BAL"
-"ANA"	"TEX"
-"TBA"	"TOR"
-"ARI"	"SDN"
-"BOS"	"ATL"
-"COL"	"SFN"
-"LAN"	"NYN"
-"PHI"	"MIA"
-"MIL"	"CHN"
-"PIT"	"CIN"
-"SLN"	"WAS"
-"DET"	"CHA"
-"CLE"	"KCA"
-"HOU"	"MIN"
-"NYA"	"OAK"
-"BAL"	"SEA"
-"TEX"	"ANA"
-"TBA"	"TOR"
-"BOS"	"ATL"
-"COL"	"SFN"
-"NYN"	"LAN"
-"MIA"	"PHI"
-"CHN"	"MIL"
-"PIT"	"CIN"
-"SLN"	"WAS"
-"DET"	"CHA"
-"CLE"	"KCA"
-"HOU"	"MIN"
-"OAK"	"NYA"
-"SEA"	"BAL"
-"ANA"	"TEX"
-"TOR"	"TBA"
-"ATL"	"ARI"
-"SDN"	"CIN"
-"CHN"	"WAS"
-"CLE"	"TOR"
-"ARI"	"ATL"
-"CIN"	"SDN"
-"LAN"	"COL"
-"MIL"	"SFN"
-"PHI"	"NYN"
-"PIT"	"MIA"
-"HOU"	"BOS"
-"ANA"	"CHA"
-"DET"	"SLN"
-"MIN"	"KCA"
-"OAK"	"TEX"
-"NYA"	"SEA"
-"TBA"	"BAL"
-"TOR"	"CLE"
-"ATL"	"ARI"
-"CIN"	"SDN"
-"COL"	"LAN"
-"MIL"	"SFN"
-"NYN"	"PHI"
-"PIT"	"MIA"
-"WAS"	"CHN"
-"WAS"	"CHN"
-"HOU"	"BOS"
-"ANA"	"CHA"
-"DET"	"SLN"
-"KCA"	"MIN"
-"OAK"	"TEX"
-"NYA"	"SEA"
-"TBA"	"BAL"
-"CLE"	"TOR"
-"ATL"	"ARI"
-"SDN"	"CIN"
-"LAN"	"COL"
-"MIL"	"SFN"
-"NYN"	"PHI"
-"BOS"	"HOU"
-"ANA"	"CHA"
-"SLN"	"DET"
-"MIN"	"KCA"
-"OAK"	"TEX"
-"SEA"	"NYA"
-"TBA"	"BAL"
-"TOR"	"CLE"
-"MIL"	"CHN"
-"CIN"	"LAN"
-"COL"	"ARI"
-"ATL"	"SFN"
-"SLN"	"PIT"
-"TEX"	"ANA"
-"HOU"	"DET"
-"KCA"	"CHA"
-"NYA"	"MIN"
-"TBA"	"CLE"
-"CHN"	"MIL"
-"CIN"	"LAN"
-"ARI"	"COL"
-"MIA"	"NYN"
-"WAS"	"PHI"
-"WAS"	"PHI"
-"ATL"	"SFN"
-"SLN"	"PIT"
-"ANA"	"TEX"
-"OAK"	"BAL"
-"BOS"	"TOR"
-"HOU"	"DET"
-"KCA"	"CHA"
-"MIN"	"NYA"
-"SDN"	"SEA"
-"CLE"	"TBA"
-"MIL"	"CHN"
-"LAN"	"CIN"
-"COL"	"ARI"
-"NYN"	"MIA"
-"WAS"	"PHI"
-"ATL"	"SFN"
-"PIT"	"SLN"
-"ANA"	"TEX"
-"OAK"	"BAL"
-"BOS"	"TOR"
-"HOU"	"DET"
-"CHA"	"KCA"
-"MIN"	"NYA"
-"SDN"	"SEA"
-"TBA"	"CLE"
-"COL"	"ARI"
-"NYN"	"MIA"
-"NYN"	"MIA"
-"LAN"	"SLN"
-"CHN"	"WAS"
-"SEA"	"ANA"
-"BAL"	"OAK"
-"BOS"	"TOR"
-"KCA"	"MIN"
-"ATL"	"WAS"
-"CHN"	"CIN"
-"MIL"	"PIT"
-"PHI"	"MIA"
-"TEX"	"SDN"
-"SFN"	"COL"
-"LAN"	"SLN"
-"SEA"	"ANA"
-"CHA"	"BAL"
-"NYN"	"BOS"
-"DET"	"CLE"
-"ARI"	"HOU"
-"KCA"	"MIN"
-"NYA"	"TOR"
-"OAK"	"TBA"
-"WAS"	"ATL"
-"CHN"	"CIN"
-"PIT"	"MIL"
-"PHI"	"MIA"
-"TEX"	"SDN"
-"SFN"	"COL"
-"LAN"	"SLN"
-"SEA"	"ANA"
-"CHA"	"BAL"
-"BOS"	"NYN"
-"CLE"	"DET"
-"HOU"	"ARI"
-"KCA"	"MIN"
-"TOR"	"NYA"
-"TBA"	"OAK"
-"WAS"	"ATL"
-"CIN"	"CHN"
-"PIT"	"MIL"
-"MIA"	"PHI"
-"SDN"	"TEX"
-"COL"	"SFN"
-"SLN"	"LAN"
-"ANA"	"SEA"
-"BAL"	"CHA"
-"BOS"	"NYN"
-"DET"	"CLE"
-"HOU"	"ARI"
-"MIN"	"KCA"
-"TOR"	"NYA"
-"TBA"	"OAK"
-"CHN"	"ARI"
-"SLN"	"ATL"
-"LAN"	"COL"
-"MIA"	"WAS"
-"MIL"	"CIN"
-"NYN"	"PHI"
-"PIT"	"KCA"
-"SFN"	"SDN"
-"TOR"	"BAL"
-"MIN"	"DET"
-"SEA"	"HOU"
-"TBA"	"TEX"
-"CHN"	"ARI"
-"SLN"	"ATL"
-"LAN"	"COL"
-"WAS"	"MIA"
-"CIN"	"MIL"
-"PHI"	"NYN"
-"PIT"	"KCA"
-"SFN"	"SDN"
-"TOR"	"BAL"
-"CLE"	"CHA"
-"MIN"	"DET"
-"HOU"	"SEA"
-"NYA"	"BOS"
-"ANA"	"OAK"
-"TBA"	"TEX"
-"ARI"	"CHN"
-"ATL"	"SLN"
-"LAN"	"COL"
-"MIL"	"CIN"
-"PHI"	"NYN"
-"PIT"	"KCA"
-"SDN"	"SFN"
-"BAL"	"TOR"
-"CLE"	"CHA"
-"MIN"	"DET"
-"SEA"	"HOU"
-"NYA"	"BOS"
-"OAK"	"ANA"
-"TBA"	"TEX"
-"ATL"	"PHI"
-"CIN"	"MIA"
-"NYN"	"WAS"
-"CHA"	"CLE"
-"DET"	"KCA"
-"BOS"	"NYA"
-"OAK"	"ANA"
-"TOR"	"TBA"
-"COL"	"ARI"
-"ATL"	"PHI"
-"SDN"	"LAN"
-"MIA"	"CIN"
-"MIL"	"PIT"
-"SLN"	"SFN"
-"NYN"	"WAS"
-"CHA"	"CHN"
-"BOS"	"CLE"
-"KCA"	"DET"
-"HOU"	"ANA"
-"NYA"	"BAL"
-"OAK"	"MIN"
-"TEX"	"SEA"
-"TBA"	"TOR"
-"COL"	"ARI"
-"ATL"	"PHI"
-"LAN"	"SDN"
-"MIA"	"CIN"
-"PIT"	"MIL"
-"SLN"	"SFN"
-"WAS"	"NYN"
-"CHN"	"CHA"
-"CLE"	"BOS"
-"DET"	"KCA"
-"HOU"	"ANA"
-"NYA"	"BAL"
-"OAK"	"MIN"
-"SEA"	"TEX"
-"TOR"	"TBA"
-"COL"	"ARI"
-"ATL"	"PHI"
-"LAN"	"SDN"
-"MIA"	"CIN"
-"MIL"	"PIT"
-"SLN"	"SFN"
-"NYN"	"WAS"
-"CHN"	"CHA"
-"CLE"	"BOS"
-"KCA"	"DET"
-"HOU"	"ANA"
-"BAL"	"NYA"
-"MIN"	"OAK"
-"TEX"	"SEA"
-"TBA"	"TOR"
-"LAN"	"ARI"
-"PIT"	"CHN"
-"COL"	"PHI"
-"SDN"	"SFN"
-"MIL"	"SLN"
-"WAS"	"MIA"
-"ANA"	"TEX"
-"BOS"	"BAL"
-"CLE"	"CHA"
-"OAK"	"SEA"
-"NYA"	"TBA"
-"HOU"	"TOR"
-"ARI"	"LAN"
-"PIT"	"CHN"
-"KCA"	"CIN"
-"COL"	"PHI"
-"ATL"	"NYN"
-"SFN"	"SDN"
-"MIL"	"SLN"
-"WAS"	"MIA"
-"ANA"	"TEX"
-"CHA"	"CLE"
-"DET"	"MIN"
-"SEA"	"OAK"
-"NYA"	"TBA"
-"HOU"	"TOR"
-"ARI"	"LAN"
-"CHN"	"PIT"
-"KCA"	"CIN"
-"COL"	"PHI"
-"NYN"	"ATL"
-"SDN"	"SFN"
-"MIL"	"SLN"
-"WAS"	"MIA"
-"ANA"	"TEX"
-"BOS"	"BAL"
-"BAL"	"BOS"
-"CLE"	"CHA"
-"MIN"	"DET"
-"OAK"	"SEA"
-"TBA"	"NYA"
-"TOR"	"HOU"
-"CHN"	"PIT"
-"COL"	"PHI"
-"NYN"	"ATL"
-"KCA"	"CLE"
-"MIN"	"DET"
-"TEX"	"SEA"
-"NYA"	"TBA"
-"CHN"	"SLN"
-"PIT"	"CIN"
-"COL"	"WAS"
-"MIL"	"DET"
-"MIA"	"NYN"
-"ATL"	"PHI"
-"SDN"	"ARI"
-"LAN"	"SFN"
-"ANA"	"OAK"
-"HOU"	"BAL"
-"NYA"	"BOS"
-"CLE"	"KCA"
-"MIN"	"CHA"
-"MIN"	"CHA"
-"SEA"	"TEX"
-"TOR"	"TBA"
-"SLN"	"CHN"
-"CIN"	"PIT"
-"WAS"	"COL"
-"MIL"	"DET"
-"NYN"	"MIA"
-"PHI"	"ATL"
-"ARI"	"SDN"
-"LAN"	"SFN"
-"OAK"	"ANA"
-"HOU"	"BAL"
-"HOU"	"BAL"
-"NYA"	"BOS"
-"KCA"	"CLE"
-"MIN"	"CHA"
-"SEA"	"TEX"
-"TBA"	"TOR"
-"CHN"	"SLN"
-"PIT"	"CIN"
-"COL"	"WAS"
-"MIL"	"DET"
-"NYN"	"MIA"
-"PHI"	"ATL"
-"SDN"	"ARI"
-"LAN"	"SFN"
-"ANA"	"OAK"
-"BAL"	"HOU"
-"BOS"	"NYA"
-"CLE"	"KCA"
-"MIN"	"CHA"
-"SEA"	"TEX"
-"TBA"	"TOR"
-"MIL"	"CHN"
-"LAN"	"COL"
+"ARI"	"COL"	1
+"ATL"	"PHI"	1
+"SFN"	"LAN"	1
+"CHN"	"MIA"	1
+"NYN"	"SLN"	1
+"MIL"	"SDN"	1
+"BAL"	"MIN"	1
+"CHA"	"KCA"	1
+"OAK"	"ANA"	1
+"SEA"	"CLE"	1
+"TBA"	"BOS"	1
+"HOU"	"TEX"	1
+"NYA"	"TOR"	1
+"ARI"	"COL"	1
+"PHI"	"ATL"	1
+"WAS"	"CIN"	1
+"SFN"	"LAN"	1
+"MIA"	"CHN"	1
+"MIL"	"SDN"	1
+"PIT"	"DET"	1
+"ANA"	"OAK"	1
+"BOS"	"TBA"	1
+"TEX"	"HOU"	1
+"NYA"	"TOR"	1
+"COL"	"ARI"	1
+"ATL"	"PHI"	1
+"WAS"	"CIN"	1
+"LAN"	"SFN"	1
+"CHN"	"MIA"	1
+"NYN"	"SLN"	1
+"MIL"	"SDN"	1
+"MIN"	"BAL"	1
+"CHA"	"KCA"	1
+"ANA"	"OAK"	1
+"CLE"	"SEA"	1
+"BOS"	"TBA"	1
+"HOU"	"TEX"	1
+"TOR"	"NYA"	1
+"WAS"	"CIN"	1
+"LAN"	"SFN"	1
+"MIA"	"CHN"	1
+"SLN"	"NYN"	1
+"MIN"	"BAL"	1
+"PIT"	"DET"	1
+"PIT"	"DET"	1
+"ANA"	"OAK"	1
+"SEA"	"CLE"	1
+"BOS"	"TBA"	1
+"HOU"	"TEX"	1
+"TOR"	"NYA"	1
+"ARI"	"LAN"	1
+"WAS"	"ATL"	1
+"CIN"	"CHN"	1
+"BOS"	"MIA"	1
+"SLN"	"MIL"	1
+"PIT"	"MIN"	1
+"COL"	"SDN"	1
+"CLE"	"ANA"	1
+"DET"	"KCA"	1
+"HOU"	"BAL"	1
+"OAK"	"TEX"	1
+"TOR"	"CHA"	1
+"ARI"	"LAN"	1
+"ATL"	"WAS"	1
+"BOS"	"MIA"	1
+"MIL"	"SLN"	1
+"NYN"	"PHI"	1
+"SDN"	"COL"	1
+"SEA"	"SFN"	1
+"ANA"	"CLE"	1
+"KCA"	"DET"	1
+"HOU"	"BAL"	1
+"NYA"	"TBA"	1
+"TEX"	"OAK"	1
+"TOR"	"CHA"	1
+"ARI"	"LAN"	1
+"ATL"	"WAS"	1
+"SLN"	"MIL"	1
+"NYN"	"PHI"	1
+"MIN"	"PIT"	1
+"COL"	"SDN"	1
+"SFN"	"SEA"	1
+"ANA"	"CLE"	1
+"HOU"	"BAL"	1
+"NYA"	"TBA"	1
+"OAK"	"TEX"	1
+"CHA"	"TOR"	1
+"CHN"	"MIL"	1
+"PHI"	"MIA"	1
+"PIT"	"CIN"	1
+"COL"	"SDN"	1
+"ARI"	"SLN"	1
+"NYN"	"WAS"	1
+"BOS"	"TBA"	1
+"DET"	"CHA"	1
+"MIN"	"SEA"	1
+"BAL"	"NYA"	1
+"TEX"	"OAK"	1
+"ATL"	"COL"	1
+"MIL"	"CHN"	1
+"PIT"	"CIN"	1
+"ANA"	"OAK"	1
+"CLE"	"KCA"	1
+"SDN"	"HOU"	1
+"BAL"	"NYA"	1
+"TOR"	"TEX"	1
+"COL"	"ATL"	1
+"CHN"	"MIL"	1
+"PHI"	"MIA"	1
+"CIN"	"PIT"	1
+"SFN"	"LAN"	1
+"SLN"	"ARI"	1
+"NYN"	"WAS"	1
+"OAK"	"ANA"	1
+"BOS"	"TBA"	1
+"DET"	"CHA"	1
+"KCA"	"CLE"	1
+"HOU"	"SDN"	1
+"SEA"	"MIN"	1
+"NYA"	"BAL"	1
+"TEX"	"TOR"	1
+"ATL"	"COL"	1
+"CHN"	"MIL"	1
+"MIA"	"PHI"	1
+"PIT"	"CIN"	1
+"LAN"	"SFN"	1
+"ARI"	"SLN"	1
+"NYN"	"WAS"	1
+"ANA"	"OAK"	1
+"BOS"	"TBA"	1
+"DET"	"CHA"	1
+"CLE"	"KCA"	1
+"HOU"	"SDN"	1
+"BAL"	"NYA"	1
+"TOR"	"TEX"	1
+"SDN"	"COL"	1
+"NYN"	"MIA"	1
+"PHI"	"CIN"	1
+"ARI"	"SFN"	1
+"MIL"	"SLN"	1
+"WAS"	"ATL"	1
+"TOR"	"BAL"	1
+"TBA"	"CHA"	1
+"CLE"	"DET"	1
+"KCA"	"SEA"	1
+"HOU"	"MIN"	1
+"ANA"	"TEX"	1
+"PIT"	"CHN"	1
+"SDN"	"COL"	1
+"LAN"	"OAK"	1
+"NYN"	"MIA"	1
+"PHI"	"CIN"	1
+"SFN"	"ARI"	1
+"SLN"	"MIL"	1
+"WAS"	"ATL"	1
+"TOR"	"BAL"	1
+"BOS"	"NYA"	1
+"TBA"	"CHA"	1
+"CLE"	"DET"	1
+"SEA"	"KCA"	1
+"MIN"	"HOU"	1
+"ANA"	"TEX"	1
+"CHN"	"PIT"	1
+"COL"	"SDN"	1
+"OAK"	"LAN"	1
+"NYN"	"MIA"	1
+"PHI"	"CIN"	1
+"ARI"	"SFN"	1
+"MIL"	"SLN"	1
+"ATL"	"WAS"	1
+"BAL"	"TOR"	1
+"NYA"	"BOS"	1
+"CHA"	"TBA"	1
+"CLE"	"DET"	1
+"SEA"	"KCA"	1
+"MIN"	"HOU"	1
+"ANA"	"TEX"	1
+"PIT"	"CHN"	1
+"SLN"	"CIN"	1
+"SFN"	"SDN"	1
+"COL"	"WAS"	1
+"BOS"	"NYA"	1
+"CLE"	"DET"	1
+"ANA"	"KCA"	1
+"MIN"	"CHA"	1
+"ATL"	"CHN"	1
+"SLN"	"CIN"	1
+"ARI"	"LAN"	1
+"MIA"	"PIT"	1
+"NYN"	"MIL"	1
+"SDN"	"SFN"	1
+"COL"	"WAS"	1
+"BOS"	"BAL"	1
+"TOR"	"CLE"	1
+"NYA"	"DET"	1
+"HOU"	"TEX"	1
+"ANA"	"KCA"	1
+"SEA"	"OAK"	1
+"PHI"	"TBA"	1
+"CHN"	"ATL"	1
+"SLN"	"CIN"	1
+"ARI"	"LAN"	1
+"PIT"	"MIA"	1
+"MIL"	"NYN"	1
+"SDN"	"SFN"	1
+"WAS"	"COL"	1
+"BOS"	"BAL"	1
+"TEX"	"HOU"	1
+"ANA"	"KCA"	1
+"SEA"	"OAK"	1
+"PHI"	"TBA"	1
+"SLN"	"CIN"	1
+"LAN"	"ARI"	1
+"PIT"	"MIA"	1
+"NYN"	"MIL"	1
+"SDN"	"SFN"	1
+"COL"	"WAS"	1
+"BOS"	"BAL"	1
+"TEX"	"HOU"	1
+"OAK"	"SEA"	1
+"PHI"	"TBA"	1
+"ATL"	"PHI"	1
+"CIN"	"MIL"	1
+"WAS"	"NYN"	1
+"COL"	"PIT"	1
+"LAN"	"SDN"	1
+"NYA"	"MIA"	1
+"OAK"	"CHA"	1
+"SEA"	"HOU"	1
+"TBA"	"TEX"	1
+"ARI"	"SFN"	1
+"PHI"	"ATL"	1
+"SLN"	"CHN"	1
+"MIL"	"CIN"	1
+"WAS"	"NYN"	1
+"COL"	"PIT"	1
+"LAN"	"SDN"	1
+"BOS"	"ANA"	1
+"DET"	"BAL"	1
+"CLE"	"MIN"	1
+"MIA"	"NYA"	1
+"OAK"	"CHA"	1
+"HOU"	"SEA"	1
+"TEX"	"TBA"	1
+"TOR"	"KCA"	1
+"TOR"	"KCA"	1
+"SFN"	"ARI"	1
+"ATL"	"PHI"	1
+"MIL"	"CIN"	1
+"NYN"	"WAS"	1
+"PIT"	"COL"	1
+"LAN"	"SDN"	1
+"BOS"	"ANA"	1
+"DET"	"BAL"	1
+"MIN"	"CLE"	1
+"OAK"	"CHA"	1
+"HOU"	"SEA"	1
+"TBA"	"TEX"	1
+"TOR"	"KCA"	1
+"ARI"	"SFN"	1
+"ATL"	"NYN"	1
+"CHN"	"SLN"	1
+"MIL"	"MIA"	1
+"PHI"	"PIT"	1
+"BOS"	"ANA"	1
+"DET"	"BAL"	1
+"NYA"	"TOR"	1
+"HOU"	"SEA"	1
+"SDN"	"ARI"	1
+"NYN"	"ATL"	1
+"CHN"	"COL"	1
+"WAS"	"LAN"	1
+"MIL"	"MIA"	1
+"PHI"	"PIT"	1
+"SLN"	"CIN"	1
+"SFN"	"ANA"	1
+"BAL"	"CLE"	1
+"HOU"	"CHA"	1
+"DET"	"KCA"	1
+"KCA"	"DET"	1
+"TOR"	"NYA"	1
+"BOS"	"OAK"	1
+"TBA"	"MIN"	1
+"SEA"	"TEX"	1
+"ARI"	"SDN"	1
+"ATL"	"NYN"	1
+"COL"	"CHN"	1
+"LAN"	"WAS"	1
+"MIL"	"MIA"	1
+"PHI"	"PIT"	1
+"SLN"	"CIN"	1
+"ANA"	"SFN"	1
+"CLE"	"BAL"	1
+"HOU"	"CHA"	1
+"DET"	"KCA"	1
+"NYA"	"TOR"	1
+"OAK"	"BOS"	1
+"TBA"	"MIN"	1
+"SEA"	"TEX"	1
+"ARI"	"SDN"	1
+"CHN"	"COL"	1
+"LAN"	"WAS"	1
+"MIL"	"MIA"	1
+"PHI"	"PIT"	1
+"SLN"	"CIN"	1
+"SFN"	"ANA"	1
+"CLE"	"BAL"	1
+"HOU"	"CHA"	1
+"KCA"	"DET"	1
+"NYA"	"TOR"	1
+"OAK"	"BOS"	1
+"TBA"	"MIN"	1
+"TEX"	"SEA"	1
+"CIN"	"ATL"	1
+"SDN"	"COL"	1
+"LAN"	"MIA"	1
+"SFN"	"WAS"	1
+"CLE"	"BAL"	1
+"CHA"	"SEA"	1
+"ANA"	"HOU"	1
+"NYA"	"MIN"	1
+"OAK"	"TEX"	1
+"CIN"	"ATL"	1
+"COL"	"SDN"	1
+"MIA"	"LAN"	1
+"ARI"	"PHI"	1
+"SFN"	"WAS"	1
+"NYN"	"SLN"	1
+"SEA"	"CHA"	1
+"CHN"	"CLE"	1
+"ANA"	"HOU"	1
+"MIL"	"KCA"	1
+"NYA"	"MIN"	1
+"OAK"	"TEX"	1
+"TOR"	"BOS"	1
+"ATL"	"CIN"	1
+"COL"	"SDN"	1
+"MIA"	"LAN"	1
+"PHI"	"ARI"	1
+"DET"	"PIT"	1
+"PIT"	"DET"	1
+"WAS"	"SFN"	1
+"SLN"	"NYN"	1
+"TBA"	"BAL"	1
+"SEA"	"CHA"	1
+"CLE"	"CHN"	1
+"HOU"	"ANA"	1
+"MIL"	"KCA"	1
+"NYA"	"MIN"	1
+"TEX"	"OAK"	1
+"BOS"	"TOR"	1
+"CHN"	"MIL"	1
+"ATL"	"CIN"	1
+"ARI"	"PHI"	1
+"PIT"	"DET"	1
+"SLN"	"NYN"	1
+"TBA"	"BAL"	1
+"SEA"	"CLE"	1
+"CHA"	"KCA"	1
+"NYA"	"MIN"	1
+"BOS"	"TOR"	1
+"CHN"	"MIL"	1
+"COL"	"MIA"	1
+"PHI"	"ATL"	1
+"PIT"	"SLN"	1
+"NYN"	"SDN"	1
+"SFN"	"LAN"	1
+"ARI"	"WAS"	1
+"NYA"	"ANA"	1
+"BAL"	"DET"	1
+"TBA"	"BOS"	1
+"CLE"	"SEA"	1
+"OAK"	"HOU"	1
+"CHA"	"KCA"	1
+"CIN"	"MIN"	1
+"TEX"	"TOR"	1
+"CHN"	"MIL"	1
+"MIA"	"COL"	1
+"ATL"	"PHI"	1
+"PIT"	"SLN"	1
+"SDN"	"NYN"	1
+"LAN"	"SFN"	1
+"SFN"	"LAN"	1
+"ARI"	"WAS"	1
+"NYA"	"ANA"	1
+"DET"	"BAL"	1
+"TBA"	"BOS"	1
+"SEA"	"CLE"	1
+"HOU"	"OAK"	1
+"CHA"	"KCA"	1
+"KCA"	"CHA"	1
+"MIN"	"CIN"	1
+"TEX"	"TOR"	1
+"CHN"	"MIL"	1
+"MIA"	"COL"	1
+"ATL"	"PHI"	1
+"PIT"	"SLN"	1
+"NYN"	"SDN"	1
+"SFN"	"LAN"	1
+"WAS"	"ARI"	1
+"NYA"	"ANA"	1
+"BAL"	"DET"	1
+"BOS"	"TBA"	1
+"SEA"	"CLE"	1
+"HOU"	"OAK"	1
+"KCA"	"CHA"	1
+"CIN"	"MIN"	1
+"TOR"	"TEX"	1
+"ARI"	"LAN"	1
+"CHN"	"COL"	1
+"MIL"	"CIN"	1
+"MIA"	"PHI"	1
+"SFN"	"SDN"	1
+"WAS"	"PIT"	1
+"BOS"	"KCA"	1
+"CLE"	"TEX"	1
+"TBA"	"DET"	1
+"HOU"	"NYA"	1
+"TOR"	"MIN"	1
+"ARI"	"LAN"	1
+"COL"	"CHN"	1
+"MIL"	"CIN"	1
+"MIA"	"PHI"	1
+"ATL"	"NYN"	1
+"SDN"	"SFN"	1
+"SLN"	"CHA"	1
+"WAS"	"PIT"	1
+"ANA"	"BAL"	1
+"KCA"	"BOS"	1
+"TEX"	"CLE"	1
+"DET"	"TBA"	1
+"NYA"	"HOU"	1
+"TOR"	"MIN"	1
+"SEA"	"OAK"	1
+"LAN"	"ARI"	1
+"COL"	"CHN"	1
+"MIL"	"CIN"	1
+"PHI"	"MIA"	1
+"ATL"	"NYN"	1
+"SFN"	"SDN"	1
+"SLN"	"CHA"	1
+"WAS"	"PIT"	1
+"ANA"	"BAL"	1
+"BOS"	"KCA"	1
+"CLE"	"TEX"	1
+"DET"	"TBA"	1
+"NYA"	"HOU"	1
+"MIN"	"TOR"	1
+"OAK"	"SEA"	1
+"LAN"	"ARI"	1
+"ATL"	"NYN"	1
+"WAS"	"PIT"	1
+"ANA"	"BAL"	1
+"CHA"	"MIN"	1
+"TOR"	"CLE"	1
+"CLE"	"TOR"	1
+"NYA"	"HOU"	1
+"KCA"	"DET"	1
+"SEA"	"OAK"	1
+"TEX"	"BOS"	1
+"HOU"	"ARI"	1
+"SFN"	"ATL"	1
+"CIN"	"MIA"	1
+"PIT"	"MIL"	1
+"COL"	"NYN"	1
+"LAN"	"SDN"	1
+"SLN"	"CHN"	1
+"WAS"	"PHI"	1
+"MIN"	"CHA"	1
+"KCA"	"DET"	1
+"NYA"	"CLE"	1
+"OAK"	"BAL"	1
+"ANA"	"SEA"	1
+"TBA"	"TOR"	1
+"BOS"	"TEX"	1
+"ARI"	"HOU"	1
+"SFN"	"ATL"	1
+"MIA"	"CIN"	1
+"MIL"	"PIT"	1
+"COL"	"NYN"	1
+"SDN"	"LAN"	1
+"SLN"	"CHN"	1
+"PHI"	"WAS"	1
+"MIN"	"CHA"	1
+"DET"	"KCA"	1
+"NYA"	"CLE"	1
+"OAK"	"BAL"	1
+"SEA"	"ANA"	1
+"TBA"	"TOR"	1
+"BOS"	"TEX"	1
+"ARI"	"HOU"	1
+"SFN"	"ATL"	1
+"MIA"	"CIN"	1
+"PIT"	"MIL"	1
+"COL"	"NYN"	1
+"SDN"	"LAN"	1
+"SLN"	"CHN"	1
+"WAS"	"PHI"	1
+"MIN"	"CHA"	1
+"KCA"	"DET"	1
+"NYA"	"CLE"	1
+"OAK"	"BAL"	1
+"ANA"	"SEA"	1
+"TOR"	"TBA"	1
+"BOS"	"TEX"	1
+"CHN"	"MIA"	1
+"NYN"	"CIN"	1
+"PHI"	"SFN"	1
+"WAS"	"SDN"	1
+"MIN"	"SLN"	1
+"HOU"	"OAK"	1
+"TEX"	"DET"	1
+"CHN"	"MIA"	1
+"CIN"	"NYN"	1
+"COL"	"ANA"	1
+"ARI"	"LAN"	1
+"MIL"	"CLE"	1
+"PHI"	"SFN"	1
+"WAS"	"SDN"	1
+"MIN"	"SLN"	1
+"KCA"	"BAL"	1
+"PIT"	"CHA"	1
+"NYA"	"BOS"	1
+"HOU"	"OAK"	1
+"ATL"	"TBA"	1
+"DET"	"TEX"	1
+"SEA"	"TOR"	1
+"CHN"	"MIA"	1
+"CIN"	"NYN"	1
+"ANA"	"COL"	1
+"LAN"	"ARI"	1
+"CLE"	"MIL"	1
+"PHI"	"SFN"	1
+"SDN"	"WAS"	1
+"BAL"	"KCA"	1
+"PIT"	"CHA"	1
+"NYA"	"BOS"	1
+"HOU"	"OAK"	1
+"ATL"	"TBA"	1
+"TEX"	"DET"	1
+"TOR"	"SEA"	1
+"WAS"	"ARI"	1
+"MIL"	"COL"	1
+"CIN"	"LAN"	1
+"ATL"	"MIA"	1
+"PHI"	"SFN"	1
+"SLN"	"SDN"	1
+"ANA"	"MIN"	1
+"BAL"	"KCA"	1
+"BOS"	"NYA"	1
+"SEA"	"TOR"	1
+"WAS"	"ARI"	1
+"CHN"	"CHA"	1
+"MIL"	"COL"	1
+"CIN"	"LAN"	1
+"MIA"	"ATL"	1
+"NYN"	"PHI"	1
+"PIT"	"SFN"	1
+"SLN"	"SDN"	1
+"MIN"	"ANA"	1
+"BAL"	"TBA"	1
+"KCA"	"CLE"	1
+"TEX"	"HOU"	1
+"OAK"	"NYA"	1
+"TOR"	"BOS"	1
+"WAS"	"ARI"	1
+"CHN"	"CHA"	1
+"COL"	"MIL"	1
+"CIN"	"LAN"	1
+"ATL"	"MIA"	1
+"PIT"	"SFN"	1
+"SDN"	"SLN"	1
+"MIN"	"ANA"	1
+"BAL"	"TBA"	1
+"TBA"	"BAL"	1
+"CLE"	"KCA"	1
+"DET"	"SEA"	1
+"SEA"	"DET"	1
+"HOU"	"TEX"	1
+"NYA"	"OAK"	1
+"BOS"	"TOR"	1
+"WAS"	"ARI"	1
+"CHA"	"CHN"	1
+"MIL"	"COL"	1
+"CIN"	"LAN"	1
+"ATL"	"MIA"	1
+"PHI"	"NYN"	1
+"SFN"	"PIT"	1
+"SDN"	"SLN"	1
+"ANA"	"MIN"	1
+"BAL"	"TBA"	1
+"CLE"	"KCA"	1
+"DET"	"SEA"	1
+"HOU"	"TEX"	1
+"NYA"	"OAK"	1
+"BOS"	"TOR"	1
+"MIL"	"ARI"	1
+"ATL"	"CHN"	1
+"COL"	"SDN"	1
+"SFN"	"CIN"	1
+"ANA"	"HOU"	1
+"OAK"	"BOS"	1
+"DET"	"CLE"	1
+"TBA"	"KCA"	1
+"SEA"	"MIN"	1
+"ARI"	"MIL"	1
+"CHN"	"ATL"	1
+"MIA"	"LAN"	1
+"NYN"	"TOR"	1
+"PIT"	"CHA"	1
+"SDN"	"COL"	1
+"SFN"	"CIN"	1
+"WAS"	"NYA"	1
+"HOU"	"ANA"	1
+"OAK"	"BOS"	1
+"DET"	"CLE"	1
+"TBA"	"KCA"	1
+"MIN"	"SLN"	1
+"SEA"	"TEX"	1
+"MIL"	"ARI"	1
+"ATL"	"CHN"	1
+"MIA"	"LAN"	1
+"TOR"	"NYN"	1
+"PIT"	"CHA"	1
+"CIN"	"SFN"	1
+"HOU"	"ANA"	1
+"PHI"	"BAL"	1
+"BOS"	"OAK"	1
+"CLE"	"DET"	1
+"TBA"	"KCA"	1
+"SLN"	"MIN"	1
+"TEX"	"SEA"	1
+"LAN"	"MIA"	1
+"PIT"	"SDN"	1
+"COL"	"SFN"	1
+"PHI"	"SLN"	1
+"TBA"	"ANA"	1
+"BOS"	"BAL"	1
+"CHA"	"TEX"	1
+"DET"	"SEA"	1
+"OAK"	"TOR"	1
+"MIA"	"ATL"	1
+"CHN"	"CIN"	1
+"NYN"	"ARI"	1
+"SDN"	"PIT"	1
+"COL"	"SFN"	1
+"SLN"	"PHI"	1
+"TBA"	"ANA"	1
+"BAL"	"BOS"	1
+"TEX"	"CHA"	1
+"HOU"	"CLE"	1
+"KCA"	"NYA"	1
+"MIL"	"MIN"	1
+"SEA"	"DET"	1
+"OAK"	"TOR"	1
+"ATL"	"MIA"	1
+"CIN"	"CHN"	1
+"CHN"	"CIN"	1
+"NYN"	"ARI"	1
+"SDN"	"PIT"	1
+"SFN"	"COL"	1
+"PHI"	"SLN"	1
+"LAN"	"WAS"	1
+"LAN"	"WAS"	1
+"TBA"	"ANA"	1
+"BOS"	"BAL"	1
+"CHA"	"TEX"	1
+"CLE"	"HOU"	1
+"NYA"	"KCA"	1
+"MIL"	"MIN"	1
+"SEA"	"DET"	1
+"OAK"	"TOR"	1
+"ATL"	"MIA"	1
+"CHN"	"CIN"	1
+"NYN"	"ARI"	1
+"SDN"	"PIT"	1
+"SFN"	"COL"	1
+"SLN"	"PHI"	1
+"LAN"	"WAS"	1
+"ANA"	"TBA"	1
+"BOS"	"BAL"	1
+"CHA"	"TEX"	1
+"HOU"	"CLE"	1
+"NYA"	"KCA"	1
+"MIN"	"MIL"	1
+"SEA"	"DET"	1
+"OAK"	"TOR"	1
+"COL"	"LAN"	1
+"MIL"	"ARI"	1
+"NYN"	"MIA"	1
+"PHI"	"ATL"	1
+"SLN"	"KCA"	1
+"WAS"	"SDN"	1
+"BAL"	"CHA"	1
+"MIN"	"DET"	1
+"NYA"	"TEX"	1
+"CLE"	"CHN"	1
+"CIN"	"PIT"	1
+"LAN"	"COL"	1
+"MIL"	"ARI"	1
+"MIA"	"NYN"	1
+"ATL"	"PHI"	1
+"KCA"	"SLN"	1
+"WAS"	"SDN"	1
+"CHA"	"BAL"	1
+"HOU"	"SFN"	1
+"MIN"	"DET"	1
+"SEA"	"OAK"	1
+"BOS"	"TBA"	1
+"TEX"	"NYA"	1
+"TOR"	"ANA"	1
+"CLE"	"CHN"	1
+"PIT"	"CIN"	1
+"LAN"	"COL"	1
+"MIL"	"ARI"	1
+"MIA"	"NYN"	1
+"PHI"	"ATL"	1
+"KCA"	"SLN"	1
+"SDN"	"WAS"	1
+"CHA"	"BAL"	1
+"HOU"	"SFN"	1
+"DET"	"MIN"	1
+"SEA"	"OAK"	1
+"BOS"	"TBA"	1
+"TEX"	"NYA"	1
+"ANA"	"TOR"	1
+"CIN"	"PIT"	1
+"NYN"	"MIL"	1
+"BAL"	"CHA"	1
+"HOU"	"CLE"	1
+"OAK"	"SEA"	1
+"TBA"	"BOS"	1
+"KCA"	"TEX"	1
+"ANA"	"TOR"	1
+"CHN"	"SFN"	1
+"COL"	"CIN"	1
+"LAN"	"SDN"	1
+"WAS"	"MIA"	1
+"MIL"	"NYN"	1
+"TOR"	"PHI"	1
+"PIT"	"SLN"	1
+"BOS"	"ATL"	1
+"HOU"	"CLE"	1
+"DET"	"CHA"	1
+"NYA"	"ANA"	1
+"ARI"	"OAK"	1
+"SEA"	"MIN"	1
+"BAL"	"TBA"	1
+"TEX"	"KCA"	1
+"SFN"	"CHN"	1
+"CIN"	"COL"	1
+"SDN"	"LAN"	1
+"WAS"	"MIA"	1
+"MIL"	"NYN"	1
+"PHI"	"TOR"	1
+"SLN"	"PIT"	1
+"BOS"	"ATL"	1
+"CLE"	"HOU"	1
+"CHA"	"DET"	1
+"ANA"	"NYA"	1
+"OAK"	"ARI"	1
+"SEA"	"MIN"	1
+"TBA"	"BAL"	1
+"TEX"	"KCA"	1
+"CHN"	"SFN"	1
+"COL"	"CIN"	1
+"LAN"	"SDN"	1
+"WAS"	"MIA"	1
+"MIL"	"NYN"	1
+"TOR"	"PHI"	1
+"SLN"	"PIT"	1
+"ATL"	"BOS"	1
+"CLE"	"HOU"	1
+"DET"	"CHA"	1
+"NYA"	"ANA"	1
+"OAK"	"ARI"	1
+"SEA"	"MIN"	1
+"TBA"	"BAL"	1
+"KCA"	"TEX"	1
+"ARI"	"CIN"	1
+"ATL"	"NYN"	1
+"NYN"	"ATL"	1
+"COL"	"SFN"	1
+"LAN"	"PHI"	1
+"MIL"	"SLN"	1
+"CHN"	"PIT"	1
+"MIA"	"SDN"	1
+"WAS"	"BAL"	1
+"BOS"	"TOR"	1
+"CLE"	"CHA"	1
+"DET"	"ANA"	1
+"MIN"	"KCA"	1
+"HOU"	"NYA"	1
+"TBA"	"OAK"	1
+"SEA"	"TEX"	1
+"ARI"	"CIN"	1
+"ATL"	"NYN"	1
+"COL"	"SFN"	1
+"PHI"	"LAN"	1
+"SLN"	"MIL"	1
+"CHN"	"PIT"	1
+"SDN"	"MIA"	1
+"WAS"	"BAL"	1
+"BOS"	"TOR"	1
+"CLE"	"CHA"	1
+"ANA"	"DET"	1
+"KCA"	"MIN"	1
+"NYA"	"HOU"	1
+"TBA"	"OAK"	1
+"TEX"	"SEA"	1
+"CIN"	"ARI"	1
+"NYN"	"ATL"	1
+"SFN"	"COL"	1
+"LAN"	"PHI"	1
+"MIL"	"SLN"	1
+"PIT"	"CHN"	1
+"SDN"	"MIA"	1
+"WAS"	"BAL"	1
+"BOS"	"TOR"	1
+"CLE"	"CHA"	1
+"DET"	"ANA"	1
+"KCA"	"MIN"	1
+"NYA"	"HOU"	1
+"TBA"	"OAK"	1
+"TEX"	"SEA"	1
+"ATL"	"WAS"	1
+"PHI"	"LAN"	1
+"CHN"	"NYN"	1
+"SDN"	"MIA"	1
+"SLN"	"PIT"	1
+"DET"	"ANA"	1
+"HOU"	"BOS"	1
+"CLE"	"MIN"	1
+"OAK"	"TBA"	1
+"SEA"	"TEX"	1
+"ARI"	"MIA"	1
+"ATL"	"WAS"	1
+"LAN"	"COL"	1
+"CHN"	"NYN"	1
+"CIN"	"SDN"	1
+"SFN"	"PHI"	1
+"PIT"	"SLN"	1
+"ANA"	"TEX"	1
+"NYA"	"BAL"	1
+"CHA"	"MIL"	1
+"DET"	"TOR"	1
+"HOU"	"BOS"	1
+"OAK"	"KCA"	1
+"MIN"	"CLE"	1
+"SEA"	"TBA"	1
+"ARI"	"MIA"	1
+"WAS"	"ATL"	1
+"LAN"	"COL"	1
+"CHN"	"NYN"	1
+"SDN"	"CIN"	1
+"SFN"	"PHI"	1
+"SLN"	"PIT"	1
+"TEX"	"ANA"	1
+"NYA"	"BAL"	1
+"MIL"	"CHA"	1
+"DET"	"TOR"	1
+"BOS"	"HOU"	1
+"KCA"	"OAK"	1
+"MIN"	"CLE"	1
+"SEA"	"TBA"	1
+"ARI"	"MIA"	1
+"ATL"	"WAS"	1
+"LAN"	"COL"	1
+"CHN"	"NYN"	1
+"SDN"	"CIN"	1
+"SFN"	"PHI"	1
+"SLN"	"PIT"	1
+"ANA"	"TEX"	1
+"CHA"	"MIL"	1
+"TOR"	"DET"	1
+"BOS"	"HOU"	1
+"OAK"	"KCA"	1
+"MIN"	"CLE"	1
+"SEA"	"TBA"	1
+"SDN"	"ATL"	1
+"SFN"	"ARI"	1
+"ANA"	"KCA"	1
+"NYA"	"DET"	1
+"DET"	"NYA"	1
+"PHI"	"CHN"	1
+"COL"	"CIN"	1
+"BAL"	"NYN"	1
+"LAN"	"PIT"	1
+"ATL"	"SDN"	1
+"ARI"	"SFN"	1
+"MIA"	"SLN"	1
+"WAS"	"TBA"	1
+"ANA"	"KCA"	1
+"BOS"	"DET"	1
+"CLE"	"MIL"	1
+"SEA"	"HOU"	1
+"MIN"	"CHA"	1
+"CHA"	"MIN"	1
+"TEX"	"OAK"	1
+"NYA"	"TOR"	1
+"CHN"	"PHI"	1
+"COL"	"CIN"	1
+"BAL"	"NYN"	1
+"PIT"	"LAN"	1
+"SDN"	"ATL"	1
+"SFN"	"ARI"	1
+"MIA"	"SLN"	1
+"WAS"	"TBA"	1
+"ANA"	"KCA"	1
+"BOS"	"DET"	1
+"CLE"	"MIL"	1
+"HOU"	"SEA"	1
+"CHA"	"MIN"	1
+"TEX"	"OAK"	1
+"NYA"	"TOR"	1
+"CHN"	"PHI"	1
+"CIN"	"COL"	1
+"LAN"	"PIT"	1
+"SLN"	"MIA"	1
+"DET"	"BOS"	1
+"MIN"	"CHA"	1
+"OAK"	"KCA"	1
+"SEA"	"TBA"	1
+"HOU"	"TEX"	1
+"TOR"	"BAL"	1
+"CHN"	"PIT"	1
+"SLN"	"CIN"	1
+"ARI"	"COL"	1
+"LAN"	"ATL"	1
+"MIA"	"SDN"	1
+"NYA"	"NYN"	1
+"MIL"	"PHI"	1
+"SFN"	"WAS"	1
+"CHA"	"BOS"	1
+"CLE"	"DET"	1
+"ANA"	"MIN"	1
+"OAK"	"KCA"	1
+"SEA"	"TBA"	1
+"HOU"	"TEX"	1
+"TOR"	"BAL"	1
+"CHN"	"PIT"	1
+"SLN"	"CIN"	1
+"ARI"	"COL"	1
+"ATL"	"LAN"	1
+"SDN"	"MIA"	1
+"NYA"	"NYN"	1
+"MIL"	"PHI"	1
+"WAS"	"SFN"	1
+"BOS"	"CHA"	1
+"DET"	"CLE"	1
+"ANA"	"MIN"	1
+"KCA"	"OAK"	1
+"TBA"	"SEA"	1
+"HOU"	"TEX"	1
+"TOR"	"BAL"	1
+"PIT"	"CHN"	1
+"CIN"	"SLN"	1
+"ARI"	"COL"	1
+"LAN"	"ATL"	1
+"SDN"	"MIA"	1
+"NYN"	"NYA"	1
+"PHI"	"MIL"	1
+"SFN"	"WAS"	1
+"CHA"	"BOS"	1
+"CLE"	"DET"	1
+"MIN"	"ANA"	1
+"OAK"	"KCA"	1
+"SEA"	"TBA"	1
+"HOU"	"TEX"	1
+"TOR"	"BAL"	1
+"ARI"	"PIT"	1
+"MIA"	"SFN"	1
+"CHN"	"MIL"	1
+"SLN"	"SDN"	1
+"BOS"	"BAL"	1
+"CLE"	"CHA"	1
+"SEA"	"ANA"	1
+"TBA"	"TOR"	1
+"ARI"	"PIT"	1
+"ATL"	"NYN"	1
+"LAN"	"TEX"	1
+"MIA"	"SFN"	1
+"MIL"	"CHN"	1
+"PHI"	"COL"	1
+"SDN"	"SLN"	1
+"BOS"	"BAL"	1
+"CHA"	"CLE"	1
+"MIN"	"DET"	1
+"CIN"	"KCA"	1
+"NYA"	"WAS"	1
+"HOU"	"OAK"	1
+"SEA"	"ANA"	1
+"TBA"	"TOR"	1
+"PIT"	"ARI"	1
+"ATL"	"NYN"	1
+"LAN"	"TEX"	1
+"MIA"	"SFN"	1
+"MIL"	"CHN"	1
+"COL"	"PHI"	1
+"SDN"	"SLN"	1
+"BOS"	"BAL"	1
+"CHA"	"CLE"	1
+"DET"	"MIN"	1
+"CIN"	"KCA"	1
+"WAS"	"NYA"	1
+"HOU"	"OAK"	1
+"SEA"	"ANA"	1
+"TBA"	"TOR"	1
+"ARI"	"NYN"	1
+"ATL"	"SDN"	1
+"SFN"	"MIA"	1
+"PHI"	"COL"	1
+"CLE"	"CHA"	1
+"DET"	"MIN"	1
+"NYA"	"TBA"	1
+"HOU"	"OAK"	1
+"BOS"	"SEA"	1
+"ARI"	"NYN"	1
+"SDN"	"ATL"	1
+"LAN"	"SFN"	1
+"MIL"	"PHI"	1
+"PIT"	"CIN"	1
+"CHN"	"SLN"	1
+"MIA"	"BAL"	1
+"DET"	"CHA"	1
+"MIN"	"CLE"	1
+"HOU"	"KCA"	1
+"NYA"	"TBA"	1
+"ANA"	"OAK"	1
+"SEA"	"BOS"	1
+"COL"	"TEX"	1
+"TOR"	"WAS"	1
+"NYN"	"ARI"	1
+"ATL"	"SDN"	1
+"LAN"	"SFN"	1
+"PHI"	"MIL"	1
+"PIT"	"CIN"	1
+"CHN"	"SLN"	1
+"MIA"	"BAL"	1
+"DET"	"CHA"	1
+"MIN"	"CLE"	1
+"HOU"	"KCA"	1
+"NYA"	"TBA"	1
+"OAK"	"ANA"	1
+"SEA"	"BOS"	1
+"TEX"	"COL"	1
+"TOR"	"WAS"	1
+"NYN"	"ARI"	1
+"ATL"	"SDN"	1
+"SFN"	"LAN"	1
+"PHI"	"MIL"	1
+"CIN"	"PIT"	1
+"SLN"	"CHN"	1
+"BAL"	"MIA"	1
+"DET"	"CHA"	1
+"CLE"	"MIN"	1
+"HOU"	"KCA"	1
+"TBA"	"NYA"	1
+"OAK"	"ANA"	1
+"BOS"	"SEA"	1
+"TEX"	"COL"	1
+"TOR"	"WAS"	1
+"NYN"	"COL"	1
+"PHI"	"SLN"	1
+"PIT"	"MIL"	1
+"MIA"	"SFN"	1
+"NYA"	"WAS"	1
+"ARI"	"ANA"	1
+"CLE"	"CHA"	1
+"HOU"	"TBA"	1
+"TEX"	"KCA"	1
+"LAN"	"CHN"	1
+"CHN"	"LAN"	1
+"CIN"	"DET"	1
+"COL"	"NYN"	1
+"SLN"	"PHI"	1
+"MIL"	"PIT"	1
+"OAK"	"SDN"	1
+"SFN"	"MIA"	1
+"WAS"	"BAL"	1
+"ANA"	"ARI"	1
+"CLE"	"CHA"	1
+"TBA"	"HOU"	1
+"TEX"	"KCA"	1
+"MIN"	"BOS"	1
+"NYA"	"SEA"	1
+"ATL"	"TOR"	1
+"CHN"	"LAN"	1
+"CIN"	"DET"	1
+"COL"	"NYN"	1
+"PHI"	"SLN"	1
+"OAK"	"SDN"	1
+"SFN"	"MIA"	1
+"BAL"	"WAS"	1
+"CLE"	"CHA"	1
+"HOU"	"TBA"	1
+"TEX"	"KCA"	1
+"MIN"	"BOS"	1
+"NYA"	"SEA"	1
+"TOR"	"ATL"	1
+"CIN"	"CHN"	1
+"COL"	"NYN"	1
+"MIL"	"SLN"	1
+"ARI"	"PIT"	1
+"SFN"	"SDN"	1
+"WAS"	"BAL"	1
+"ANA"	"TOR"	1
+"BOS"	"MIN"	1
+"NYA"	"SEA"	1
+"BAL"	"ATL"	1
+"CIN"	"CHN"	1
+"COL"	"MIA"	1
+"MIL"	"SLN"	1
+"LAN"	"NYN"	1
+"ARI"	"PIT"	1
+"SDN"	"SFN"	1
+"PHI"	"WAS"	1
+"ANA"	"TOR"	1
+"BOS"	"SEA"	1
+"OAK"	"CHA"	1
+"CHA"	"OAK"	1
+"CLE"	"DET"	1
+"KCA"	"HOU"	1
+"TEX"	"MIN"	1
+"TBA"	"NYA"	1
+"BAL"	"ATL"	1
+"CIN"	"CHN"	1
+"MIA"	"COL"	1
+"SLN"	"MIL"	1
+"LAN"	"NYN"	1
+"ARI"	"PIT"	1
+"SFN"	"SDN"	1
+"PHI"	"WAS"	1
+"TOR"	"ANA"	1
+"SEA"	"BOS"	1
+"OAK"	"CHA"	1
+"CLE"	"DET"	1
+"HOU"	"KCA"	1
+"TEX"	"MIN"	1
+"TBA"	"NYA"	1
+"ATL"	"BAL"	1
+"CIN"	"CHN"	1
+"MIA"	"COL"	1
+"SLN"	"MIL"	1
+"LAN"	"NYN"	1
+"ARI"	"PIT"	1
+"SFN"	"SDN"	1
+"WAS"	"PHI"	1
+"TOR"	"ANA"	1
+"BOS"	"SEA"	1
+"CHA"	"OAK"	1
+"CLE"	"DET"	1
+"HOU"	"KCA"	1
+"MIN"	"TEX"	1
+"TBA"	"NYA"	1
+"ATL"	"CIN"	1
+"LAN"	"CHN"	1
+"MIA"	"ARI"	1
+"PIT"	"NYN"	1
+"NYA"	"PHI"	1
+"SLN"	"CLE"	1
+"SEA"	"BAL"	1
+"OAK"	"DET"	1
+"TOR"	"HOU"	1
+"KCA"	"ANA"	1
+"TBA"	"WAS"	1
+"TEX"	"SDN"	1
+"CIN"	"ATL"	1
+"CHN"	"LAN"	1
+"ARI"	"MIA"	1
+"MIL"	"KCA"	1
+"NYN"	"PIT"	1
+"NYA"	"PHI"	1
+"SFN"	"COL"	1
+"SLN"	"CLE"	1
+"SEA"	"BAL"	1
+"BOS"	"ANA"	1
+"CHA"	"MIN"	1
+"OAK"	"DET"	1
+"HOU"	"TOR"	1
+"TBA"	"WAS"	1
+"SDN"	"TEX"	1
+"CIN"	"ATL"	1
+"LAN"	"CHN"	1
+"ARI"	"MIA"	1
+"KCA"	"MIL"	1
+"PIT"	"NYN"	1
+"PHI"	"NYA"	1
+"SFN"	"COL"	1
+"CLE"	"SLN"	1
+"SEA"	"BAL"	1
+"BOS"	"ANA"	1
+"CHA"	"MIN"	1
+"OAK"	"DET"	1
+"HOU"	"TOR"	1
+"TEX"	"SDN"	1
+"MIL"	"CIN"	1
+"CHN"	"LAN"	1
+"ARI"	"MIA"	1
+"PHI"	"WAS"	1
+"COL"	"SFN"	1
+"SEA"	"BAL"	1
+"BOS"	"ANA"	1
+"MIN"	"CHA"	1
+"OAK"	"DET"	1
+"HOU"	"TBA"	1
+"SFN"	"ARI"	1
+"CHN"	"MIN"	1
+"MIL"	"CIN"	1
+"COL"	"LAN"	1
+"MIA"	"NYN"	1
+"WAS"	"PHI"	1
+"PIT"	"SDN"	1
+"ATL"	"SLN"	1
+"ANA"	"BAL"	1
+"NYA"	"BOS"	1
+"OAK"	"CLE"	1
+"SEA"	"KCA"	1
+"TBA"	"HOU"	1
+"TEX"	"CHA"	1
+"TOR"	"DET"	1
+"SFN"	"ARI"	1
+"CHN"	"MIN"	1
+"CIN"	"MIL"	1
+"COL"	"LAN"	1
+"MIA"	"NYN"	1
+"PHI"	"WAS"	1
+"SDN"	"PIT"	1
+"ATL"	"SLN"	1
+"ANA"	"BAL"	1
+"BOS"	"NYA"	1
+"OAK"	"CLE"	1
+"SEA"	"KCA"	1
+"TBA"	"HOU"	1
+"TEX"	"CHA"	1
+"TOR"	"DET"	1
+"SFN"	"ARI"	1
+"CHN"	"MIN"	1
+"CIN"	"MIL"	1
+"LAN"	"COL"	1
+"NYN"	"MIA"	1
+"PHI"	"WAS"	1
+"PIT"	"SDN"	1
+"ATL"	"SLN"	1
+"BAL"	"ANA"	1
+"NYA"	"BOS"	1
+"CLE"	"OAK"	1
+"SEA"	"KCA"	1
+"TBA"	"HOU"	1
+"CHA"	"TEX"	1
+"DET"	"TOR"	1
+"SLN"	"ARI"	1
+"CIN"	"CHA"	1
+"COL"	"SFN"	1
+"LAN"	"PIT"	1
+"MIA"	"TBA"	1
+"MIL"	"MIN"	1
+"BOS"	"WAS"	1
+"CLE"	"KCA"	1
+"ATL"	"NYA"	1
+"DET"	"TOR"	1
+"ARI"	"SLN"	1
+"CHN"	"DET"	1
+"CHA"	"CIN"	1
+"COL"	"SFN"	1
+"LAN"	"PIT"	1
+"TBA"	"MIA"	1
+"MIL"	"MIN"	1
+"PHI"	"BAL"	1
+"BOS"	"WAS"	1
+"CLE"	"KCA"	1
+"NYA"	"ATL"	1
+"OAK"	"SDN"	1
+"SEA"	"ANA"	1
+"HOU"	"TEX"	1
+"TOR"	"NYN"	1
+"SLN"	"ARI"	1
+"CHN"	"DET"	1
+"CIN"	"CHA"	1
+"COL"	"SFN"	1
+"LAN"	"PIT"	1
+"MIA"	"TBA"	1
+"MIL"	"MIN"	1
+"PHI"	"BAL"	1
+"BOS"	"WAS"	1
+"CLE"	"KCA"	1
+"NYA"	"ATL"	1
+"OAK"	"SDN"	1
+"ANA"	"SEA"	1
+"HOU"	"TEX"	1
+"NYN"	"TOR"	1
+"SDN"	"ARI"	1
+"MIL"	"ATL"	1
+"SLN"	"SFN"	1
+"WAS"	"MIA"	1
+"TEX"	"DET"	1
+"HOU"	"CHA"	1
+"MIN"	"BAL"	1
+"SEA"	"ANA"	1
+"ARI"	"SDN"	1
+"CIN"	"CHN"	1
+"MIL"	"ATL"	1
+"NYN"	"TBA"	1
+"PHI"	"PIT"	1
+"SFN"	"SLN"	1
+"WAS"	"MIA"	1
+"ANA"	"LAN"	1
+"CLE"	"OAK"	1
+"DET"	"TEX"	1
+"HOU"	"CHA"	1
+"BOS"	"KCA"	1
+"MIN"	"BAL"	1
+"COL"	"SEA"	1
+"TOR"	"NYA"	1
+"ARI"	"SDN"	1
+"CHN"	"CIN"	1
+"ATL"	"MIL"	1
+"TBA"	"NYN"	1
+"PHI"	"PIT"	1
+"SLN"	"SFN"	1
+"WAS"	"MIA"	1
+"LAN"	"ANA"	1
+"OAK"	"CLE"	1
+"DET"	"TEX"	1
+"HOU"	"CHA"	1
+"BOS"	"KCA"	1
+"MIN"	"BAL"	1
+"COL"	"SEA"	1
+"NYA"	"TOR"	1
+"SDN"	"ARI"	1
+"CHN"	"CIN"	1
+"MIL"	"ATL"	1
+"TBA"	"NYN"	1
+"PIT"	"PHI"	1
+"SFN"	"SLN"	1
+"MIA"	"WAS"	1
+"ANA"	"LAN"	1
+"OAK"	"CLE"	1
+"TEX"	"DET"	1
+"HOU"	"CHA"	1
+"BOS"	"KCA"	1
+"MIN"	"BAL"	1
+"SEA"	"COL"	1
+"NYA"	"TOR"	1
+"MIA"	"MIL"	1
+"NYN"	"PHI"	1
+"PHI"	"NYN"	1
+"PIT"	"WAS"	1
+"LAN"	"SDN"	1
+"SFN"	"CHN"	1
+"BAL"	"NYA"	1
+"NYA"	"BAL"	1
+"BOS"	"TEX"	1
+"CIN"	"CLE"	1
+"OAK"	"HOU"	1
+"MIN"	"KCA"	1
+"TBA"	"DET"	1
+"TOR"	"ATL"	1
+"ARI"	"COL"	1
+"MIL"	"MIA"	1
+"PHI"	"NYN"	1
+"WAS"	"PIT"	1
+"SDN"	"LAN"	1
+"CHN"	"SFN"	1
+"ANA"	"SEA"	1
+"BAL"	"NYA"	1
+"BOS"	"TEX"	1
+"SLN"	"CHA"	1
+"CIN"	"CLE"	1
+"HOU"	"OAK"	1
+"KCA"	"MIN"	1
+"TBA"	"DET"	1
+"ATL"	"TOR"	1
+"COL"	"ARI"	1
+"MIA"	"MIL"	1
+"NYN"	"PHI"	1
+"PIT"	"WAS"	1
+"LAN"	"SDN"	1
+"SFN"	"CHN"	1
+"SEA"	"ANA"	1
+"NYA"	"BAL"	1
+"BOS"	"TEX"	1
+"CHA"	"SLN"	1
+"CLE"	"CIN"	1
+"OAK"	"HOU"	1
+"MIN"	"KCA"	1
+"TBA"	"DET"	1
+"COL"	"ARI"	1
+"WAS"	"NYN"	1
+"PIT"	"MIL"	1
+"LAN"	"SDN"	1
+"ANA"	"SEA"	1
+"PHI"	"BAL"	1
+"BOS"	"TOR"	1
+"NYA"	"CLE"	1
+"OAK"	"HOU"	1
+"MIN"	"TBA"	1
+"ARI"	"ATL"	1
+"COL"	"SEA"	1
+"LAN"	"ANA"	1
+"PHI"	"MIA"	1
+"NYN"	"WAS"	1
+"PIT"	"MIL"	1
+"CHN"	"SDN"	1
+"SFN"	"OAK"	1
+"CIN"	"SLN"	1
+"TEX"	"BAL"	1
+"TOR"	"BOS"	1
+"CHA"	"KCA"	1
+"CLE"	"NYA"	1
+"HOU"	"DET"	1
+"MIN"	"TBA"	1
+"ARI"	"ATL"	1
+"COL"	"SEA"	1
+"ANA"	"LAN"	1
+"MIA"	"PHI"	1
+"NYN"	"WAS"	1
+"PIT"	"MIL"	1
+"PIT"	"MIL"	1
+"CHN"	"SDN"	1
+"OAK"	"SFN"	1
+"CIN"	"SLN"	1
+"BAL"	"TEX"	1
+"BOS"	"TOR"	1
+"KCA"	"CHA"	1
+"NYA"	"CLE"	1
+"HOU"	"DET"	1
+"TBA"	"MIN"	1
+"ATL"	"ARI"	1
+"COL"	"SEA"	1
+"LAN"	"ANA"	1
+"MIA"	"PHI"	1
+"WAS"	"NYN"	1
+"PIT"	"MIL"	1
+"CHN"	"SDN"	1
+"OAK"	"SFN"	1
+"SLN"	"CIN"	1
+"BAL"	"TEX"	1
+"BOS"	"TOR"	1
+"CHA"	"KCA"	1
+"CLE"	"NYA"	1
+"DET"	"HOU"	1
+"MIN"	"TBA"	1
+"CHN"	"SLN"	1
+"COL"	"ARI"	1
+"SLN"	"CHN"	1
+"PIT"	"CIN"	1
+"LAN"	"MIL"	1
+"PHI"	"SDN"	1
+"ATL"	"WAS"	1
+"HOU"	"ANA"	1
+"BOS"	"DET"	1
+"KCA"	"MIN"	1
+"NYN"	"NYA"	1
+"SFN"	"OAK"	1
+"SEA"	"CHA"	1
+"MIA"	"TBA"	1
+"CLE"	"TEX"	1
+"TOR"	"BAL"	1
+"COL"	"ARI"	1
+"CHN"	"SLN"	1
+"SLN"	"CHN"	1
+"PIT"	"CIN"	1
+"MIL"	"LAN"	1
+"HOU"	"ANA"	1
+"DET"	"BOS"	1
+"KCA"	"MIN"	1
+"NYA"	"NYN"	1
+"OAK"	"SFN"	1
+"CHA"	"SEA"	1
+"MIA"	"TBA"	1
+"CLE"	"TEX"	1
+"TOR"	"BAL"	1
+"ARI"	"COL"	1
+"CHN"	"SLN"	1
+"PIT"	"CIN"	1
+"LAN"	"MIL"	1
+"SDN"	"PHI"	1
+"PHI"	"SDN"	1
+"WAS"	"ATL"	1
+"ANA"	"HOU"	1
+"BOS"	"DET"	1
+"KCA"	"MIN"	1
+"OAK"	"SFN"	1
+"SEA"	"CHA"	1
+"TBA"	"MIA"	1
+"TEX"	"CLE"	1
+"TOR"	"BAL"	1
+"ARI"	"CHN"	1
+"CIN"	"SLN"	1
+"ATL"	"MIA"	1
+"MIL"	"WAS"	1
+"SDN"	"NYN"	1
+"LAN"	"PHI"	1
+"CHA"	"ANA"	1
+"BOS"	"BAL"	1
+"PIT"	"CLE"	1
+"DET"	"KCA"	1
+"TBA"	"NYA"	1
+"OAK"	"TEX"	1
+"MIN"	"TOR"	1
+"ARI"	"CHN"	1
+"SLN"	"CIN"	1
+"HOU"	"COL"	1
+"MIA"	"ATL"	1
+"MIL"	"WAS"	1
+"NYN"	"SDN"	1
+"PHI"	"LAN"	1
+"CHA"	"ANA"	1
+"BAL"	"BOS"	1
+"PIT"	"CLE"	1
+"KCA"	"DET"	1
+"SFN"	"SEA"	1
+"NYA"	"TBA"	1
+"OAK"	"TEX"	1
+"MIN"	"TOR"	1
+"CHN"	"ARI"	1
+"CIN"	"SLN"	1
+"COL"	"HOU"	1
+"WAS"	"MIL"	1
+"NYN"	"SDN"	1
+"PHI"	"LAN"	1
+"ANA"	"CHA"	1
+"CLE"	"PIT"	1
+"DET"	"KCA"	1
+"SEA"	"SFN"	1
+"TBA"	"NYA"	1
+"OAK"	"TEX"	1
+"MIN"	"TOR"	1
+"LAN"	"ATL"	1
+"CHN"	"ARI"	1
+"PHI"	"CIN"	1
+"WAS"	"MIA"	1
+"NYN"	"PIT"	1
+"MIL"	"SFN"	1
+"ANA"	"CHA"	1
+"TBA"	"BAL"	1
+"MIN"	"BOS"	1
+"NYA"	"KCA"	1
+"OAK"	"TEX"	1
+"LAN"	"ATL"	1
+"CIN"	"PHI"	1
+"COL"	"OAK"	1
+"WAS"	"MIA"	1
+"PIT"	"NYN"	1
+"ARI"	"SDN"	1
+"MIL"	"SFN"	1
+"SLN"	"CHN"	1
+"ANA"	"SEA"	1
+"BAL"	"TBA"	1
+"BOS"	"MIN"	1
+"TOR"	"CHA"	1
+"CLE"	"DET"	1
+"TEX"	"HOU"	1
+"LAN"	"ATL"	1
+"CIN"	"PHI"	1
+"COL"	"OAK"	1
+"MIA"	"WAS"	1
+"PIT"	"NYN"	1
+"ARI"	"SDN"	1
+"MIL"	"SFN"	1
+"SLN"	"CHN"	1
+"ANA"	"SEA"	1
+"BAL"	"TBA"	1
+"BOS"	"MIN"	1
+"CHA"	"TOR"	1
+"DET"	"CLE"	1
+"TEX"	"HOU"	1
+"KCA"	"NYA"	1
+"NYA"	"KCA"	1
+"ATL"	"LAN"	1
+"CIN"	"PHI"	1
+"COL"	"OAK"	1
+"MIA"	"WAS"	1
+"NYN"	"PIT"	1
+"ARI"	"SDN"	1
+"SFN"	"MIL"	1
+"CHN"	"SLN"	1
+"SEA"	"ANA"	1
+"BAL"	"TBA"	1
+"BOS"	"MIN"	1
+"TOR"	"CHA"	1
+"CLE"	"DET"	1
+"TEX"	"HOU"	1
+"NYA"	"KCA"	1
+"TEX"	"ARI"	1
+"ATL"	"MIA"	1
+"MIL"	"LAN"	1
+"SFN"	"SDN"	1
+"SLN"	"COL"	1
+"BOS"	"PHI"	1
+"MIN"	"CLE"	1
+"OAK"	"TOR"	1
+"SEA"	"HOU"	1
+"ARI"	"TEX"	1
+"ATL"	"MIA"	1
+"MIL"	"LAN"	1
+"PIT"	"CHN"	1
+"SFN"	"SDN"	1
+"COL"	"SLN"	1
+"WAS"	"NYN"	1
+"PHI"	"BOS"	1
+"KCA"	"CHA"	1
+"DET"	"CIN"	1
+"CLE"	"MIN"	1
+"NYA"	"BAL"	1
+"OAK"	"TOR"	1
+"HOU"	"SEA"	1
+"TBA"	"ANA"	1
+"LAN"	"MIL"	1
+"CHN"	"PIT"	1
+"SLN"	"COL"	1
+"WAS"	"NYN"	1
+"KCA"	"CHA"	1
+"DET"	"CIN"	1
+"CLE"	"MIN"	1
+"BAL"	"NYA"	1
+"OAK"	"TOR"	1
+"HOU"	"SEA"	1
+"TBA"	"ANA"	1
+"SFN"	"ARI"	1
+"SDN"	"CHN"	1
+"LAN"	"MIL"	1
+"ATL"	"NYN"	1
+"PHI"	"MIA"	1
+"SLN"	"COL"	1
+"WAS"	"CIN"	1
+"BOS"	"NYA"	1
+"CHA"	"KCA"	1
+"TOR"	"SEA"	1
+"TBA"	"ANA"	1
+"TEX"	"BAL"	1
+"ARI"	"SFN"	1
+"CHN"	"SDN"	1
+"HOU"	"LAN"	1
+"MIL"	"COL"	1
+"ATL"	"NYN"	1
+"PHI"	"MIA"	1
+"PIT"	"SLN"	1
+"BOS"	"NYA"	1
+"ANA"	"CLE"	1
+"MIN"	"KCA"	1
+"OAK"	"DET"	1
+"TOR"	"SEA"	1
+"CHA"	"TBA"	1
+"TEX"	"BAL"	1
+"ARI"	"SFN"	1
+"CHN"	"SDN"	1
+"HOU"	"LAN"	1
+"MIL"	"COL"	1
+"NYN"	"ATL"	1
+"PHI"	"MIA"	1
+"SLN"	"PIT"	1
+"CIN"	"WAS"	1
+"WAS"	"CIN"	1
+"BOS"	"NYA"	1
+"CLE"	"ANA"	1
+"MIN"	"KCA"	1
+"OAK"	"DET"	1
+"TOR"	"SEA"	1
+"CHA"	"TBA"	1
+"TEX"	"BAL"	1
+"SFN"	"ARI"	1
+"SDN"	"CHN"	1
+"LAN"	"HOU"	1
+"COL"	"MIL"	1
+"ATL"	"NYN"	1
+"PHI"	"MIA"	1
+"SLN"	"PIT"	1
+"WAS"	"CIN"	1
+"BOS"	"NYA"	1
+"CLE"	"ANA"	1
+"MIN"	"KCA"	1
+"OAK"	"DET"	1
+"SEA"	"TOR"	1
+"CHA"	"TBA"	1
+"BAL"	"TEX"	1
+"ARI"	"PHI"	1
+"COL"	"PIT"	1
+"MIA"	"SLN"	1
+"NYN"	"CIN"	1
+"HOU"	"SFN"	1
+"ANA"	"DET"	1
+"NYA"	"CHA"	1
+"CLE"	"MIN"	1
+"CHN"	"KCA"	1
+"SEA"	"TEX"	1
+"PHI"	"ARI"	1
+"PIT"	"COL"	1
+"SLN"	"MIA"	1
+"SDN"	"MIL"	1
+"CIN"	"NYN"	1
+"HOU"	"SFN"	1
+"WAS"	"ATL"	1
+"ATL"	"WAS"	1
+"ANA"	"DET"	1
+"NYA"	"CHA"	1
+"MIN"	"CLE"	1
+"CHN"	"KCA"	1
+"LAN"	"OAK"	1
+"TBA"	"BAL"	1
+"TEX"	"SEA"	1
+"BOS"	"TOR"	1
+"ARI"	"PHI"	1
+"PIT"	"COL"	1
+"SLN"	"MIA"	1
+"MIL"	"SDN"	1
+"NYN"	"CIN"	1
+"ATL"	"WAS"	1
+"ANA"	"DET"	1
+"NYA"	"CHA"	1
+"CLE"	"MIN"	1
+"KCA"	"CHN"	1
+"OAK"	"LAN"	1
+"BAL"	"TBA"	1
+"TEX"	"SEA"	1
+"BOS"	"TOR"	1
+"LAN"	"COL"	1
+"SDN"	"MIL"	1
+"PIT"	"SFN"	1
+"WAS"	"ATL"	1
+"CLE"	"MIN"	1
+"SEA"	"HOU"	1
+"NYA"	"TEX"	1
+"TBA"	"BAL"	1
+"TOR"	"BOS"	1
+"ATL"	"MIL"	1
+"CHN"	"WAS"	1
+"CIN"	"ARI"	1
+"COL"	"LAN"	1
+"NYN"	"MIA"	1
+"SDN"	"PHI"	1
+"SFN"	"PIT"	1
+"ANA"	"OAK"	1
+"BOS"	"BAL"	1
+"CHA"	"CLE"	1
+"DET"	"MIN"	1
+"SEA"	"HOU"	1
+"SLN"	"KCA"	1
+"TEX"	"NYA"	1
+"TBA"	"TOR"	1
+"MIL"	"ATL"	1
+"WAS"	"CHN"	1
+"CIN"	"ARI"	1
+"COL"	"LAN"	1
+"MIA"	"NYN"	1
+"PHI"	"SDN"	1
+"PIT"	"SFN"	1
+"OAK"	"ANA"	1
+"BOS"	"BAL"	1
+"BOS"	"BAL"	1
+"CLE"	"CHA"	1
+"MIN"	"DET"	1
+"SEA"	"HOU"	1
+"SLN"	"KCA"	1
+"NYA"	"TEX"	1
+"TBA"	"TOR"	1
+"ATL"	"MIL"	1
+"CHN"	"WAS"	1
+"ARI"	"CIN"	1
+"COL"	"LAN"	1
+"NYN"	"MIA"	1
+"SDN"	"PHI"	1
+"SFN"	"PIT"	1
+"OAK"	"ANA"	1
+"BOS"	"BAL"	1
+"CLE"	"CHA"	1
+"DET"	"MIN"	1
+"SEA"	"HOU"	1
+"SLN"	"KCA"	1
+"NYA"	"TEX"	1
+"TOR"	"TBA"	1
+"ATL"	"MIA"	1
+"ATL"	"MIA"	1
+"CLE"	"CIN"	1
+"SFN"	"LAN"	1
+"ANA"	"SDN"	1
+"SLN"	"WAS"	1
+"DET"	"CHA"	1
+"KCA"	"TOR"	1
+"NYN"	"NYA"	1
+"OAK"	"SEA"	1
+"TEX"	"ARI"	1
+"ATL"	"MIA"	1
+"MIL"	"CHN"	1
+"CLE"	"CIN"	1
+"SFN"	"LAN"	1
+"BOS"	"PHI"	1
+"ANA"	"SDN"	1
+"SLN"	"WAS"	1
+"BAL"	"NYN"	1
+"CHA"	"DET"	1
+"COL"	"HOU"	1
+"TOR"	"KCA"	1
+"MIN"	"PIT"	1
+"NYA"	"TBA"	1
+"OAK"	"SEA"	1
+"ARI"	"TEX"	1
+"ATL"	"MIA"	1
+"CHN"	"MIL"	1
+"CLE"	"CIN"	1
+"LAN"	"SFN"	1
+"PHI"	"BOS"	1
+"ANA"	"SDN"	1
+"SLN"	"WAS"	1
+"NYN"	"BAL"	1
+"CHA"	"DET"	1
+"HOU"	"COL"	1
+"TOR"	"KCA"	1
+"MIN"	"PIT"	1
+"TBA"	"NYA"	1
+"SEA"	"OAK"	1
+"COL"	"ATL"	1
+"NYN"	"PHI"	1
+"PHI"	"NYN"	1
+"CHN"	"PIT"	1
+"ARI"	"SDN"	1
+"WAS"	"SLN"	1
+"KCA"	"TOR"	1
+"MIN"	"DET"	1
+"TBA"	"NYA"	1
+"TEX"	"ANA"	1
+"COL"	"ATL"	1
+"CIN"	"SFN"	1
+"PHI"	"NYN"	1
+"CHN"	"PIT"	1
+"ARI"	"SDN"	1
+"SLN"	"MIL"	1
+"WAS"	"MIA"	1
+"BOS"	"TBA"	1
+"CHA"	"KCA"	1
+"CLE"	"BAL"	1
+"MIN"	"DET"	1
+"NYA"	"TOR"	1
+"OAK"	"HOU"	1
+"LAN"	"SEA"	1
+"TEX"	"ANA"	1
+"COL"	"ATL"	1
+"CIN"	"SFN"	1
+"NYN"	"PHI"	1
+"PIT"	"CHN"	1
+"SDN"	"ARI"	1
+"SLN"	"MIL"	1
+"MIA"	"WAS"	1
+"BOS"	"TBA"	1
+"KCA"	"CHA"	1
+"BAL"	"CLE"	1
+"DET"	"MIN"	1
+"NYA"	"TOR"	1
+"OAK"	"HOU"	1
+"SEA"	"LAN"	1
+"ANA"	"TEX"	1
+"COL"	"ATL"	1
+"CIN"	"SFN"	1
+"NYN"	"PHI"	1
+"PIT"	"CHN"	1
+"ARI"	"SDN"	1
+"MIL"	"SLN"	1
+"MIA"	"WAS"	1
+"TBA"	"BOS"	1
+"CHA"	"KCA"	1
+"CLE"	"BAL"	1
+"MIN"	"DET"	1
+"NYA"	"TOR"	1
+"HOU"	"OAK"	1
+"LAN"	"SEA"	1
+"TEX"	"ANA"	1
+"SLN"	"LAN"	1
+"MIL"	"CIN"	1
+"SFN"	"NYN"	1
+"ATL"	"PIT"	1
+"CLE"	"BOS"	1
+"CHA"	"MIN"	1
+"OAK"	"TEX"	1
+"SEA"	"HOU"	1
+"TBA"	"KCA"	1
+"TOR"	"BAL"	1
+"ARI"	"ANA"	1
+"SDN"	"COL"	1
+"SLN"	"LAN"	1
+"NYA"	"MIA"	1
+"CIN"	"MIL"	1
+"NYN"	"SFN"	1
+"ATL"	"PIT"	1
+"WAS"	"PHI"	1
+"CLE"	"BOS"	1
+"MIN"	"CHA"	1
+"DET"	"CHN"	1
+"OAK"	"TEX"	1
+"HOU"	"SEA"	1
+"TBA"	"KCA"	1
+"TOR"	"BAL"	1
+"ARI"	"ANA"	1
+"COL"	"SDN"	1
+"SLN"	"LAN"	1
+"MIA"	"NYA"	1
+"MIL"	"CIN"	1
+"NYN"	"SFN"	1
+"ATL"	"PIT"	1
+"WAS"	"PHI"	1
+"BOS"	"CLE"	1
+"CHA"	"MIN"	1
+"CHN"	"DET"	1
+"TEX"	"OAK"	1
+"HOU"	"SEA"	1
+"TBA"	"KCA"	1
+"TOR"	"BAL"	1
+"CHN"	"CIN"	1
+"COL"	"SDN"	1
+"ATL"	"MIA"	1
+"SFN"	"NYN"	1
+"PHI"	"WAS"	1
+"BOS"	"CLE"	1
+"DET"	"CHA"	1
+"MIN"	"OAK"	1
+"TBA"	"KCA"	1
+"SEA"	"ARI"	1
+"CHN"	"CIN"	1
+"SLN"	"COL"	1
+"LAN"	"SDN"	1
+"MIA"	"ATL"	1
+"MIL"	"PIT"	1
+"NYN"	"WAS"	1
+"TEX"	"SFN"	1
+"HOU"	"ANA"	1
+"NYA"	"BAL"	1
+"CHA"	"DET"	1
+"KCA"	"CLE"	1
+"OAK"	"MIN"	1
+"TBA"	"BOS"	1
+"TOR"	"PHI"	1
+"SEA"	"ARI"	1
+"CHN"	"CIN"	1
+"COL"	"SLN"	1
+"LAN"	"SDN"	1
+"MIA"	"ATL"	1
+"PIT"	"MIL"	1
+"NYN"	"WAS"	1
+"SFN"	"TEX"	1
+"HOU"	"ANA"	1
+"NYA"	"BAL"	1
+"NYA"	"BAL"	1
+"CHA"	"DET"	1
+"KCA"	"CLE"	1
+"OAK"	"MIN"	1
+"TBA"	"BOS"	1
+"TOR"	"PHI"	1
+"ARI"	"SEA"	1
+"CHN"	"CIN"	1
+"SLN"	"COL"	1
+"LAN"	"SDN"	1
+"ATL"	"MIA"	1
+"MIL"	"PIT"	1
+"WAS"	"NYN"	1
+"SFN"	"TEX"	1
+"HOU"	"ANA"	1
+"NYA"	"BAL"	1
+"CHA"	"DET"	1
+"CLE"	"KCA"	1
+"OAK"	"MIN"	1
+"TBA"	"BOS"	1
+"PHI"	"TOR"	1
+"CHN"	"NYN"	1
+"WAS"	"PHI"	1
+"SFN"	"ARI"	1
+"ANA"	"COL"	1
+"BAL"	"TOR"	1
+"HOU"	"OAK"	1
+"CHA"	"NYA"	1
+"ATL"	"TBA"	1
+"CHN"	"NYN"	1
+"CIN"	"MIL"	1
+"WAS"	"PHI"	1
+"SDN"	"SEA"	1
+"SFN"	"ARI"	1
+"SLN"	"PIT"	1
+"COL"	"ANA"	1
+"BAL"	"TOR"	1
+"BOS"	"MIA"	1
+"CLE"	"MIN"	1
+"OAK"	"HOU"	1
+"KCA"	"DET"	1
+"NYA"	"CHA"	1
+"LAN"	"TEX"	1
+"TBA"	"ATL"	1
+"NYN"	"CHN"	1
+"MIL"	"CIN"	1
+"PHI"	"WAS"	1
+"SDN"	"SEA"	1
+"ARI"	"SFN"	1
+"PIT"	"SLN"	1
+"BAL"	"TOR"	1
+"BOS"	"MIA"	1
+"MIN"	"CLE"	1
+"HOU"	"OAK"	1
+"KCA"	"DET"	1
+"CHA"	"NYA"	1
+"LAN"	"TEX"	1
+"CHN"	"ATL"	1
+"MIL"	"CIN"	1
+"ARI"	"LAN"	1
+"SDN"	"COL"	1
+"SLN"	"PIT"	1
+"BOS"	"CHA"	1
+"CLE"	"MIN"	1
+"ANA"	"HOU"	1
+"DET"	"NYA"	1
+"SEA"	"OAK"	1
+"PIT"	"ATL"	1
+"LAN"	"ARI"	1
+"TOR"	"MIA"	1
+"PHI"	"CHN"	1
+"SDN"	"COL"	1
+"SFN"	"NYN"	1
+"SLN"	"CIN"	1
+"MIL"	"WAS"	1
+"CHA"	"BOS"	1
+"CLE"	"TBA"	1
+"ANA"	"HOU"	1
+"KCA"	"BAL"	1
+"NYA"	"DET"	1
+"OAK"	"SEA"	1
+"MIN"	"TEX"	1
+"ATL"	"PIT"	1
+"LAN"	"ARI"	1
+"MIA"	"TOR"	1
+"CHN"	"PHI"	1
+"COL"	"SDN"	1
+"NYN"	"SFN"	1
+"CIN"	"SLN"	1
+"WAS"	"MIL"	1
+"BOS"	"CHA"	1
+"TBA"	"CLE"	1
+"HOU"	"ANA"	1
+"KCA"	"BAL"	1
+"NYA"	"DET"	1
+"SEA"	"OAK"	1
+"TEX"	"MIN"	1
+"ATL"	"PIT"	1
+"LAN"	"ARI"	1
+"TOR"	"MIA"	1
+"CHN"	"PHI"	1
+"COL"	"SDN"	1
+"NYN"	"SFN"	1
+"CIN"	"SLN"	1
+"MIL"	"WAS"	1
+"CHA"	"BOS"	1
+"TBA"	"CLE"	1
+"HOU"	"ANA"	1
+"KCA"	"BAL"	1
+"DET"	"NYA"	1
+"OAK"	"SEA"	1
+"TEX"	"MIN"	1
+"SDN"	"ARI"	1
+"BOS"	"ATL"	1
+"COL"	"SFN"	1
+"NYN"	"LAN"	1
+"MIA"	"PHI"	1
+"MIL"	"CHN"	1
+"PIT"	"CIN"	1
+"WAS"	"SLN"	1
+"CHA"	"DET"	1
+"KCA"	"CLE"	1
+"HOU"	"MIN"	1
+"OAK"	"NYA"	1
+"SEA"	"BAL"	1
+"ANA"	"TEX"	1
+"TBA"	"TOR"	1
+"ARI"	"SDN"	1
+"BOS"	"ATL"	1
+"COL"	"SFN"	1
+"LAN"	"NYN"	1
+"PHI"	"MIA"	1
+"MIL"	"CHN"	1
+"PIT"	"CIN"	1
+"SLN"	"WAS"	1
+"DET"	"CHA"	1
+"CLE"	"KCA"	1
+"HOU"	"MIN"	1
+"NYA"	"OAK"	1
+"BAL"	"SEA"	1
+"TEX"	"ANA"	1
+"TBA"	"TOR"	1
+"BOS"	"ATL"	1
+"COL"	"SFN"	1
+"NYN"	"LAN"	1
+"MIA"	"PHI"	1
+"CHN"	"MIL"	1
+"PIT"	"CIN"	1
+"SLN"	"WAS"	1
+"DET"	"CHA"	1
+"CLE"	"KCA"	1
+"HOU"	"MIN"	1
+"OAK"	"NYA"	1
+"SEA"	"BAL"	1
+"ANA"	"TEX"	1
+"TOR"	"TBA"	1
+"ATL"	"ARI"	1
+"SDN"	"CIN"	1
+"CHN"	"WAS"	1
+"CLE"	"TOR"	1
+"ARI"	"ATL"	1
+"CIN"	"SDN"	1
+"LAN"	"COL"	1
+"MIL"	"SFN"	1
+"PHI"	"NYN"	1
+"PIT"	"MIA"	1
+"HOU"	"BOS"	1
+"ANA"	"CHA"	1
+"DET"	"SLN"	1
+"MIN"	"KCA"	1
+"OAK"	"TEX"	1
+"NYA"	"SEA"	1
+"TBA"	"BAL"	1
+"TOR"	"CLE"	1
+"ATL"	"ARI"	1
+"CIN"	"SDN"	1
+"COL"	"LAN"	1
+"MIL"	"SFN"	1
+"NYN"	"PHI"	1
+"PIT"	"MIA"	1
+"WAS"	"CHN"	1
+"WAS"	"CHN"	1
+"HOU"	"BOS"	1
+"ANA"	"CHA"	1
+"DET"	"SLN"	1
+"KCA"	"MIN"	1
+"OAK"	"TEX"	1
+"NYA"	"SEA"	1
+"TBA"	"BAL"	1
+"CLE"	"TOR"	1
+"ATL"	"ARI"	1
+"SDN"	"CIN"	1
+"LAN"	"COL"	1
+"MIL"	"SFN"	1
+"NYN"	"PHI"	1
+"BOS"	"HOU"	1
+"ANA"	"CHA"	1
+"SLN"	"DET"	1
+"MIN"	"KCA"	1
+"OAK"	"TEX"	1
+"SEA"	"NYA"	1
+"TBA"	"BAL"	1
+"TOR"	"CLE"	1
+"MIL"	"CHN"	1
+"CIN"	"LAN"	1
+"COL"	"ARI"	1
+"ATL"	"SFN"	1
+"SLN"	"PIT"	1
+"TEX"	"ANA"	1
+"HOU"	"DET"	1
+"KCA"	"CHA"	1
+"NYA"	"MIN"	1
+"TBA"	"CLE"	1
+"CHN"	"MIL"	1
+"CIN"	"LAN"	1
+"ARI"	"COL"	1
+"MIA"	"NYN"	1
+"WAS"	"PHI"	1
+"WAS"	"PHI"	1
+"ATL"	"SFN"	1
+"SLN"	"PIT"	1
+"ANA"	"TEX"	1
+"OAK"	"BAL"	1
+"BOS"	"TOR"	1
+"HOU"	"DET"	1
+"KCA"	"CHA"	1
+"MIN"	"NYA"	1
+"SDN"	"SEA"	1
+"CLE"	"TBA"	1
+"MIL"	"CHN"	1
+"LAN"	"CIN"	1
+"COL"	"ARI"	1
+"NYN"	"MIA"	1
+"WAS"	"PHI"	1
+"ATL"	"SFN"	1
+"PIT"	"SLN"	1
+"ANA"	"TEX"	1
+"OAK"	"BAL"	1
+"BOS"	"TOR"	1
+"HOU"	"DET"	1
+"CHA"	"KCA"	1
+"MIN"	"NYA"	1
+"SDN"	"SEA"	1
+"TBA"	"CLE"	1
+"COL"	"ARI"	1
+"NYN"	"MIA"	1
+"NYN"	"MIA"	1
+"LAN"	"SLN"	1
+"CHN"	"WAS"	1
+"SEA"	"ANA"	1
+"BAL"	"OAK"	1
+"BOS"	"TOR"	1
+"KCA"	"MIN"	1
+"ATL"	"WAS"	1
+"CHN"	"CIN"	1
+"MIL"	"PIT"	1
+"PHI"	"MIA"	1
+"TEX"	"SDN"	1
+"SFN"	"COL"	1
+"LAN"	"SLN"	1
+"SEA"	"ANA"	1
+"CHA"	"BAL"	1
+"NYN"	"BOS"	1
+"DET"	"CLE"	1
+"ARI"	"HOU"	1
+"KCA"	"MIN"	1
+"NYA"	"TOR"	1
+"OAK"	"TBA"	1
+"WAS"	"ATL"	1
+"CHN"	"CIN"	1
+"PIT"	"MIL"	1
+"PHI"	"MIA"	1
+"TEX"	"SDN"	1
+"SFN"	"COL"	1
+"LAN"	"SLN"	1
+"SEA"	"ANA"	1
+"CHA"	"BAL"	1
+"BOS"	"NYN"	1
+"CLE"	"DET"	1
+"HOU"	"ARI"	1
+"KCA"	"MIN"	1
+"TOR"	"NYA"	1
+"TBA"	"OAK"	1
+"WAS"	"ATL"	1
+"CIN"	"CHN"	1
+"PIT"	"MIL"	1
+"MIA"	"PHI"	1
+"SDN"	"TEX"	1
+"COL"	"SFN"	1
+"SLN"	"LAN"	1
+"ANA"	"SEA"	1
+"BAL"	"CHA"	1
+"BOS"	"NYN"	1
+"DET"	"CLE"	1
+"HOU"	"ARI"	1
+"MIN"	"KCA"	1
+"TOR"	"NYA"	1
+"TBA"	"OAK"	1
+"CHN"	"ARI"	1
+"SLN"	"ATL"	1
+"LAN"	"COL"	1
+"MIA"	"WAS"	1
+"MIL"	"CIN"	1
+"NYN"	"PHI"	1
+"PIT"	"KCA"	1
+"SFN"	"SDN"	1
+"TOR"	"BAL"	1
+"MIN"	"DET"	1
+"SEA"	"HOU"	1
+"TBA"	"TEX"	1
+"CHN"	"ARI"	1
+"SLN"	"ATL"	1
+"LAN"	"COL"	1
+"WAS"	"MIA"	1
+"CIN"	"MIL"	1
+"PHI"	"NYN"	1
+"PIT"	"KCA"	1
+"SFN"	"SDN"	1
+"TOR"	"BAL"	1
+"CLE"	"CHA"	1
+"MIN"	"DET"	1
+"HOU"	"SEA"	1
+"NYA"	"BOS"	1
+"ANA"	"OAK"	1
+"TBA"	"TEX"	1
+"ARI"	"CHN"	1
+"ATL"	"SLN"	1
+"LAN"	"COL"	1
+"MIL"	"CIN"	1
+"PHI"	"NYN"	1
+"PIT"	"KCA"	1
+"SDN"	"SFN"	1
+"BAL"	"TOR"	1
+"CLE"	"CHA"	1
+"MIN"	"DET"	1
+"SEA"	"HOU"	1
+"NYA"	"BOS"	1
+"OAK"	"ANA"	1
+"TBA"	"TEX"	1
+"ATL"	"PHI"	1
+"CIN"	"MIA"	1
+"NYN"	"WAS"	1
+"CHA"	"CLE"	1
+"DET"	"KCA"	1
+"BOS"	"NYA"	1
+"OAK"	"ANA"	1
+"TOR"	"TBA"	1
+"COL"	"ARI"	1
+"ATL"	"PHI"	1
+"SDN"	"LAN"	1
+"MIA"	"CIN"	1
+"MIL"	"PIT"	1
+"SLN"	"SFN"	1
+"NYN"	"WAS"	1
+"CHA"	"CHN"	1
+"BOS"	"CLE"	1
+"KCA"	"DET"	1
+"HOU"	"ANA"	1
+"NYA"	"BAL"	1
+"OAK"	"MIN"	1
+"TEX"	"SEA"	1
+"TBA"	"TOR"	1
+"COL"	"ARI"	1
+"ATL"	"PHI"	1
+"LAN"	"SDN"	1
+"MIA"	"CIN"	1
+"PIT"	"MIL"	1
+"SLN"	"SFN"	1
+"WAS"	"NYN"	1
+"CHN"	"CHA"	1
+"CLE"	"BOS"	1
+"DET"	"KCA"	1
+"HOU"	"ANA"	1
+"NYA"	"BAL"	1
+"OAK"	"MIN"	1
+"SEA"	"TEX"	1
+"TOR"	"TBA"	1
+"COL"	"ARI"	1
+"ATL"	"PHI"	1
+"LAN"	"SDN"	1
+"MIA"	"CIN"	1
+"MIL"	"PIT"	1
+"SLN"	"SFN"	1
+"NYN"	"WAS"	1
+"CHN"	"CHA"	1
+"CLE"	"BOS"	1
+"KCA"	"DET"	1
+"HOU"	"ANA"	1
+"BAL"	"NYA"	1
+"MIN"	"OAK"	1
+"TEX"	"SEA"	1
+"TBA"	"TOR"	1
+"LAN"	"ARI"	1
+"PIT"	"CHN"	1
+"COL"	"PHI"	1
+"SDN"	"SFN"	1
+"MIL"	"SLN"	1
+"WAS"	"MIA"	1
+"ANA"	"TEX"	1
+"BOS"	"BAL"	1
+"CLE"	"CHA"	1
+"OAK"	"SEA"	1
+"NYA"	"TBA"	1
+"HOU"	"TOR"	1
+"ARI"	"LAN"	1
+"PIT"	"CHN"	1
+"KCA"	"CIN"	1
+"COL"	"PHI"	1
+"ATL"	"NYN"	1
+"SFN"	"SDN"	1
+"MIL"	"SLN"	1
+"WAS"	"MIA"	1
+"ANA"	"TEX"	1
+"CHA"	"CLE"	1
+"DET"	"MIN"	1
+"SEA"	"OAK"	1
+"NYA"	"TBA"	1
+"HOU"	"TOR"	1
+"ARI"	"LAN"	1
+"CHN"	"PIT"	1
+"KCA"	"CIN"	1
+"COL"	"PHI"	1
+"NYN"	"ATL"	1
+"SDN"	"SFN"	1
+"MIL"	"SLN"	1
+"WAS"	"MIA"	1
+"ANA"	"TEX"	1
+"BOS"	"BAL"	1
+"BAL"	"BOS"	1
+"CLE"	"CHA"	1
+"MIN"	"DET"	1
+"OAK"	"SEA"	1
+"TBA"	"NYA"	1
+"TOR"	"HOU"	1
+"CHN"	"PIT"	1
+"COL"	"PHI"	1
+"NYN"	"ATL"	1
+"KCA"	"CLE"	1
+"MIN"	"DET"	1
+"TEX"	"SEA"	1
+"NYA"	"TBA"	1
+"CHN"	"SLN"	1
+"PIT"	"CIN"	1
+"COL"	"WAS"	1
+"MIL"	"DET"	1
+"MIA"	"NYN"	1
+"ATL"	"PHI"	1
+"SDN"	"ARI"	1
+"LAN"	"SFN"	1
+"ANA"	"OAK"	1
+"HOU"	"BAL"	1
+"NYA"	"BOS"	1
+"CLE"	"KCA"	1
+"MIN"	"CHA"	1
+"MIN"	"CHA"	1
+"SEA"	"TEX"	1
+"TOR"	"TBA"	1
+"SLN"	"CHN"	1
+"CIN"	"PIT"	1
+"WAS"	"COL"	1
+"MIL"	"DET"	1
+"NYN"	"MIA"	1
+"PHI"	"ATL"	1
+"ARI"	"SDN"	1
+"LAN"	"SFN"	1
+"OAK"	"ANA"	1
+"HOU"	"BAL"	1
+"HOU"	"BAL"	1
+"NYA"	"BOS"	1
+"KCA"	"CLE"	1
+"MIN"	"CHA"	1
+"SEA"	"TEX"	1
+"TBA"	"TOR"	1
+"CHN"	"SLN"	1
+"PIT"	"CIN"	1
+"COL"	"WAS"	1
+"MIL"	"DET"	1
+"NYN"	"MIA"	1
+"PHI"	"ATL"	1
+"SDN"	"ARI"	1
+"LAN"	"SFN"	1
+"ANA"	"OAK"	1
+"BAL"	"HOU"	1
+"BOS"	"NYA"	1
+"CLE"	"KCA"	1
+"MIN"	"CHA"	1
+"SEA"	"TEX"	1
+"TBA"	"TOR"	1
+"MIL"	"CHN"	1
+"LAN"	"COL"	1
