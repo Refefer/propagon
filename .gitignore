@@ -1,3 +1,7 @@
 /target
 **/*.rs.bk
 /examples/*/out/
+# Machine-local cargo config (e.g. an absolute target-dir override).
+/.cargo/
+# Scratch space, not part of the project.
+/store/
