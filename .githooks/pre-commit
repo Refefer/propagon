@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Fast local checks — rustfmt, clippy, and rustdoc. Clippy and rustdoc
+# mirror CI; rustfmt is an extra local guard. Full tests, the
+# no-default-features build, MSRV, and audit live in `.githooks/pre-push`.
+#
+# This is a single-crate repo, so fmt deliberately omits `--all`: with the
+# sibling crates linked by path, `cargo fmt --all` would reach into them.
+#
+# Install once per clone:  git config core.hooksPath .githooks
+# Bypass (use sparingly):  git commit --no-verify
+
+set -euo pipefail
+
+step() {
+    printf '\n\033[1m[pre-commit]\033[0m %s\n' "$*"
+}
+
+step 'cargo fmt -- --check'
+cargo fmt -- --check
+
+step 'cargo clippy --all-features --all-targets -- -D warnings'
+cargo clippy --all-features --all-targets -- -D warnings
+
+step 'RUSTDOCFLAGS=-D warnings cargo doc --no-deps --all-features'
+RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --all-features

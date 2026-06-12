@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Full push gate — every test, the no-default-features build, and
+# cargo-audit. When rustup has the pinned MSRV toolchain installed, this
+# also runs the same MSRV check as CI. The fast lint / doc subset lives in
+# `.githooks/pre-commit`.
+#
+# Install once per clone:  git config core.hooksPath .githooks
+# Bypass (use sparingly):  git push --no-verify
+
+set -euo pipefail
+
+HOOKS_PATH=$(git config --get core.hooksPath || true)
+printf '\n\033[1m[pre-push]\033[0m active hooks path: %s\n' "${HOOKS_PATH:-<unset>}"
+
+PACKAGE_RUST_VERSION=$(sed -n 's/^rust-version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' Cargo.toml)
+if [ -z "$PACKAGE_RUST_VERSION" ]; then
+    printf '\n\033[1m[pre-push]\033[0m Cargo.toml does not declare package.rust-version.\n' >&2
+    exit 1
+fi
+
+step() {
+    printf '\n\033[1m[pre-push]\033[0m %s\n' "$*"
+}
+
+step 'cargo test --all-features --all-targets'
+cargo test --all-features --all-targets
+
+step 'cargo test --doc --all-features'
+cargo test --doc --all-features
+
+step 'cargo check --no-default-features'
+cargo check --no-default-features
+
+if ! command -v rustup >/dev/null 2>&1; then
+    printf '\n\033[1m[pre-push]\033[0m rustup not installed; skipping local MSRV check.\n' >&2
+    printf '            GitHub CI still runs Rust %s.\n' "$PACKAGE_RUST_VERSION" >&2
+elif ! rustup toolchain list | grep -Eq "^${PACKAGE_RUST_VERSION//./\\.}(-|[[:space:]])"; then
+    printf '\n\033[1m[pre-push]\033[0m Rust %s toolchain not installed; skipping local MSRV check.\n' "$PACKAGE_RUST_VERSION" >&2
+    printf '            install with: rustup toolchain install %s\n' "$PACKAGE_RUST_VERSION" >&2
+    printf '            GitHub CI still runs Rust %s.\n' "$PACKAGE_RUST_VERSION" >&2
+else
+    step "cargo +$PACKAGE_RUST_VERSION check --all-features"
+    cargo "+$PACKAGE_RUST_VERSION" check --all-features
+fi
+
+if ! command -v cargo-audit >/dev/null 2>&1; then
+    printf '\n\033[1m[pre-push]\033[0m cargo-audit not installed.\n' >&2
+    printf '            install with: cargo install cargo-audit --locked\n' >&2
+    exit 1
+fi
+
+step 'cargo audit'
+cargo audit

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Enforce the Conventional Commit subject style used by this project.
+#
+# Install once per clone:  git config core.hooksPath .githooks
+# Bypass (use sparingly):  git commit --no-verify
+
+set -euo pipefail
+
+msg_file="${1:?commit message file is required}"
+subject="$(sed -n '1p' "$msg_file")"
+pattern='^(feat|fix|docs|test|refactor|perf|build|ci|chore)(\([a-z0-9._-]+\))?!?: .+'
+
+fail() {
+    printf '\n\033[1m[commit-msg]\033[0m %s\n' "$*" >&2
+    exit 1
+}
+
+if [[ -z "$subject" ]]; then
+    fail 'Commit subject must not be empty.'
+fi
+
+if ! [[ "$subject" =~ $pattern ]]; then
+    cat >&2 <<'EOF'
+
+[commit-msg] Invalid commit subject.
+
+Expected:
+  <type>[optional scope]: <description>
+
+Allowed types:
+  feat, fix, docs, test, refactor, perf, build, ci, chore
+
+Examples:
+  feat(compare): add benchmark runner
+  fix(rpc): avoid broken pipe tracebacks
+  build!: raise minimum Rust version
+EOF
+    exit 1
+fi
+
+if [[ "$subject" == *. ]]; then
+    fail 'Commit subject must not end with a period.'
+fi
+
+if (( ${#subject} > 72 )); then
+    printf '\n\033[1m[commit-msg]\033[0m warning: subject is longer than 72 characters.\n' >&2
+fi
+
+body_line_number=0
+while IFS= read -r line; do
+    body_line_number=$((body_line_number + 1))
+
+    # Skip subject, separator, comments, trailers, and intentionally
+    # unwrapped machine-readable lines.
+    if (( body_line_number <= 2 )) \
+        || [[ -z "$line" ]] \
+        || [[ "$line" == \#* ]] \
+        || [[ "$line" =~ ^[A-Za-z0-9-]+:[[:space:]] ]] \
+        || [[ "$line" =~ ^[[:space:]] ]] \
+        || [[ "$line" =~ ^https?:// ]]; then
+        continue
+    fi
+
+    if (( ${#line} > 72 )); then
+        fail "Body line ${body_line_number} is longer than 72 characters."
+    fi
+done < "$msg_file"
