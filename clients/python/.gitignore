@@ -1,0 +1,15 @@
+# Rust build artifacts (this sub-workspace has its own target/).
+# Cargo.lock IS committed: this crate builds a shipped cdylib wheel, so a
+# pinned lock keeps CI wheel builds reproducible.
+/target/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+.pytest_cache/
+dist/
+*.egg-info/
+build/

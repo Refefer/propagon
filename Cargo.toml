@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# The Python bindings (clients/python) are a self-contained sub-workspace with
+# their own Cargo.lock: they pull in pyo3 (and link against no libpython under
+# `extension-module`), which must never enter the core's `cargo *--workspace`
+# builds. Excluding the path keeps all four core CI invocations pyo3-free.
+exclude = ["clients/python"]
 
 [workspace.package]
 version = "2.0.0-alpha.1"

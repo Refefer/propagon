@@ -427,8 +427,9 @@ Doc-comment examples may use `unwrap()` (rustdoc convention; not linted).
 Versioning is workspace-wide (`2.0.0-alpha.1`); MSRV 1.88 (let-chains). CI
 (`.github/workflows/ci.yml`) runs the same gate as above on stable.
 
-Next milestones (PRD §10): **M3** Python bindings (PyO3/maturin, abi3 wheels),
-**M4** WASM (wasm-bindgen, single-threaded default — which is why the
-`parallel`-off build must always stay green), **M5** mobile via UniFFI. The core
-was shaped for these: no filesystem or printing in algorithms, owned
-lifetime-free models, u32/f64 API boundaries.
+Milestones (PRD §10): **M3** Python bindings (PyO3/maturin, abi3 wheels) — landed
+in [`clients/python`](clients/python) (its own sub-workspace; `cd clients/python
+&& maturin develop && pytest`); **M4** WASM (wasm-bindgen, single-threaded default
+— which is why the `parallel`-off build must always stay green), **M5** mobile via
+UniFFI. The core was shaped for these: no filesystem or printing in algorithms,
+owned lifetime-free models, u32/f64 API boundaries.

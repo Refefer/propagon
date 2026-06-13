@@ -1,0 +1,95 @@
+name: python
+
+# Additive to ci.yml: builds and tests the clients/python bindings only.
+# Gated on paths so unrelated changes don't trigger it.
+on:
+  push:
+    branches: [master, v2]
+    paths:
+      - "clients/python/**"
+      - "crates/propagon/**"
+      - ".github/workflows/python.yml"
+  pull_request:
+    paths:
+      - "clients/python/**"
+      - "crates/propagon/**"
+      - ".github/workflows/python.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: clients/python
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/python
+      - run: cargo fmt --all --check
+      # The bindings are their own workspace; the core CI never lints them, so
+      # the no-panic-across-FFI gate is enforced here.
+      - run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/python
+      - name: Install build/test deps
+        run: python -m pip install --upgrade pip maturin pytest
+      - name: Build the extension into the environment
+        run: maturin develop --release
+      - name: Run the test suite
+        run: pytest -q
+
+  wheels:
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build abi3 wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: clients/python
+          command: build
+          args: --release --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: clients/python/dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: clients/python
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: clients/python/dist

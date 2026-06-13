@@ -1,0 +1,48 @@
+# Python bindings for propagon — a self-contained sub-workspace.
+#
+# The empty `[workspace]` table below makes this directory its own workspace
+# root, so Cargo never walks up into the repo's virtual workspace. Combined
+# with `exclude = ["clients/python"]` there, the core's `cargo *--workspace`
+# and CI never compile pyo3. The wheel is built by maturin (see pyproject.toml),
+# never published to crates.io.
+[package]
+name = "propagon-python"
+version = "2.0.0-alpha.1"
+authors = ["Andrew Stanton <refefer@gmail.com>"]
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Refefer/propagon"
+publish = false
+
+[lib]
+# The compiled extension module is imported as `propagon._propagon`.
+name = "_propagon"
+crate-type = ["cdylib"]
+
+[workspace]
+
+[dependencies]
+# Default features: `parallel` (rayon) + `io`. The bindings persist state in
+# memory (save_jsonl/load_jsonl), so `io` is not strictly required, but the
+# default set keeps parity with how the CLI consumes the library.
+propagon = { path = "../../crates/propagon" }
+# abi3-py39: one wheel runs on CPython 3.9+ without a per-version rebuild.
+# extension-module: do not link libpython (the host interpreter resolves it).
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py39"] }
+serde = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }
+# Generates per-field setter identifiers (`set_<field>`) inside the binding
+# macros; stable Rust has no `concat_idents!`.
+paste = "1"
+
+# A panic across the FFI boundary is undefined behavior unless caught. This
+# crate is its own workspace and does not inherit the core's lints, so the
+# no-panic gate is re-declared here.
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[profile.release]
+lto = "thin"
