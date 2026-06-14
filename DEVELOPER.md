@@ -429,7 +429,11 @@ Versioning is workspace-wide (`2.0.0-alpha.1`); MSRV 1.88 (let-chains). CI
 
 Milestones (PRD §10): **M3** Python bindings (PyO3/maturin, abi3 wheels) — landed
 in [`clients/python`](clients/python) (its own sub-workspace; `cd clients/python
-&& maturin develop && pytest`); **M4** WASM (wasm-bindgen, single-threaded default
-— which is why the `parallel`-off build must always stay green), **M5** mobile via
-UniFFI. The core was shaped for these: no filesystem or printing in algorithms,
-owned lifetime-free models, u32/f64 API boundaries.
+&& maturin develop && pytest`); **M4** WASM — landed in
+[`clients/wasm`](clients/wasm) as a **Component-Model** build (cargo-component +
+wit-bindgen), consumed by TypeScript via jco and by other hosts via wasmtime;
+single-threaded (which is why the `parallel`-off build must always stay green) —
+see [`clients/wasm/THREADING.md`](clients/wasm/THREADING.md). This supersedes the
+PRD's FR-6.2 wasm-bindgen plan. **M5** mobile via UniFFI. The core was shaped for
+these: no filesystem or printing in algorithms, owned lifetime-free models,
+u32/f64 API boundaries.

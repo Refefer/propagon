@@ -1,0 +1,64 @@
+name: wasm
+
+# Additive to ci.yml: builds and tests the clients/wasm component only.
+# Gated on paths so unrelated changes don't trigger it. This exercises the
+# core's parallel-OFF build (the component is single-threaded).
+on:
+  push:
+    branches: [master, v2]
+    paths:
+      - "clients/wasm/**"
+      - "crates/propagon/**"
+      - ".github/workflows/wasm.yml"
+  pull_request:
+    paths:
+      - "clients/wasm/**"
+      - "crates/propagon/**"
+      - ".github/workflows/wasm.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: clients/wasm
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/wasm
+      - run: cargo fmt --all --check
+      # The component is its own workspace; the core CI never lints it, so the
+      # no-panic-across-FFI gate is enforced here, against the wasm target.
+      - run: cargo clippy --target wasm32-wasip2 --all-targets -- -D warnings
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/wasm
+      - name: Install cargo-component
+        run: cargo install cargo-component --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci
+      # Builds the component (parallel-OFF core) and transpiles it with jco.
+      - run: npm run build
+      - name: Run the host test suite
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: propagon-wasm-dist
+          path: clients/wasm/dist
