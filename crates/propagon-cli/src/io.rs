@@ -8,8 +8,9 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use propagon::{
-    AnnotatedPairsDataset, ContextualRewardsDataset, Error, GameOutcome, GamesDataset,
-    GraphDataset, MatchupsDataset, RankingsDataset, Result, RewardsDataset, TrajectoriesDataset,
+    AnnotatedPairsDataset, ContextualRewardsDataset, Error, ForecastDataset, GameOutcome,
+    GamesDataset, GraphDataset, MarketDataset, MatchupsDataset, OddsDataset, RankingsDataset,
+    Result, RewardsDataset, TrajectoriesDataset,
 };
 
 fn rows(path: &Path) -> Result<impl Iterator<Item = std::io::Result<String>>> {
@@ -363,4 +364,215 @@ pub fn read_trajectories(path: &Path) -> Result<TrajectoriesDataset> {
         return Err(Error::EmptyDataset);
     }
     Ok(ds)
+}
+
+/// Reads a betting odds file (`§14.1` de-vigging): one event per blank-line-
+/// separated block, each line `outcome <decimal odds>`. Outcome names must be
+/// unique across the file (qualify them per event, e.g. `race1:Alpha`).
+pub fn read_odds(path: &Path) -> Result<OddsDataset> {
+    let mut ds = OddsDataset::new();
+    let mut event: Vec<(String, f64)> = Vec::new();
+    let flush = |ds: &mut OddsDataset, event: &mut Vec<(String, f64)>| -> Result<()> {
+        if !event.is_empty() {
+            let pairs: Vec<(&str, f64)> = event.iter().map(|(n, o)| (n.as_str(), *o)).collect();
+            ds.push_event(&pairs)?;
+            event.clear();
+        }
+        Ok(())
+    };
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            flush(&mut ds, &mut event)?;
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(outcome), Some(odds)) = (it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'outcome <decimal odds>': {line:?}"),
+            ));
+        };
+        let o: f64 = odds
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad odds {odds:?}: {e}")))?;
+        event.push((outcome.to_string(), o));
+    }
+    flush(&mut ds, &mut event)?;
+    if ds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(ds)
+}
+
+/// Reads a forecast file (`§14.2` opinion pools): `source outcome <probability>`
+/// per line. Rows are grouped by source in first-seen order; each source's
+/// probabilities must sum to 1.
+pub fn read_forecasts(path: &Path) -> Result<ForecastDataset> {
+    let mut order: Vec<String> = Vec::new();
+    let mut by_source: Vec<Vec<(String, f64)>> = Vec::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(source), Some(outcome), Some(prob)) = (it.next(), it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'source outcome <probability>': {line:?}"),
+            ));
+        };
+        let p: f64 = prob
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad probability {prob:?}: {e}")))?;
+        let idx = match order.iter().position(|s| s == source) {
+            Some(i) => i,
+            None => {
+                order.push(source.to_string());
+                by_source.push(Vec::new());
+                order.len() - 1
+            }
+        };
+        by_source[idx].push((outcome.to_string(), p));
+    }
+    let mut ds = ForecastDataset::new();
+    for (name, forecast) in order.iter().zip(&by_source) {
+        let pairs: Vec<(&str, f64)> = forecast.iter().map(|(n, p)| (n.as_str(), *p)).collect();
+        ds.push_source(name, &pairs)?;
+    }
+    if ds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(ds)
+}
+
+/// Reads a prediction-market trade stream (`§14.3` LMSR): `outcome <shares>`
+/// per line (negative shares sell).
+pub fn read_market(path: &Path) -> Result<MarketDataset> {
+    let mut ds = MarketDataset::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(outcome), Some(shares)) = (it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'outcome <shares>': {line:?}"),
+            ));
+        };
+        let s: f64 = shares
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad shares {shares:?}: {e}")))?;
+        ds.push_trade(outcome, s)
+            .map_err(|e| Error::parse(lineno + 1, e.to_string()))?;
+    }
+    if ds.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(ds)
+}
+
+/// Reads Kelly rows (`§14.4`): `outcome <win probability> <decimal odds>`.
+pub fn read_kelly(path: &Path) -> Result<Vec<(String, f64, f64)>> {
+    let mut out = Vec::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(name), Some(p), Some(o)) = (it.next(), it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'outcome <probability> <decimal odds>': {line:?}"),
+            ));
+        };
+        let prob: f64 = p
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad probability {p:?}: {e}")))?;
+        let odds: f64 = o
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad odds {o:?}: {e}")))?;
+        out.push((name.to_string(), prob, odds));
+    }
+    if out.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(out)
+}
+
+/// Reads closing-line-value rows (`§14.5`): `label <taken odds> <closing odds>`.
+pub fn read_clv(path: &Path) -> Result<Vec<(String, f64, f64)>> {
+    let mut out = Vec::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(label), Some(t), Some(c)) = (it.next(), it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected 'label <taken odds> <closing odds>': {line:?}"),
+            ));
+        };
+        let taken: f64 = t
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad taken odds {t:?}: {e}")))?;
+        let closing: f64 = c
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad closing odds {c:?}: {e}")))?;
+        out.push((label.to_string(), taken, closing));
+    }
+    if out.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok(out)
+}
+
+/// Reads calibration rows (`§14.5`): `<implied probability> <outcome 0|1>`.
+pub fn read_calibration(path: &Path) -> Result<(Vec<f64>, Vec<bool>)> {
+    let mut probs = Vec::new();
+    let mut outcomes = Vec::new();
+    for (lineno, line) in rows(path)?.enumerate() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let (Some(p), Some(o)) = (it.next(), it.next()) else {
+            return Err(Error::parse(
+                lineno + 1,
+                format!("expected '<implied probability> <outcome 0|1>': {line:?}"),
+            ));
+        };
+        let prob: f64 = p
+            .parse()
+            .map_err(|e| Error::parse(lineno + 1, format!("bad probability {p:?}: {e}")))?;
+        let outcome = match o {
+            "1" | "true" | "win" | "yes" => true,
+            "0" | "false" | "loss" | "lose" | "no" => false,
+            other => {
+                return Err(Error::parse(
+                    lineno + 1,
+                    format!("bad outcome {other:?}; expected 0/1"),
+                ));
+            }
+        };
+        probs.push(prob);
+        outcomes.push(outcome);
+    }
+    if probs.is_empty() {
+        return Err(Error::EmptyDataset);
+    }
+    Ok((probs, outcomes))
 }

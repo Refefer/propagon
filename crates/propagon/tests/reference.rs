@@ -6,11 +6,12 @@
 //! unwrap/expect denies: every test propagates errors via `Result`.
 
 use propagon::algos::{
-    Bandit, BanditPolicy, Borda, BradleyTerryMM, Copeland, Elo, Kemeny, KemenyPasses, PageRank,
-    Sink, wilson_interval,
+    Bandit, BanditPolicy, Borda, BradleyTerryMM, Copeland, DevigMethod, Elo, Kemeny, KemenyPasses,
+    OddsDevig, OpinionPool, PageRank, PoolKind, Sink, kelly_fraction, wilson_interval,
 };
 use propagon::{
-    GraphDataset, OnlineRanker, PairwiseDataset, RankModel, Ranker, RankingsDataset, RewardsDataset,
+    ForecastDataset, GraphDataset, OddsDataset, OnlineRanker, PairwiseDataset, RankModel, Ranker,
+    RankingsDataset, RewardsDataset,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -799,5 +800,121 @@ fn hits_matches_langville_meyer_example() -> TestResult {
         assert!((got_h - h).abs() < 5e-4, "{node} hub {got_h:.4} vs {h}");
     }
 
+    Ok(())
+}
+
+/// Power and Shin de-vigging against the `implied` R package vignette.
+///
+/// Source: the `implied` R package, "Implied probabilities from bookmaker
+/// odds" vignette
+/// (<https://cran.r-project.org/web/packages/implied/vignettes/introduction.html>),
+/// odds (4.20, 3.70, 1.95). Published power exponent 0.9797666 with fair
+/// probabilities (0.2311414, 0.2630644, 0.5057941); Shin insider share
+/// 0.01054734 with fair probabilities (0.2315811, 0.2635808, 0.5048382). The
+/// package solves a least-squares objective, so these match to ~1e-3 (cf.
+/// `keener_matches_comperank`).
+#[test]
+fn devig_power_and_shin_match_implied_package() -> TestResult {
+    const ODDS: [(&str, f64); 3] = [("a", 4.20), ("b", 3.70), ("c", 1.95)];
+
+    let mut d = OddsDataset::new();
+    d.push_event(&ODDS)?;
+
+    let power = OddsDevig {
+        method: DevigMethod::Power,
+        ..Default::default()
+    }
+    .fit(&d)?;
+    let p: std::collections::HashMap<_, _> = power.scores().collect();
+    for (name, want) in [("a", 0.2311414), ("b", 0.2630644), ("c", 0.5057941)] {
+        assert!(
+            (p[name] - want).abs() < 1e-3,
+            "power {name}: {} vs {want}",
+            p[name]
+        );
+    }
+
+    let shin = OddsDevig {
+        method: DevigMethod::Shin,
+        ..Default::default()
+    }
+    .fit(&d)?;
+    let s: std::collections::HashMap<_, _> = shin.scores().collect();
+    for (name, want) in [("a", 0.2315811), ("b", 0.2635808), ("c", 0.5048382)] {
+        assert!(
+            (s[name] - want).abs() < 1e-3,
+            "shin {name}: {} vs {want}",
+            s[name]
+        );
+    }
+    let z = shin.insider_share(0).ok_or("event 0 fitted")?;
+    assert!((z - 0.01054734).abs() < 1e-3, "shin z {z} vs 0.01054734");
+
+    Ok(())
+}
+
+/// The logarithmic opinion pool is *externally Bayesian* — pooling then
+/// updating with a likelihood equals updating then pooling — and the linear
+/// pool is not.
+///
+/// Source: Genest & Zidek (1986), "Combining probability distributions: a
+/// critique and an annotated bibliography", *Statistical Science* 1(1):114-148
+/// (the log pool's defining property). This is an exact algebraic identity, so
+/// it holds to ~1e-9 with no external numbers.
+#[test]
+fn log_pool_is_externally_bayesian() -> TestResult {
+    let priors = [[0.5, 0.3, 0.2], [0.2, 0.5, 0.3]];
+    let likelihood = [0.7, 0.2, 0.1];
+    let outcomes = ["a", "b", "c"];
+
+    let bayes = |p: &[f64]| -> Vec<f64> {
+        let post: Vec<f64> = p.iter().zip(likelihood).map(|(pi, l)| pi * l).collect();
+        let z: f64 = post.iter().sum();
+        post.iter().map(|x| x / z).collect()
+    };
+    let log_pool = |sources: &[Vec<f64>]| -> TestResult2 {
+        let mut d = ForecastDataset::new();
+        for (i, s) in sources.iter().enumerate() {
+            let row: Vec<(&str, f64)> = outcomes.iter().copied().zip(s.iter().copied()).collect();
+            d.push_source(&format!("s{i}"), &row)?;
+        }
+        let m = OpinionPool {
+            kind: PoolKind::Logarithmic,
+            ..Default::default()
+        }
+        .fit(&d)?;
+        let map: std::collections::HashMap<_, _> = m.scores().collect();
+        Ok(outcomes.iter().map(|o| map[*o]).collect())
+    };
+
+    // update-then-pool
+    let updated: Vec<Vec<f64>> = priors.iter().map(|p| bayes(p)).collect();
+    let utp = log_pool(&updated)?;
+    // pool-then-update
+    let pooled = log_pool(&[priors[0].to_vec(), priors[1].to_vec()])?;
+    let ptu = bayes(&pooled);
+
+    for (a, b) in utp.iter().zip(&ptu) {
+        assert!(
+            (a - b).abs() < 1e-9,
+            "log pool not externally Bayesian: {a} vs {b}"
+        );
+    }
+    Ok(())
+}
+
+type TestResult2 = Result<Vec<f64>, Box<dyn std::error::Error>>;
+
+/// The Kelly criterion's canonical even-money example.
+///
+/// Source: Kelly (1956), "A New Interpretation of Information Rate", *Bell
+/// System Technical Journal*; the textbook even-money result f* = 2p − 1. At
+/// p = 0.6, b = 1 the growth-optimal stake is 0.2. Exact closed form, asserted
+/// to 1e-12.
+#[test]
+fn kelly_even_money_closed_form() -> TestResult {
+    assert!((kelly_fraction(0.6, 1.0)? - 0.2).abs() < 1e-12);
+    assert!((kelly_fraction(0.75, 1.0)? - 0.5).abs() < 1e-12);
+    assert_eq!(kelly_fraction(0.5, 1.0)?, 0.0);
     Ok(())
 }

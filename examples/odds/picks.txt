@@ -1,0 +1,3 @@
+manchester 0.55 2.10
+verstappen 0.75 1.45
+hamilton 0.18 4.50

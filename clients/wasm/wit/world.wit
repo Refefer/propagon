@@ -148,6 +148,35 @@ interface datasets {
         len: func() -> u32;
         is-empty: func() -> bool;
     }
+
+    /// Posted decimal odds grouped by events (§14.1 de-vigging).
+    resource odds-dataset {
+        constructor();
+        push-event: func(outcomes: list<tuple<string, f64>>) -> result<_, error>;
+        n-entities: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// Several sources' probability forecasts over a common outcome space
+    /// (§14.2 opinion pools).
+    resource forecast-dataset {
+        constructor();
+        push-source: func(name: string, weight: f64, forecast: list<tuple<string, f64>>) -> result<_, error>;
+        n-outcomes: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// A prediction-market trade stream (§14.3 LMSR).
+    resource market-dataset {
+        constructor();
+        push-trade: func(outcome: string, shares: f64) -> result<_, error>;
+        declare-outcome: func(outcome: string);
+        n-entities: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
 }
 
 interface games {
@@ -1179,6 +1208,93 @@ interface trajectories {
     load-td-value: func(state: string) -> result<td-value-model, error>;
 }
 
+interface betting {
+    use types.{error, scores-bulk};
+    use datasets.{odds-dataset, forecast-dataset, market-dataset};
+
+    // --- §14.1 de-vigging (batch) ---
+    record odds-devig-params {
+        // "multiplicative" | "additive" | "power" | "shin"
+        method: option<string>,
+        // "error" | "clamp-renormalize"
+        additive-clamp: option<string>,
+        tolerance: option<f64>,
+    }
+    resource odds-devig-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        n-events: func() -> u32;
+        booksum: func(event: u32) -> option<f64>;
+        insider-share: func(event: u32) -> option<f64>;
+    }
+    fit-odds-devig: func(params: odds-devig-params, data: borrow<odds-dataset>) -> result<odds-devig-model, error>;
+    fit-warm-odds-devig: func(params: odds-devig-params, data: borrow<odds-dataset>, init: borrow<odds-devig-model>) -> result<odds-devig-model, error>;
+    load-odds-devig: func(state: string) -> result<odds-devig-model, error>;
+
+    // --- §14.2 opinion pools (batch) ---
+    record opinion-pool-params {
+        // "linear" | "logarithmic"
+        kind: option<string>,
+        extremize: option<f64>,
+        // "error" | "skip" | "uniform"
+        missing: option<string>,
+        eps-floor: option<f64>,
+    }
+    resource opinion-pool-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-opinion-pool: func(params: opinion-pool-params, data: borrow<forecast-dataset>) -> result<opinion-pool-model, error>;
+    fit-warm-opinion-pool: func(params: opinion-pool-params, data: borrow<forecast-dataset>, init: borrow<opinion-pool-model>) -> result<opinion-pool-model, error>;
+    load-opinion-pool: func(state: string) -> result<opinion-pool-model, error>;
+
+    // --- §14.3 LMSR prediction market (online) ---
+    record lmsr-params {
+        b: option<f64>,
+    }
+    resource lmsr-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<market-dataset>) -> result<_, error>;
+        price: func(outcome: string) -> option<f64>;
+        cost: func() -> f64;
+        trade-cost: func(outcome: string, shares: f64) -> option<f64>;
+    }
+    init-lmsr: func(params: lmsr-params) -> lmsr-model;
+    fit-lmsr: func(params: lmsr-params, data: borrow<market-dataset>) -> result<lmsr-model, error>;
+    load-lmsr: func(state: string) -> result<lmsr-model, error>;
+
+    // --- §14.4 Kelly staking (free functions) ---
+    kelly-fraction: func(p: f64, b: f64) -> result<f64, error>;
+    fractional-kelly: func(p: f64, b: f64, lambda: f64) -> result<f64, error>;
+    portfolio-kelly: func(opportunities: list<tuple<f64, f64>>) -> result<list<f64>, error>;
+
+    // --- §14.5 diagnostics (free functions) ---
+    record calibration-bin {
+        lo: f64,
+        hi: f64,
+        mean-pred: f64,
+        realized-freq: f64,
+        count: u32,
+    }
+    brier-score: func(forecasts: list<f64>, outcomes: list<bool>) -> result<f64, error>;
+    log-loss: func(forecasts: list<f64>, outcomes: list<bool>) -> result<f64, error>;
+    closing-line-value: func(taken: f64, closing: f64) -> result<f64, error>;
+    calibration-table: func(implied: list<f64>, outcomes: list<bool>, n-buckets: u32) -> result<list<calibration-bin>, error>;
+}
+
 interface functions {
     use types.{error};
     use datasets.{graph-dataset};
@@ -1202,5 +1318,6 @@ world propagon {
     export annotated;
     export rankings;
     export trajectories;
+    export betting;
     export functions;
 }

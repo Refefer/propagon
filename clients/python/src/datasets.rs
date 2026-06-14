@@ -459,6 +459,147 @@ impl TrajectoriesDataset {
     }
 }
 
+/// Posted betting odds grouped by events (§14.1 de-vigging).
+#[pyclass(name = "OddsDataset", module = "propagon._propagon")]
+pub struct OddsDataset {
+    pub(crate) inner: propagon::OddsDataset,
+}
+
+#[pymethods]
+impl OddsDataset {
+    /// An empty dataset.
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: propagon::OddsDataset::new(),
+        }
+    }
+
+    /// Appends one event from `(outcome, decimal_odds)` pairs. Outcome names
+    /// must be unique across the dataset; every `decimal_odds` must exceed 1.0.
+    fn push_event(&mut self, outcomes: Vec<(String, f64)>) -> PyResult<()> {
+        let pairs: Vec<(&str, f64)> = outcomes.iter().map(|(n, o)| (n.as_str(), *o)).collect();
+        self.inner.push_event(&pairs).map_py()
+    }
+
+    /// Number of events.
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Number of distinct outcomes.
+    fn n_entities(&self) -> usize {
+        self.inner.n_entities()
+    }
+
+    /// Whether the dataset holds no events.
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("OddsDataset(events={})", self.inner.len())
+    }
+}
+
+/// Several sources' probability forecasts over a common outcome space
+/// (§14.2 opinion pools).
+#[pyclass(name = "ForecastDataset", module = "propagon._propagon")]
+pub struct ForecastDataset {
+    pub(crate) inner: propagon::ForecastDataset,
+}
+
+#[pymethods]
+impl ForecastDataset {
+    /// An empty dataset.
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: propagon::ForecastDataset::new(),
+        }
+    }
+
+    /// Appends a source's forecast from `(outcome, probability)` pairs. The
+    /// probabilities must be non-negative and sum to 1; `weight` defaults to 1.
+    #[pyo3(signature = (name, forecast, weight = 1.0))]
+    fn push_source(
+        &mut self,
+        name: &str,
+        forecast: Vec<(String, f64)>,
+        weight: f64,
+    ) -> PyResult<()> {
+        let pairs: Vec<(&str, f64)> = forecast.iter().map(|(n, p)| (n.as_str(), *p)).collect();
+        self.inner
+            .push_source_weighted(name, weight, &pairs)
+            .map_py()
+    }
+
+    /// Number of sources.
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Number of distinct outcomes.
+    fn n_outcomes(&self) -> usize {
+        self.inner.n_outcomes()
+    }
+
+    /// Whether the dataset holds no sources.
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("ForecastDataset(sources={})", self.inner.len())
+    }
+}
+
+/// A prediction-market trade stream (§14.3 LMSR).
+#[pyclass(name = "MarketDataset", module = "propagon._propagon")]
+pub struct MarketDataset {
+    pub(crate) inner: propagon::MarketDataset,
+}
+
+#[pymethods]
+impl MarketDataset {
+    /// An empty market.
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: propagon::MarketDataset::new(),
+        }
+    }
+
+    /// Records a trade: `shares` of `outcome` (negative sells; 0 just declares).
+    fn push_trade(&mut self, outcome: &str, shares: f64) -> PyResult<()> {
+        self.inner.push_trade(outcome, shares).map_py()
+    }
+
+    /// Adds `outcome` to the universe without trading on it.
+    fn declare_outcome(&mut self, outcome: &str) {
+        self.inner.declare_outcome(outcome);
+    }
+
+    /// Number of trades.
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Number of distinct outcomes.
+    fn n_entities(&self) -> usize {
+        self.inner.n_entities()
+    }
+
+    /// Whether the market holds no trades.
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("MarketDataset(trades={})", self.inner.len())
+    }
+}
+
 /// Registers the dataset classes on the module.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PairwiseDataset>()?;
@@ -470,6 +611,9 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AnnotatedPairsDataset>()?;
     m.add_class::<RankingsDataset>()?;
     m.add_class::<TrajectoriesDataset>()?;
+    m.add_class::<OddsDataset>()?;
+    m.add_class::<ForecastDataset>()?;
+    m.add_class::<MarketDataset>()?;
     Ok(())
 }
 
@@ -484,4 +628,7 @@ pub(crate) const EXPORTS: &[&str] = &[
     "AnnotatedPairsDataset",
     "RankingsDataset",
     "TrajectoriesDataset",
+    "OddsDataset",
+    "ForecastDataset",
+    "MarketDataset",
 ];

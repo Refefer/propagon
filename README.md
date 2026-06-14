@@ -48,6 +48,7 @@ Use this guide to find the right category for your data:
 | Each entity has features and you want strengths to depend on them | **Covariate models** — Covariate Bradley-Terry |
 | Choosing between options with uncertain rewards (A/B testing, ad selection) | **Bandits** — Epsilon-Greedy, UCB, KL-UCB, Thompson Sampling, EXP3; Sliding-Window UCB (drift), LinUCB (with context), dueling bandits (preference feedback) |
 | Episodes of states and rewards (sessions, rollouts, demonstrations) | **Trajectory values** — Monte Carlo, TD(0), Value Comparison, Behavior Cloning |
+| Posted betting odds, book prices, or several probability forecasts | **Betting & portfolio** — odds de-vigging, opinion pools, LMSR prediction market, Kelly staking, calibration diagnostics |
 | You need confidence intervals on any leaderboard | **Bootstrap intervals** — the `--bootstrap N` wrapper on any batch ranker |
 
 ## Algorithm catalog
@@ -2694,6 +2695,157 @@ for (name, score) in model.sorted_scores() {
 
 Each entity gets a score between 0 and 1. At P95 (the default), the score is the upper bound of the 95% Wilson confidence interval for the entity's true win rate. A score of 0.95 means you can be 95% confident the entity's true win rate is at least that high. An undefeated player with only 2 games might score 0.82 (Wilson penalizes small samples), while a 90-10 veteran scores 0.97 — the veteran ranks higher despite a lower raw rate. At P50, the score is the plain win fraction with no smoothing.
 
+### Odds De-vigging
+
+**Real-world scenario:** A sportsbook posts decimal odds of 4.20 / 3.70 / 1.95 on a three-way market. The raw implied probabilities (1/odds) sum to about 1.02 — the extra 2% is the bookmaker's margin (the "vig"). De-vigging strips that margin out to recover the book's fair probability for each outcome, which is a Bradley-Terry / Plackett-Luce strength on the log-odds scale and drops straight onto a leaderboard.
+
+**When to use:**
+
+- You have posted odds (one or more events) and want calibrated probabilities or strengths out of them.
+- You want to remove the favorite-longshot bias (use the power or Shin method) rather than just normalize (multiplicative).
+- You want the Shin method's recovered insider-share `z` as a market-quality diagnostic.
+
+**When to avoid:**
+
+- You have raw outcomes rather than prices — fit a comparison model (Bradley-Terry, Elo) instead.
+- The additive method can produce negative probabilities on lopsided books; it errors by default (or clamp-renormalizes on request).
+
+**CLI usage:**
+
+```bash
+propagon odds devig --method shin events.txt
+```
+
+**Library usage:**
+
+```rust
+use propagon::algos::{DevigMethod, OddsDevig};
+use propagon::{OddsDataset, RankModel, Ranker};
+
+let mut d = OddsDataset::new();
+d.push_event(&[("home", 4.20), ("draw", 3.70), ("away", 1.95)]).unwrap();
+
+let model = OddsDevig { method: DevigMethod::Shin, ..Default::default() }.fit(&d).unwrap();
+for (outcome, p) in model.sorted_scores() {
+    println!("{outcome}: {p:.4}");
+}
+println!("insider share z = {:?}", model.insider_share(0));
+```
+
+**What the numbers mean:**
+
+Each outcome's score is its fair probability; the outcomes of one event sum to 1. Multiplicative spreads the margin proportionally (leaves the favorite-longshot bias in place); power and Shin compress favorites less than longshots, removing that bias; Shin additionally estimates the fraction of insider money the book defended against.
+
+### Opinion Pool
+
+**Real-world scenario:** Three sportsbooks (or three forecasters) each publish a probability over the same outcomes. Averaging them naively in probability space is biased toward the timid middle; pooling them in log-odds space — the geometric mean of the odds — gives a sharper, better-calibrated consensus, and is the unique "externally Bayesian" way to combine beliefs.
+
+**When to use:**
+
+- You have several sources' probability vectors over a common outcome space and want one consensus.
+- You want the sharper logarithmic pool (geometric mean) and optional extremizing to counter correlated under-confidence.
+
+**When to avoid:**
+
+- Sources disagree on the outcome space — align them first, or set the missing-coverage policy explicitly.
+- A single source assigns probability 0 under the log pool — that vetoes the outcome (set an `eps_floor` to soften it).
+
+**CLI usage:**
+
+```bash
+propagon odds opinion-pool --kind log --extremize 1.5 forecasts.txt
+```
+
+**Library usage:**
+
+```rust
+use propagon::algos::{OpinionPool, PoolKind};
+use propagon::{ForecastDataset, RankModel, Ranker};
+
+let mut d = ForecastDataset::new();
+d.push_source("book1", &[("home", 0.55), ("away", 0.45)]).unwrap();
+d.push_source("book2", &[("home", 0.62), ("away", 0.38)]).unwrap();
+
+let model = OpinionPool { kind: PoolKind::Logarithmic, ..Default::default() }.fit(&d).unwrap();
+println!("{:?}", model.sorted_scores());
+```
+
+**What the numbers mean:**
+
+The consensus probability per outcome, summing to 1. The linear pool is the weighted arithmetic mean; the logarithmic pool is the weighted geometric mean (the mean of log-odds), which is sharper. Extremizing (`a > 1`) pushes the consensus away from the uniform middle.
+
+### LMSR Prediction Market
+
+**Real-world scenario:** You run an internal prediction market where colleagues trade shares on an event's outcomes. Hanson's logarithmic market scoring rule sets a price for each outcome that *is* the crowd's stake-weighted consensus probability, updates it with every trade, and bounds the market maker's worst-case subsidy at `b · ln n`.
+
+**When to use:**
+
+- You are eliciting probabilities from participants with skin in the game, with always-on liquidity.
+- You want a live, incrementally-updated consensus (the model is an online ranker — feed it trades as they arrive).
+
+**When to avoid:**
+
+- You have historical outcomes, not trades — use a comparison or de-vigging model.
+- The market is thin: few participants make the price noisy and manipulable.
+
+**CLI usage:**
+
+```bash
+propagon odds lmsr --liquidity 100 trades.txt
+```
+
+**Library usage:**
+
+```rust
+use propagon::algos::Lmsr;
+use propagon::{MarketDataset, OnlineRanker, RankModel};
+
+let mut d = MarketDataset::new();
+d.push_trade("yes", 100.0).unwrap();
+d.push_trade("no", 20.0).unwrap();
+
+let algo = Lmsr { b: 100.0 };
+let model = algo.fit(&d).unwrap();
+println!("prices: {:?}", model.sorted_scores());
+```
+
+**What the numbers mean:**
+
+Each outcome's score is its current market price (a softmax of `q/b` over the outstanding share vector), and the prices sum to 1 — a decision-ready probability. Larger liquidity `b` makes the price move less per trade and raises the bounded subsidy.
+
+### Kelly Criterion
+
+**Real-world scenario:** A model says an outcome has a 60% chance and the market offers even money. How much of your bankroll should you stake? The Kelly criterion answers with the growth-optimal fraction (here, 20%); fractional Kelly stakes a multiple of that to trade a little growth for much lower drawdown — the standard hedge against an *estimated* edge.
+
+**When to use:**
+
+- You have a calibrated win probability and the odds, and need a sizing decision (how much to stake / allocate).
+- You have several simultaneous independent opportunities and want growth-optimal allocations across a shared bankroll (`portfolio_kelly`).
+
+**When to avoid:**
+
+- Your probability is poorly calibrated — Kelly is brutally sensitive to over-estimated edges; run fractional Kelly.
+- You need risk preferences other than log-utility growth.
+
+**Library usage:**
+
+```rust
+use propagon::algos::{fractional_kelly, kelly_fraction};
+
+let f = kelly_fraction(0.6, 1.0).unwrap();        // 0.20 (b = net decimal odds)
+let half = fractional_kelly(0.6, 1.0, 0.5).unwrap(); // 0.10
+println!("stake {f}, half-Kelly {half}");
+```
+
+```bash
+# rows of 'outcome <win probability> <decimal odds>'; prints a stake per row
+propagon odds kelly --fraction 0.5 picks.txt
+```
+
+**What the numbers mean:**
+
+`kelly_fraction(p, b)` returns the fraction of bankroll to stake, where `b` is the net decimal odds (decimal − 1); a non-positive edge returns 0. The companion `closing_line_value`, `brier_score`, `log_loss`, and `calibration_table` functions (and the `propagon odds clv` / `calibrate` commands) score how good your probabilities were.
+
 ## Input file formats
 
 Propagon reads plain-text input files. Every algorithm accepts the format that matches its data type — here's what each format looks like.
@@ -2808,6 +2960,57 @@ Used by: Covariate Bradley-Terry (`--features`)
 alice 1.0 -0.5
 bob   0.0  0.5
 carol -1.0 1.0
+```
+
+### Betting odds (events)
+
+Used by: Odds De-vigging (`propagon odds devig`)
+
+**Format:** one `outcome <decimal odds>` per line; a blank line separates events. Outcome names must be unique across the file (qualify them per event). Decimal odds must exceed 1.
+
+```
+home 4.20
+draw 3.70
+away 1.95
+
+r2:alpha 1.80
+r2:beta  2.20
+```
+
+### Forecasts (opinion pools)
+
+Used by: Opinion Pool (`propagon odds opinion-pool`)
+
+**Format:** one `source outcome <probability>` per line; each source's probabilities must sum to 1.
+
+```
+book1 home 0.55
+book1 away 0.45
+book2 home 0.62
+book2 away 0.38
+```
+
+### Market trades (LMSR)
+
+Used by: LMSR (`propagon odds lmsr`)
+
+**Format:** one `outcome <shares>` trade per line (negative shares sell).
+
+```
+yes 100
+no  20
+yes 15
+```
+
+### Kelly picks & calibration
+
+Used by: `propagon odds kelly` / `clv` / `calibrate`
+
+**Format:** `kelly` reads `outcome <win probability> <decimal odds>`; `clv` reads `label <taken odds> <closing odds>`; `calibrate` reads `<implied probability> <outcome 0|1>`.
+
+```
+pick1 0.60 2.00
+pick2 0.30 4.50
 ```
 
 ## State files and incremental updates

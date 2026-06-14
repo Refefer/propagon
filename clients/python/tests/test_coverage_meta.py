@@ -74,6 +74,27 @@ def _trajectories():
     return d
 
 
+def _odds():
+    d = propagon.OddsDataset()
+    d.push_event([("home", 2.1), ("draw", 3.4), ("away", 3.9)])
+    d.push_event([("p", 1.8), ("q", 2.2)])
+    return d
+
+
+def _forecasts():
+    d = propagon.ForecastDataset()
+    d.push_source("s1", [("a", 0.5), ("b", 0.3), ("c", 0.2)])
+    d.push_source("s2", [("a", 0.4), ("b", 0.4), ("c", 0.2)])
+    return d
+
+
+def _market():
+    d = propagon.MarketDataset()
+    for o, s in [("yes", 30.0), ("no", 5.0), ("yes", 10.0)]:
+        d.push_trade(o, s)
+    return d
+
+
 # (factory, fixture builder) for every fittable algorithm.
 ALGORITHMS = [
     (lambda: propagon.Elo(), _games),
@@ -127,6 +148,9 @@ ALGORITHMS = [
     (lambda: propagon.WinRate(), _pairwise),
     (lambda: propagon.DuelingBandit(), _pairwise),
     (lambda: propagon.CovariateBt(features=[("A", [1.0]), ("B", [0.0]), ("C", [-1.0])]), _pairwise),
+    (lambda: propagon.OddsDevig(), _odds),
+    (lambda: propagon.OpinionPool(), _forecasts),
+    (lambda: propagon.Lmsr(), _market),
 ]
 
 
@@ -142,5 +166,5 @@ def test_every_algorithm_fits_and_round_trips(factory, fixture):
 
 
 def test_algorithm_count_is_comprehensive():
-    """Sanity: we cover the full catalog (51 fittable algorithms)."""
-    assert len(ALGORITHMS) == 51
+    """Sanity: we cover the full catalog (54 fittable algorithms)."""
+    assert len(ALGORITHMS) == 54

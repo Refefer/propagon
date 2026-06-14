@@ -126,3 +126,26 @@ def test_thompson_beta_posterior_mean_is_analytic():
     model = bandit.fit(data)
     estimate = model.score("arm")
     assert abs(estimate - 8.0 / 12.0) < 1e-12, f"posterior mean {estimate}"
+
+
+def test_devig_power_matches_implied_package():
+    """`implied` R-package vignette: odds (4.20, 3.70, 1.95), power method."""
+    d = propagon.OddsDataset()
+    d.push_event([("a", 4.20), ("b", 3.70), ("c", 1.95)])
+    s = propagon.OddsDevig(method="power").fit(d).scores()
+    for name, want in [("a", 0.2311414), ("b", 0.2630644), ("c", 0.5057941)]:
+        assert abs(s[name] - want) < 1e-3, f"{name}: {s[name]} vs {want}"
+    assert abs(sum(s.values()) - 1.0) < 1e-9
+
+
+def test_kelly_even_money_closed_form():
+    """Kelly (1956) even-money result f* = 2p - 1."""
+    assert abs(propagon.kelly_fraction(0.6, 1.0) - 0.2) < 1e-12
+    assert propagon.kelly_fraction(0.4, 1.0) == 0.0
+    assert abs(propagon.fractional_kelly(0.6, 1.0, 0.5) - 0.1) < 1e-12
+
+
+def test_closing_line_value_sign():
+    """Beating the close (taking a longer price) is positive."""
+    assert abs(propagon.closing_line_value(2.10, 2.00) - 0.05) < 1e-12
+    assert abs(propagon.closing_line_value(2.00, 2.10) + 0.047619047619047616) < 1e-12

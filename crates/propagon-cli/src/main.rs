@@ -23,6 +23,9 @@
 //! - `propagon trajectories <algo> <path>` — `state reward` steps with a blank
 //!   line ending each episode: Monte Carlo / TD state values, bootstrap value
 //!   comparison, and behavior cloning.
+//! - `propagon odds <algo> <path>` — betting & portfolio prediction (§14):
+//!   de-vig decimal odds into fair probabilities, pool multiple forecasts, run
+//!   an LMSR prediction market, size Kelly stakes, and score calibration / CLV.
 //!
 //! Flags are scoped to the commands that use them, so each command's `--help`
 //! is authoritative and shows every default. `--threads`, `--format tsv|jsonl`,
@@ -38,17 +41,20 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use clap::{Arg, ArgAction, ArgMatches, Command, value_parser};
+use propagon::algos::{AdditiveClamp, DevigMethod};
 use propagon::algos::{
     Aggregate, Bandit, BanditModel, BanditPolicy, BayesianBradleyTerry, BehaviorCloning, BiRank,
     BladeChest, BladeChestVariant, Borda, BradleyTerryLR, BradleyTerryMM, Colley, Confidence,
     Copeland, CovariateBt, CrowdBt, Degree, Direction, EdgeCost, Elo, EsRum, Estimator, Footrule,
     GammaPolicy, GeneralizedBt, Glicko2, Granularity, Harmonic, Hits, HodgeFlow, HodgeRank,
     HomeAdvantage, ILsr, KCore, Katz, Keener, Kemeny, KemenyAlgo, KemenyPasses, LeaderRank, LinUcb,
-    LinUcbModel, Lsr, MElo, Mallows, Massey, Mc4, McValue, MovElo, NashAveraging, OffenseDefense,
-    PageRank, PairwiseTests, PlackettLuce, RandomWalker, RankCentrality, ResampleScheme,
-    RumDistribution, SerialRank, Sink, SlidingWindowUcb, SourceBudget, SwUcbModel, TdValue,
-    TeamAggregate, TeamBradleyTerry, Teleport, ThurstoneMosteller, TieModel, ValueCompare, Visit,
-    WengLin, WengLinVariant, Whr, WinRate, Winsorize, extract_components,
+    LinUcbModel, Lmsr, Lsr, MElo, Mallows, Massey, Mc4, McValue, Missing, MovElo, NashAveraging,
+    OddsDevig, OffenseDefense, OpinionPool, PageRank, PairwiseTests, PlackettLuce, PoolKind,
+    RandomWalker, RankCentrality, ResampleScheme, RumDistribution, SerialRank, Sink,
+    SlidingWindowUcb, SourceBudget, SwUcbModel, TdValue, TeamAggregate, TeamBradleyTerry, Teleport,
+    ThurstoneMosteller, TieModel, ValueCompare, Visit, WengLin, WengLinVariant, Whr, WinRate,
+    Winsorize, brier_score, calibration_table, closing_line_value, extract_components,
+    fractional_kelly, log_loss,
 };
 use propagon::{
     Error, FitOptions, MarginTies, OnlineRanker, Progress, RankModel, Ranker, Resample, Result,
@@ -247,6 +253,7 @@ fn cli() -> Command {
         .subcommand(graph_cmd())
         .subcommand(bandit_cmd())
         .subcommand(trajectories_cmd())
+        .subcommand(odds_cmd())
 }
 
 /// The `tournament` group: rankers over two-sided game-result rows.
@@ -1492,6 +1499,92 @@ fn trajectories_cmd() -> Command {
         )))
 }
 
+/// The `odds` group: betting & portfolio prediction (§14) — de-vig odds, pool
+/// forecasts, run an LMSR market, size Kelly stakes, and score calibration.
+fn odds_cmd() -> Command {
+    Command::new("odds")
+        .about("Betting & portfolio: de-vig odds, pool forecasts, LMSR market, Kelly stakes, calibration")
+        .subcommand_required(true)
+        .subcommand(with_path(
+            Command::new("devig")
+                .about("De-vig decimal odds into fair probabilities (blank-line-separated events of 'outcome <odds>' rows)")
+                .arg(
+                    Arg::new("method")
+                        .long("method")
+                        .value_parser(["multiplicative", "additive", "power", "shin"])
+                        .default_value("power")
+                        .help("Margin-removal map"),
+                )
+                .arg(
+                    Arg::new("additive-clamp")
+                        .long("additive-clamp")
+                        .value_parser(["error", "clamp-renormalize"])
+                        .default_value("error")
+                        .help("What 'additive' does when a probability goes negative"),
+                )
+                .arg(opt_def::<f64>(
+                    "tolerance",
+                    "Root-finder tolerance (power/shin)",
+                    OddsDevig::default().tolerance,
+                )),
+        ))
+        .subcommand(with_path(
+            Command::new("opinion-pool")
+                .visible_alias("pool")
+                .about("Consolidate sources' forecasts ('source outcome <probability>' rows)")
+                .arg(
+                    Arg::new("kind")
+                        .long("kind")
+                        .value_parser(["linear", "log"])
+                        .default_value("log")
+                        .help("Arithmetic (linear) or geometric (log) consensus"),
+                )
+                .arg(opt_def::<f64>(
+                    "extremize",
+                    "Extremizing exponent a >= 1 (1 = none)",
+                    OpinionPool::default().extremize,
+                ))
+                .arg(
+                    Arg::new("missing")
+                        .long("missing")
+                        .value_parser(["error", "skip", "uniform"])
+                        .default_value("error")
+                        .help("How a source omitting an outcome is treated"),
+                ),
+        ))
+        .subcommand(with_load_state(with_path(
+            Command::new("lmsr")
+                .about("LMSR prediction-market prices ('outcome <shares>' trade rows; negative sells)")
+                .arg(opt_def::<f64>(
+                    "liquidity",
+                    "Liquidity b > 0 (deeper = less price movement per trade)",
+                    Lmsr::default().b,
+                )),
+        )))
+        .subcommand(with_path(
+            Command::new("kelly")
+                .about("Kelly stake fractions ('outcome <win probability> <decimal odds>' rows)")
+                .arg(opt_def::<f64>(
+                    "fraction",
+                    "Fractional-Kelly multiplier lambda (0.5 = half Kelly)",
+                    1.0,
+                )),
+        ))
+        .subcommand(with_path(
+            Command::new("clv")
+                .about("Closing-line value ('label <taken odds> <closing odds>' rows)"),
+        ))
+        .subcommand(with_path(
+            Command::new("calibrate")
+                .about("Calibration table + Brier/log-loss ('<implied probability> <outcome 0|1>' rows)")
+                .arg(opt_def::<usize>(
+                    "buckets",
+                    "Number of equal-width probability bins",
+                    10,
+                )),
+        ))
+}
+
 // ---------------------------------------------------------------- helpers
 
 /// Overrides `field` only when the user actually passed the flag — the
@@ -1748,6 +1841,7 @@ fn run() -> Result<()> {
         "graph" => run_graph(leaf, sm),
         "bandit" => run_bandit(leaf, sm),
         "trajectories" => run_trajectories(leaf, sm),
+        "odds" => run_odds(leaf, sm),
         other => Err(Error::InvalidInput(format!("unknown subcommand {other:?}"))),
     }
 }
@@ -2804,5 +2898,119 @@ fn run_bandit(policy_name: &str, sm: &ArgMatches) -> Result<()> {
         Ok(())
     } else {
         ctx.emit(&model)
+    }
+}
+
+/// Runs one `odds` leaf (§14). The de-vig/pool/lmsr leaves emit a model; the
+/// kelly/clv/calibrate leaves are free-function reports printed directly.
+fn run_odds(algo: &str, sm: &ArgMatches) -> Result<()> {
+    use std::io::Write;
+
+    let ctx = Ctx::from_matches(sm)?;
+    match algo {
+        "devig" => {
+            let mut tolerance = OddsDevig::default().tolerance;
+            set(sm, "tolerance", &mut tolerance);
+            let a = OddsDevig {
+                method: match choice(sm, "method", "power") {
+                    "multiplicative" => DevigMethod::Multiplicative,
+                    "additive" => DevigMethod::Additive,
+                    "shin" => DevigMethod::Shin,
+                    _ => DevigMethod::Power,
+                },
+                additive_clamp: match choice(sm, "additive-clamp", "error") {
+                    "clamp-renormalize" => AdditiveClamp::ClampRenormalize,
+                    _ => AdditiveClamp::Error,
+                },
+                tolerance,
+            };
+            let data = io::read_odds(ctx.path)?;
+            let model = fit_maybe_warm(&a, &data, &ctx)?;
+            ctx.emit(&model)
+        }
+        "opinion-pool" => {
+            let mut extremize = OpinionPool::default().extremize;
+            set(sm, "extremize", &mut extremize);
+            let a = OpinionPool {
+                kind: match choice(sm, "kind", "log") {
+                    "linear" => PoolKind::Linear,
+                    _ => PoolKind::Logarithmic,
+                },
+                extremize,
+                missing: match choice(sm, "missing", "error") {
+                    "skip" => Missing::Skip,
+                    "uniform" => Missing::Uniform,
+                    _ => Missing::Error,
+                },
+                eps_floor: None,
+            };
+            let data = io::read_forecasts(ctx.path)?;
+            let model = fit_maybe_warm(&a, &data, &ctx)?;
+            ctx.emit(&model)
+        }
+        "lmsr" => {
+            let mut a = Lmsr::default();
+            set(sm, "liquidity", &mut a.b);
+            let data = io::read_market(ctx.path)?;
+            let model = update_maybe_loaded(&a, &data, &ctx)?;
+            ctx.emit(&model)
+        }
+        "kelly" => {
+            let mut lambda = 1.0;
+            set(sm, "fraction", &mut lambda);
+            let rows = io::read_kelly(ctx.path)?;
+            let mut out = std::io::stdout().lock();
+            for (name, p, decimal) in rows {
+                let f = fractional_kelly(p, decimal - 1.0, lambda)?;
+                writeln!(out, "{name}: {f}")?;
+            }
+            Ok(())
+        }
+        "clv" => {
+            let rows = io::read_clv(ctx.path)?;
+            let mut out = std::io::stdout().lock();
+            for (label, taken, closing) in rows {
+                writeln!(out, "{label}: {}", closing_line_value(taken, closing)?)?;
+            }
+            Ok(())
+        }
+        "calibrate" => {
+            let mut buckets = 10usize;
+            set(sm, "buckets", &mut buckets);
+            let (probs, outcomes) = io::read_calibration(ctx.path)?;
+            let table = calibration_table(&probs, &outcomes, buckets)?;
+            let mut out = std::io::stdout().lock();
+            writeln!(
+                out,
+                "# brier={} log_loss={}",
+                brier_score(&probs, &outcomes)?,
+                log_loss(&probs, &outcomes)?
+            )?;
+            writeln!(out, "# lo hi mean_pred realized_freq count")?;
+            for bin in table {
+                // Empty bins have NaN summaries; render them as '-' for a clean
+                // human-facing table.
+                let fmt = |x: f64| {
+                    if x.is_nan() {
+                        "     -".to_string()
+                    } else {
+                        format!("{x:.4}")
+                    }
+                };
+                writeln!(
+                    out,
+                    "{:.3} {:.3} {} {} {}",
+                    bin.lo,
+                    bin.hi,
+                    fmt(bin.mean_pred),
+                    fmt(bin.realized_freq),
+                    bin.count
+                )?;
+            }
+            Ok(())
+        }
+        other => Err(Error::InvalidInput(format!(
+            "unknown odds algorithm {other:?}"
+        ))),
     }
 }

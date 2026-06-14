@@ -7,6 +7,7 @@
 //! once the surface is scaled (Phase 2+).
 
 pub mod annotated;
+pub mod betting;
 pub mod games;
 pub mod graph;
 pub mod matchups;

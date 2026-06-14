@@ -1,6 +1,7 @@
 //! Algorithm + model classes, grouped by the dataset shape they consume.
 
 pub mod annotated;
+pub mod betting;
 pub mod contextual;
 pub mod games;
 pub mod graph;
@@ -126,6 +127,13 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<pairwise::WinRateModel>()?;
     m.add_class::<pairwise::DuelingBandit>()?;
     m.add_class::<pairwise::DuelingModel>()?;
+    // --- betting / portfolio (§14) ---
+    m.add_class::<betting::OddsDevig>()?;
+    m.add_class::<betting::OddsDevigModel>()?;
+    m.add_class::<betting::OpinionPool>()?;
+    m.add_class::<betting::OpinionPoolModel>()?;
+    m.add_class::<betting::Lmsr>()?;
+    m.add_class::<betting::LmsrModel>()?;
     Ok(())
 }
 
@@ -243,4 +251,11 @@ pub(crate) const EXPORTS: &[&str] = &[
     "WinRateModel",
     "DuelingBandit",
     "DuelingBanditModel",
+    // betting / portfolio (§14)
+    "OddsDevig",
+    "OddsDevigModel",
+    "OpinionPool",
+    "OpinionPoolModel",
+    "Lmsr",
+    "LmsrModel",
 ];

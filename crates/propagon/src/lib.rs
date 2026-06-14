@@ -65,9 +65,10 @@ pub mod state;
 mod traits;
 
 pub use dataset::{
-    Adjacency, AnnotatedPairsDataset, ContextualRewardsDataset, GameOutcome, GameView,
-    GamesDataset, GraphDataset, GraphView, MarginTies, MatchupsDataset, PairwiseDataset,
-    RankingsDataset, Resample, RewardsDataset, Tally, TiePolicy, TrajectoriesDataset,
+    Adjacency, AnnotatedPairsDataset, ContextualRewardsDataset, ForecastDataset, GameOutcome,
+    GameView, GamesDataset, GraphDataset, GraphView, MarginTies, MarketDataset, MatchupsDataset,
+    OddsDataset, PairwiseDataset, RankingsDataset, Resample, RewardsDataset, Tally, TiePolicy,
+    TrajectoriesDataset,
 };
 pub use error::{Error, Result};
 pub use interner::Interner;

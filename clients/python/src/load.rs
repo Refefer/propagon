@@ -10,7 +10,8 @@
 use pyo3::prelude::*;
 
 use crate::algos::{
-    annotated, contextual, games, graph, matchups, pairwise, rankings, rewards, trajectories,
+    annotated, betting, contextual, games, graph, matchups, pairwise, rankings, rewards,
+    trajectories,
 };
 use crate::errors::{MapPy, StateError};
 
@@ -96,6 +97,10 @@ pub(crate) fn load_state(py: Python<'_>, text: &str) -> PyResult<Py<PyAny>> {
         "covariate-bt" => load_into(py, text, |inner| pairwise::CovariateBtModel { inner }),
         "rate" => load_into(py, text, |inner| pairwise::WinRateModel { inner }),
         "dueling-bandit" => load_into(py, text, |inner| pairwise::DuelingModel { inner }),
+        // betting / portfolio (§14)
+        "odds-devig" => load_into(py, text, |inner| betting::OddsDevigModel { inner }),
+        "opinion-pool" => load_into(py, text, |inner| betting::OpinionPoolModel { inner }),
+        "lmsr" => load_into(py, text, |inner| betting::LmsrModel { inner }),
         other => Err(StateError::new_err(format!(
             "unknown algorithm tag {other:?} in state header"
         ))),

@@ -8,10 +8,13 @@
 
 mod annotated;
 mod contextual;
+mod forecast;
 mod games;
 mod graph;
 mod io;
+mod market;
 mod matchups;
+mod odds;
 mod pairwise;
 mod rankings;
 mod resample;
@@ -20,9 +23,12 @@ mod trajectories;
 
 pub use annotated::AnnotatedPairsDataset;
 pub use contextual::ContextualRewardsDataset;
+pub use forecast::ForecastDataset;
 pub use games::{GameOutcome, GameView, GamesDataset, MarginTies, TiePolicy};
 pub use graph::{Adjacency, GraphDataset, GraphView};
+pub use market::MarketDataset;
 pub use matchups::MatchupsDataset;
+pub use odds::OddsDataset;
 pub use pairwise::{PairwiseDataset, Tally};
 pub use rankings::RankingsDataset;
 pub use resample::Resample;

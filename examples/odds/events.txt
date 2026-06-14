@@ -1,0 +1,10 @@
+manchester 2.10
+draw 3.40
+chelsea 3.75
+
+verstappen 1.45
+hamilton 4.50
+leclerc 9.00
+
+trump 1.95
+biden 2.05

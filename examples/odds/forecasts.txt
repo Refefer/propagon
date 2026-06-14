@@ -1,0 +1,6 @@
+pinnacle trump 0.52
+pinnacle biden 0.48
+betfair trump 0.49
+betfair biden 0.51
+model trump 0.55
+model biden 0.45

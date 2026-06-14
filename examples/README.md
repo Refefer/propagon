@@ -14,6 +14,7 @@ override with `PROPAGON_BIN`). Outputs land in each directory's `out/`
 | [`crowd/`](crowd/) | annotator-tagged votes | `annotator winner loser [weight]` | crowd-bt |
 | [`graph/`](graph/) | directed weighted edges (Wikipedia links) | `src dst [weight]` | page-rank, hits, katz, degree, k-core, birank, components |
 | [`bandit/`](bandit/) | reward log | `arm reward` | greedy, ε-greedy, ucb1, kl-ucb, thompson (beta/gaussian), exp3 |
+| [`odds/`](odds/) | betting odds / forecasts / trades | blank-line events of `outcome odds`; `source outcome prob`; `outcome shares` | devig (multiplicative/power/shin), opinion-pool, lmsr, kelly, clv, calibrate |
 
 Cross-cutting flags work everywhere: `--threads N`, `--format tsv|jsonl`,
 `--save-state FILE`, `--load-state FILE`. See the top-level README for the

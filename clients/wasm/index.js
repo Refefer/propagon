@@ -13,6 +13,7 @@ import {
   annotated,
   rankings,
   trajectories,
+  betting,
 } from "./dist/propagon.js";
 
 // algorithm tag (state header) -> loader. Tags match propagon's RankModel::algorithm().
@@ -76,6 +77,10 @@ const LOADERS = {
   "covariate-bt": (s) => pairwise.loadCovariateBt(s),
   "rate": (s) => pairwise.loadWinRate(s),
   "dueling-bandit": (s) => pairwise.loadDuelingBandit(s),
+  // betting / portfolio (§14)
+  "odds-devig": (s) => betting.loadOddsDevig(s),
+  "opinion-pool": (s) => betting.loadOpinionPool(s),
+  "lmsr": (s) => betting.loadLmsr(s),
 };
 
 /**

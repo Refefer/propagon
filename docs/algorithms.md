@@ -1010,7 +1010,7 @@ A note on calibration: these methods are judged on probability quality (Brier/lo
 - **Model & assumptions** — decimal odds $o_i$ give a raw implied probability $r_i = 1/o_i$; their sum, the **booksum** or **overround** $B = \sum_i r_i > 1$, is inflated by the vig $B - 1$. Four maps return fair probabilities $\pi$ with $\sum_i \pi_i = 1$, differing only in *how they assume the margin is spread across outcomes*:
   - **Multiplicative** (normalization): $\pi_i = r_i / B$. Margin proportional to probability; simple, but **underprices longshots** (it leaves the favorite-longshot bias, §14.5, in place).
   - **Additive**: $\pi_i = r_i - (B-1)/n$. The margin split equally; can drive rank outsiders **negative**, so it is rarely used unmodified.
-  - **Power**: $\pi_i = r_i^{1/\tau}$ with the exponent $\tau \ge 1$ solved so $\sum_i \pi_i = 1$. Compresses favorites less than longshots, absorbing the favorite-longshot bias — the practitioner default.
+  - **Power**: $\pi_i = r_i^{1/\tau}$ with the exponent $\tau$ solved so $\sum_i \pi_i = 1$ (for the usual over-round $B>1$ this gives $\tau<1$, since every $r_i<1$). Compresses favorites less than longshots, absorbing the favorite-longshot bias — the practitioner default.
   - **Shin** [Shin 1992; Shin 1993]: models the margin as the bookmaker's defense against a fraction $z$ of **insider** money. The fair probability has the Jullien–Salanié closed form
 
     $$\pi_i = \frac{\sqrt{\,z^2 + 4(1-z)\,\dfrac{r_i^2}{B}\,} \; - \; z}{2(1-z)}, \qquad r_i = 1/o_i,\; B = \textstyle\sum_j r_j,$$

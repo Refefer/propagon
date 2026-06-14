@@ -9,9 +9,10 @@ use std::cell::RefCell;
 
 use crate::Component;
 use crate::bindings::exports::propagon::core::datasets::{
-    Guest, GuestAnnotatedPairsDataset, GuestContextualRewardsDataset, GuestGamesDataset,
-    GuestGraphDataset, GuestMatchupsDataset, GuestPairwiseDataset, GuestRankingsDataset,
-    GuestRewardsDataset, GuestTrajectoriesDataset,
+    Guest, GuestAnnotatedPairsDataset, GuestContextualRewardsDataset, GuestForecastDataset,
+    GuestGamesDataset, GuestGraphDataset, GuestMarketDataset, GuestMatchupsDataset,
+    GuestOddsDataset, GuestPairwiseDataset, GuestRankingsDataset, GuestRewardsDataset,
+    GuestTrajectoriesDataset,
 };
 use crate::bindings::exports::propagon::core::types::{Error, GameOutcome};
 use crate::convert::{as_str_slice, narrow_f32};
@@ -27,6 +28,9 @@ pub struct MatchupsData(pub RefCell<propagon::MatchupsDataset>);
 pub struct AnnotatedPairsData(pub RefCell<propagon::AnnotatedPairsDataset>);
 pub struct RankingsData(pub RefCell<propagon::RankingsDataset>);
 pub struct TrajectoriesData(pub RefCell<propagon::TrajectoriesDataset>);
+pub struct OddsData(pub RefCell<propagon::OddsDataset>);
+pub struct ForecastData(pub RefCell<propagon::ForecastDataset>);
+pub struct MarketData(pub RefCell<propagon::MarketDataset>);
 
 impl Guest for Component {
     type PairwiseDataset = PairwiseData;
@@ -38,6 +42,9 @@ impl Guest for Component {
     type AnnotatedPairsDataset = AnnotatedPairsData;
     type RankingsDataset = RankingsData;
     type TrajectoriesDataset = TrajectoriesData;
+    type OddsDataset = OddsData;
+    type ForecastDataset = ForecastData;
+    type MarketDataset = MarketData;
 }
 
 impl GuestPairwiseDataset for PairwiseData {
@@ -250,6 +257,73 @@ impl GuestTrajectoriesDataset for TrajectoriesData {
     }
     fn n_episodes(&self) -> u32 {
         self.0.borrow().n_episodes() as u32
+    }
+    fn len(&self) -> u32 {
+        self.0.borrow().len() as u32
+    }
+    fn is_empty(&self) -> bool {
+        self.0.borrow().is_empty()
+    }
+}
+
+impl GuestOddsDataset for OddsData {
+    fn new() -> Self {
+        Self(RefCell::new(propagon::OddsDataset::new()))
+    }
+    fn push_event(&self, outcomes: Vec<(String, f64)>) -> Result<(), Error> {
+        let pairs: Vec<(&str, f64)> = outcomes.iter().map(|(n, o)| (n.as_str(), *o)).collect();
+        self.0.borrow_mut().push_event(&pairs).map_wit()
+    }
+    fn n_entities(&self) -> u32 {
+        self.0.borrow().n_entities() as u32
+    }
+    fn len(&self) -> u32 {
+        self.0.borrow().len() as u32
+    }
+    fn is_empty(&self) -> bool {
+        self.0.borrow().is_empty()
+    }
+}
+
+impl GuestForecastDataset for ForecastData {
+    fn new() -> Self {
+        Self(RefCell::new(propagon::ForecastDataset::new()))
+    }
+    fn push_source(
+        &self,
+        name: String,
+        weight: f64,
+        forecast: Vec<(String, f64)>,
+    ) -> Result<(), Error> {
+        let pairs: Vec<(&str, f64)> = forecast.iter().map(|(n, p)| (n.as_str(), *p)).collect();
+        self.0
+            .borrow_mut()
+            .push_source_weighted(&name, weight, &pairs)
+            .map_wit()
+    }
+    fn n_outcomes(&self) -> u32 {
+        self.0.borrow().n_outcomes() as u32
+    }
+    fn len(&self) -> u32 {
+        self.0.borrow().len() as u32
+    }
+    fn is_empty(&self) -> bool {
+        self.0.borrow().is_empty()
+    }
+}
+
+impl GuestMarketDataset for MarketData {
+    fn new() -> Self {
+        Self(RefCell::new(propagon::MarketDataset::new()))
+    }
+    fn push_trade(&self, outcome: String, shares: f64) -> Result<(), Error> {
+        self.0.borrow_mut().push_trade(&outcome, shares).map_wit()
+    }
+    fn declare_outcome(&self, outcome: String) {
+        self.0.borrow_mut().declare_outcome(&outcome);
+    }
+    fn n_entities(&self) -> u32 {
+        self.0.borrow().n_entities() as u32
     }
     fn len(&self) -> u32 {
         self.0.borrow().len() as u32
