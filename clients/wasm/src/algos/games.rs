@@ -1,55 +1,73 @@
-//! Algorithms over `games-dataset`: Elo (online). Phase 1 surface.
+//! Algorithms over `games-dataset`: Elo and Glicko-2 (online).
 
 use std::cell::RefCell;
 
 use propagon::OnlineRanker;
 use propagon::RankModel;
-use propagon::algos::{Elo, EloModel as CoreEloModel};
+use propagon::algos::{Elo, EloModel as CoreElo, Glicko2, Glicko2Model as CoreGlicko2};
 
 use crate::Component;
-use crate::algos::{bulk, save, score_of, sorted, top_k};
-use crate::bindings::exports::propagon::core::datasets::GamesDatasetBorrow;
-use crate::bindings::exports::propagon::core::games::{EloModel, EloParams, Guest, GuestEloModel};
-use crate::bindings::exports::propagon::core::types::{Error, ScoresBulk};
 use crate::datasets::GamesData;
 use crate::errors::MapWit;
+use crate::wit::datasets::GamesDatasetBorrow;
+use crate::wit::games::{
+    EloModel, EloParams, Glicko2Model, Glicko2Params, Guest, GuestEloModel, GuestGlicko2Model,
+    PlayerState,
+};
+use crate::wit::types::Error;
 
-/// An Elo model plus the configured algorithm it was fit with (needed to fold
-/// further batches in via `update`). A loaded model defaults its config.
-pub struct EloMod {
-    algo: Elo,
-    model: RefCell<CoreEloModel>,
-}
+online_model!(
+    EloMod,
+    GuestEloModel,
+    Elo,
+    CoreElo,
+    GamesData,
+    GamesDatasetBorrow<'_>
+);
 
-/// Merge optional WIT fields onto the core `Default`.
-fn elo_params(p: EloParams) -> Elo {
-    let mut e = Elo::default();
-    if let Some(v) = p.k {
-        e.k = v;
+online_model!(
+    Glicko2Mod, GuestGlicko2Model, Glicko2, CoreGlicko2, GamesData, GamesDatasetBorrow<'_>,
+    extras {
+        fn players(&self) -> Vec<(String, PlayerState)> {
+            self.model
+                .borrow()
+                .players()
+                .map(|(n, p)| (n.to_string(), PlayerState { r: p.r, rd: p.rd, sigma: p.sigma }))
+                .collect()
+        }
     }
-    if let Some(v) = p.initial_rating {
-        e.initial_rating = v;
-    }
-    if let Some(v) = p.scale {
-        e.scale = v;
-    }
-    e
-}
+);
 
 impl Guest for Component {
     type EloModel = EloMod;
+    type Glicko2Model = Glicko2Mod;
 
     fn init_elo(params: EloParams) -> EloModel {
-        let algo = elo_params(params);
+        let algo = merge_params!(
+            params,
+            Elo,
+            scalar {
+                k,
+                initial_rating,
+                scale
+            }
+        );
         let model = algo.init();
         EloModel::new(EloMod {
             algo,
             model: RefCell::new(model),
         })
     }
-
     fn fit_elo(params: EloParams, data: GamesDatasetBorrow<'_>) -> Result<EloModel, Error> {
-        let algo = elo_params(params);
+        let algo = merge_params!(
+            params,
+            Elo,
+            scalar {
+                k,
+                initial_rating,
+                scale
+            }
+        );
         let ds = data.get::<GamesData>();
         let mut model = algo.init();
         algo.update(&mut model, &ds.0.borrow()).map_wit()?;
@@ -58,38 +76,58 @@ impl Guest for Component {
             model: RefCell::new(model),
         }))
     }
-
     fn load_elo(state: String) -> Result<EloModel, Error> {
-        let model = CoreEloModel::load_jsonl(state.as_bytes()).map_wit()?;
+        let model = CoreElo::load_jsonl(state.as_bytes()).map_wit()?;
         Ok(EloModel::new(EloMod {
             algo: Elo::default(),
             model: RefCell::new(model),
         }))
     }
-}
 
-impl GuestEloModel for EloMod {
-    fn algorithm(&self) -> String {
-        self.model.borrow().algorithm().to_string()
+    fn init_glicko2(params: Glicko2Params) -> Glicko2Model {
+        let algo = merge_params!(
+            params,
+            Glicko2,
+            scalar {
+                tau,
+                rating,
+                rd,
+                sigma
+            }
+        );
+        let model = algo.init();
+        Glicko2Model::new(Glicko2Mod {
+            algo,
+            model: RefCell::new(model),
+        })
     }
-    fn sorted_scores(&self) -> Vec<(String, f64)> {
-        sorted(&*self.model.borrow())
-    }
-    fn score(&self, name: String) -> Option<f64> {
-        score_of(&*self.model.borrow(), &name)
-    }
-    fn top(&self, k: u32) -> Vec<(String, f64)> {
-        top_k(&*self.model.borrow(), k)
-    }
-    fn scores_bulk(&self) -> ScoresBulk {
-        bulk(&*self.model.borrow())
-    }
-    fn save_state(&self) -> Result<String, Error> {
-        save(&*self.model.borrow())
-    }
-    fn update(&self, data: GamesDatasetBorrow<'_>) -> Result<(), Error> {
+    fn fit_glicko2(
+        params: Glicko2Params,
+        data: GamesDatasetBorrow<'_>,
+    ) -> Result<Glicko2Model, Error> {
+        let algo = merge_params!(
+            params,
+            Glicko2,
+            scalar {
+                tau,
+                rating,
+                rd,
+                sigma
+            }
+        );
         let ds = data.get::<GamesData>();
-        let mut model = self.model.borrow_mut();
-        self.algo.update(&mut model, &ds.0.borrow()).map_wit()
+        let mut model = algo.init();
+        algo.update(&mut model, &ds.0.borrow()).map_wit()?;
+        Ok(Glicko2Model::new(Glicko2Mod {
+            algo,
+            model: RefCell::new(model),
+        }))
+    }
+    fn load_glicko2(state: String) -> Result<Glicko2Model, Error> {
+        let model = CoreGlicko2::load_jsonl(state.as_bytes()).map_wit()?;
+        Ok(Glicko2Model::new(Glicko2Mod {
+            algo: Glicko2::default(),
+            model: RefCell::new(model),
+        }))
     }
 }

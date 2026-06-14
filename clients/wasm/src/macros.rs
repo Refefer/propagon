@@ -1,0 +1,107 @@
+//! Declarative macros that cut the per-algorithm boilerplate.
+//!
+//! - [`batch_model!`] / [`online_model!`] generate a model `resource` wrapper and
+//!   its common read surface (`algorithm`, `sorted-scores`, `score`, `top`,
+//!   `scores-bulk`, `save-state`; plus `update` for online). An optional
+//!   `extras { … }` block splices algorithm-specific accessors (Glicko-2
+//!   `players`, Weng-Lin `ratings`) into the same impl.
+//! - [`merge_params!`] folds a WIT params record's `option` fields onto the
+//!   core's `Default` (scalar fields assigned as-is; `usize` fields cast from
+//!   `u32`). Enum/data fields are set by the caller after the merge.
+
+/// A batch model resource (no incremental `update`).
+macro_rules! batch_model {
+    ($wrapper:ident, $model_trait:path, $core:ty $(, extras { $($extra:item)* })?) => {
+        pub struct $wrapper(pub $core);
+
+        impl $model_trait for $wrapper {
+            fn algorithm(&self) -> ::std::string::String {
+                ::propagon::RankModel::algorithm(&self.0).to_string()
+            }
+            fn sorted_scores(&self) -> ::std::vec::Vec<(::std::string::String, f64)> {
+                $crate::algos::sorted(&self.0)
+            }
+            fn score(&self, name: ::std::string::String) -> ::core::option::Option<f64> {
+                $crate::algos::score_of(&self.0, &name)
+            }
+            fn top(&self, k: u32) -> ::std::vec::Vec<(::std::string::String, f64)> {
+                $crate::algos::top_k(&self.0, k)
+            }
+            fn scores_bulk(&self) -> $crate::wit::types::ScoresBulk {
+                $crate::algos::bulk(&self.0)
+            }
+            fn save_state(
+                &self,
+            ) -> ::core::result::Result<::std::string::String, $crate::wit::types::Error> {
+                $crate::algos::save(&self.0)
+            }
+            $($($extra)*)?
+        }
+    };
+}
+
+/// An online model resource: stores the configured algorithm alongside the model
+/// so `update` can fold further batches in. `$ds_impl` is the dataset wrapper
+/// (a tuple struct over `RefCell<_>`); `$ds_borrow` its generated borrow type.
+macro_rules! online_model {
+    (
+        $wrapper:ident, $model_trait:path, $algo:ty, $core:ty,
+        $ds_impl:ty, $ds_borrow:ty
+        $(, extras { $($extra:item)* })?
+    ) => {
+        pub struct $wrapper {
+            pub algo: $algo,
+            pub model: ::std::cell::RefCell<$core>,
+        }
+
+        impl $model_trait for $wrapper {
+            fn algorithm(&self) -> ::std::string::String {
+                ::propagon::RankModel::algorithm(&*self.model.borrow()).to_string()
+            }
+            fn sorted_scores(&self) -> ::std::vec::Vec<(::std::string::String, f64)> {
+                $crate::algos::sorted(&*self.model.borrow())
+            }
+            fn score(&self, name: ::std::string::String) -> ::core::option::Option<f64> {
+                $crate::algos::score_of(&*self.model.borrow(), &name)
+            }
+            fn top(&self, k: u32) -> ::std::vec::Vec<(::std::string::String, f64)> {
+                $crate::algos::top_k(&*self.model.borrow(), k)
+            }
+            fn scores_bulk(&self) -> $crate::wit::types::ScoresBulk {
+                $crate::algos::bulk(&*self.model.borrow())
+            }
+            fn save_state(
+                &self,
+            ) -> ::core::result::Result<::std::string::String, $crate::wit::types::Error> {
+                $crate::algos::save(&*self.model.borrow())
+            }
+            fn update(
+                &self,
+                data: $ds_borrow,
+            ) -> ::core::result::Result<(), $crate::wit::types::Error> {
+                let ds = data.get::<$ds_impl>();
+                let mut model = self.model.borrow_mut();
+                $crate::errors::MapWit::map_wit(::propagon::OnlineRanker::update(
+                    &self.algo,
+                    &mut model,
+                    &ds.0.borrow(),
+                ))
+            }
+            $($($extra)*)?
+        }
+    };
+}
+
+/// Fold a params record's `option` fields onto the core algorithm's `Default`.
+macro_rules! merge_params {
+    (
+        $p:expr, $algo:ty
+        $(, scalar { $($sf:ident),* $(,)? })?
+        $(, usize { $($uf:ident),* $(,)? })?
+    ) => {{
+        let mut a = <$algo>::default();
+        $( $( if let ::core::option::Option::Some(v) = $p.$sf { a.$sf = v; } )* )?
+        $( $( if let ::core::option::Option::Some(v) = $p.$uf { a.$uf = v as usize; } )* )?
+        a
+    }};
+}

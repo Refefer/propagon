@@ -1,30 +1,25 @@
-//! Algorithms over `graph-dataset`: PageRank (batch). Phase 1 surface.
+//! Algorithms over `graph-dataset`: PageRank and HITS (batch).
 
 use propagon::RankModel;
 use propagon::Ranker;
-use propagon::algos::{PageRank, PageRankModel as CorePageRankModel};
+use propagon::algos::{Hits, HitsModel as CoreHits, PageRank, PageRankModel as CorePageRank};
 
 use crate::Component;
-use crate::algos::{bulk, save, score_of, sorted, top_k};
-use crate::bindings::exports::propagon::core::datasets::GraphDatasetBorrow;
-use crate::bindings::exports::propagon::core::graph::{
-    Guest, GuestPageRankModel, PageRankModel, PageRankParams,
-};
-use crate::bindings::exports::propagon::core::types::{Error, ScoresBulk};
 use crate::datasets::GraphData;
 use crate::enums::{sink, teleport};
 use crate::errors::MapWit;
+use crate::wit::datasets::GraphDatasetBorrow;
+use crate::wit::graph::{
+    Guest, GuestHitsModel, GuestPageRankModel, HitsModel, HitsModelBorrow, HitsParams,
+    PageRankModel, PageRankModelBorrow, PageRankParams,
+};
+use crate::wit::types::Error;
 
-pub struct PageRankMod(CorePageRankModel);
+batch_model!(PageRankMod, GuestPageRankModel, CorePageRank);
+batch_model!(HitsMod, GuestHitsModel, CoreHits);
 
 fn pr_params(p: PageRankParams) -> PageRank {
-    let mut pr = PageRank::default();
-    if let Some(v) = p.damping {
-        pr.damping = v;
-    }
-    if let Some(v) = p.iterations {
-        pr.iterations = v as usize;
-    }
+    let mut pr = merge_params!(p, PageRank, scalar { damping }, usize { iterations });
     if let Some(s) = p.sink {
         pr.sink = sink(s);
     }
@@ -36,6 +31,7 @@ fn pr_params(p: PageRankParams) -> PageRank {
 
 impl Guest for Component {
     type PageRankModel = PageRankMod;
+    type HitsModel = HitsMod;
 
     fn fit_page_rank(
         params: PageRankParams,
@@ -46,11 +42,10 @@ impl Guest for Component {
         let model = pr.fit(&ds.0.borrow()).map_wit()?;
         Ok(PageRankModel::new(PageRankMod(model)))
     }
-
     fn fit_warm_page_rank(
         params: PageRankParams,
         data: GraphDatasetBorrow<'_>,
-        init: crate::bindings::exports::propagon::core::graph::PageRankModelBorrow<'_>,
+        init: PageRankModelBorrow<'_>,
     ) -> Result<PageRankModel, Error> {
         let pr = pr_params(params);
         let ds = data.get::<GraphData>();
@@ -58,30 +53,30 @@ impl Guest for Component {
         let model = pr.fit_warm(&ds.0.borrow(), &init.0).map_wit()?;
         Ok(PageRankModel::new(PageRankMod(model)))
     }
-
     fn load_page_rank(state: String) -> Result<PageRankModel, Error> {
-        let model = CorePageRankModel::load_jsonl(state.as_bytes()).map_wit()?;
+        let model = CorePageRank::load_jsonl(state.as_bytes()).map_wit()?;
         Ok(PageRankModel::new(PageRankMod(model)))
     }
-}
 
-impl GuestPageRankModel for PageRankMod {
-    fn algorithm(&self) -> String {
-        self.0.algorithm().to_string()
+    fn fit_hits(params: HitsParams, data: GraphDatasetBorrow<'_>) -> Result<HitsModel, Error> {
+        let h = merge_params!(params, Hits, scalar { tolerance }, usize { iterations });
+        let ds = data.get::<GraphData>();
+        let model = h.fit(&ds.0.borrow()).map_wit()?;
+        Ok(HitsModel::new(HitsMod(model)))
     }
-    fn sorted_scores(&self) -> Vec<(String, f64)> {
-        sorted(&self.0)
+    fn fit_warm_hits(
+        params: HitsParams,
+        data: GraphDatasetBorrow<'_>,
+        init: HitsModelBorrow<'_>,
+    ) -> Result<HitsModel, Error> {
+        let h = merge_params!(params, Hits, scalar { tolerance }, usize { iterations });
+        let ds = data.get::<GraphData>();
+        let init = init.get::<HitsMod>();
+        let model = h.fit_warm(&ds.0.borrow(), &init.0).map_wit()?;
+        Ok(HitsModel::new(HitsMod(model)))
     }
-    fn score(&self, name: String) -> Option<f64> {
-        score_of(&self.0, &name)
-    }
-    fn top(&self, k: u32) -> Vec<(String, f64)> {
-        top_k(&self.0, k)
-    }
-    fn scores_bulk(&self) -> ScoresBulk {
-        bulk(&self.0)
-    }
-    fn save_state(&self) -> Result<String, Error> {
-        save(&self.0)
+    fn load_hits(state: String) -> Result<HitsModel, Error> {
+        let model = CoreHits::load_jsonl(state.as_bytes()).map_wit()?;
+        Ok(HitsModel::new(HitsMod(model)))
     }
 }

@@ -5,6 +5,7 @@
 //! conversion is a total `match` with no parse step or "expected one of" error.
 
 use crate::bindings::exports::propagon::core::graph::{Sink, Teleport};
+use crate::bindings::exports::propagon::core::rewards::BanditPolicy;
 use crate::bindings::exports::propagon::core::types::{Error, GameOutcome};
 use crate::convert::narrow_f32;
 
@@ -33,5 +34,25 @@ pub(crate) fn teleport(t: Teleport) -> propagon::algos::Teleport {
     match t {
         Teleport::Uniform => propagon::algos::Teleport::Uniform,
         Teleport::Seeds(seeds) => propagon::algos::Teleport::Seeds(seeds),
+    }
+}
+
+/// WIT `bandit-policy` -> `propagon::algos::BanditPolicy`.
+pub(crate) fn bandit_policy(p: BanditPolicy) -> propagon::algos::BanditPolicy {
+    use propagon::algos::BanditPolicy as P;
+    match p {
+        BanditPolicy::Greedy => P::Greedy,
+        BanditPolicy::EpsilonGreedy(epsilon) => P::EpsilonGreedy { epsilon },
+        BanditPolicy::Ucb1(exploration) => P::Ucb1 { exploration },
+        BanditPolicy::ThompsonBeta((prior_alpha, prior_beta)) => P::ThompsonBeta {
+            prior_alpha,
+            prior_beta,
+        },
+        BanditPolicy::ThompsonGaussian((prior_mean, prior_weight)) => P::ThompsonGaussian {
+            prior_mean,
+            prior_weight,
+        },
+        BanditPolicy::KlUcb(c) => P::KlUcb { c },
+        BanditPolicy::Exp3(gamma) => P::Exp3 { gamma },
     }
 }

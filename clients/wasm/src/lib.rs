@@ -18,6 +18,13 @@
 )]
 mod bindings;
 
+/// Short alias for the generated export root (`propagon:core`), so binding code
+/// writes `crate::wit::types::Error` instead of the full path.
+pub(crate) use bindings::exports::propagon::core as wit;
+
+#[macro_use]
+mod macros;
+
 mod algos;
 mod convert;
 mod datasets;
@@ -26,7 +33,7 @@ mod errors;
 mod functions;
 
 /// The component entry point. Implements every exported interface's `Guest`
-/// trait across the submodules (datasets, games, graph, functions).
+/// trait across the submodules (datasets, algos, functions).
 struct Component;
 
 bindings::export!(Component with_types_in bindings);

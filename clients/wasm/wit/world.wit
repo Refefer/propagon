@@ -5,10 +5,6 @@
 // surface (clients/python). Datasets and fitted models are resources; algorithm
 // parameters are by-value records with `option` fields (omit a field to take the
 // core's default). Everything fallible returns `result<_, error>`.
-//
-// Phase 1 scaffold: all nine datasets + Elo (online) and PageRank (batch),
-// proving the online/batch paradigms, cross-interface borrows, resource returns,
-// and result error mapping before the surface is scaled to full parity.
 
 package propagon:core;
 
@@ -171,6 +167,36 @@ interface games {
     init-elo: func(params: elo-params) -> elo-model;
     fit-elo: func(params: elo-params, data: borrow<games-dataset>) -> result<elo-model, error>;
     load-elo: func(state: string) -> result<elo-model, error>;
+
+    /// One entity's Glicko-2 state on the display (Elo-like) scale.
+    record player-state {
+        r: f64,
+        rd: f64,
+        sigma: f64,
+    }
+
+    record glicko2-params {
+        tau: option<f64>,
+        rating: option<f64>,
+        rd: option<f64>,
+        sigma: option<f64>,
+    }
+
+    resource glicko2-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<games-dataset>) -> result<_, error>;
+        /// Per-entity rating states (glicko2-specific).
+        players: func() -> list<tuple<string, player-state>>;
+    }
+
+    init-glicko2: func(params: glicko2-params) -> glicko2-model;
+    fit-glicko2: func(params: glicko2-params, data: borrow<games-dataset>) -> result<glicko2-model, error>;
+    load-glicko2: func(state: string) -> result<glicko2-model, error>;
 }
 
 interface graph {
@@ -208,6 +234,209 @@ interface graph {
     fit-page-rank: func(params: page-rank-params, data: borrow<graph-dataset>) -> result<page-rank-model, error>;
     fit-warm-page-rank: func(params: page-rank-params, data: borrow<graph-dataset>, init: borrow<page-rank-model>) -> result<page-rank-model, error>;
     load-page-rank: func(state: string) -> result<page-rank-model, error>;
+
+    record hits-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+
+    resource hits-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+
+    fit-hits: func(params: hits-params, data: borrow<graph-dataset>) -> result<hits-model, error>;
+    fit-warm-hits: func(params: hits-params, data: borrow<graph-dataset>, init: borrow<hits-model>) -> result<hits-model, error>;
+    load-hits: func(state: string) -> result<hits-model, error>;
+}
+
+interface pairwise {
+    use types.{error, scores-bulk};
+    use datasets.{pairwise-dataset};
+
+    record bradley-terry-mm-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+        min-graph-size: option<u32>,
+        remove-total-losers: option<bool>,
+        create-fake-games: option<f64>,
+        random-subgraph-links: option<u32>,
+        random-subgraph-weight: option<f64>,
+        seed: option<u64>,
+    }
+
+    resource bradley-terry-mm-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+
+    fit-bradley-terry-mm: func(params: bradley-terry-mm-params, data: borrow<pairwise-dataset>) -> result<bradley-terry-mm-model, error>;
+    fit-warm-bradley-terry-mm: func(params: bradley-terry-mm-params, data: borrow<pairwise-dataset>, init: borrow<bradley-terry-mm-model>) -> result<bradley-terry-mm-model, error>;
+    load-bradley-terry-mm: func(state: string) -> result<bradley-terry-mm-model, error>;
+
+    resource borda-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+
+    fit-borda: func(data: borrow<pairwise-dataset>) -> result<borda-model, error>;
+    load-borda: func(state: string) -> result<borda-model, error>;
+}
+
+interface rewards {
+    use types.{error, scores-bulk};
+    use datasets.{rewards-dataset};
+
+    /// Arm-selection policy for the multi-armed bandit.
+    variant bandit-policy {
+        greedy,
+        epsilon-greedy(f64),
+        ucb1(f64),
+        thompson-beta(tuple<f64, f64>),
+        thompson-gaussian(tuple<f64, f64>),
+        kl-ucb(f64),
+        exp3(f64),
+    }
+
+    record bandit-params {
+        policy: option<bandit-policy>,
+        seed: option<u64>,
+    }
+
+    resource bandit-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<rewards-dataset>) -> result<_, error>;
+    }
+
+    init-bandit: func(params: bandit-params) -> bandit-model;
+    fit-bandit: func(params: bandit-params, data: borrow<rewards-dataset>) -> result<bandit-model, error>;
+    load-bandit: func(state: string) -> result<bandit-model, error>;
+}
+
+interface matchups {
+    use types.{error, scores-bulk};
+    use datasets.{matchups-dataset};
+
+    /// A Weng-Lin (μ, σ) rating.
+    record rating {
+        mu: f64,
+        sigma: f64,
+    }
+
+    record weng-lin-params {
+        mu: option<f64>,
+        sigma: option<f64>,
+        beta: option<f64>,
+        kappa: option<f64>,
+        epsilon: option<f64>,
+        tau: option<f64>,
+    }
+
+    resource weng-lin-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<matchups-dataset>) -> result<_, error>;
+        /// Per-player (μ, σ) ratings (weng-lin-specific).
+        ratings: func() -> list<tuple<string, rating>>;
+    }
+
+    init-weng-lin: func(params: weng-lin-params) -> weng-lin-model;
+    fit-weng-lin: func(params: weng-lin-params, data: borrow<matchups-dataset>) -> result<weng-lin-model, error>;
+    load-weng-lin: func(state: string) -> result<weng-lin-model, error>;
+}
+
+interface annotated {
+    use types.{error, scores-bulk};
+    use datasets.{annotated-pairs-dataset};
+
+    record crowd-bt-params {
+        lambda: option<f64>,
+        eta-prior-alpha: option<f64>,
+        eta-prior-beta: option<f64>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+        inner-sweeps: option<u32>,
+    }
+
+    resource crowd-bt-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+
+    fit-crowd-bt: func(params: crowd-bt-params, data: borrow<annotated-pairs-dataset>) -> result<crowd-bt-model, error>;
+    fit-warm-crowd-bt: func(params: crowd-bt-params, data: borrow<annotated-pairs-dataset>, init: borrow<crowd-bt-model>) -> result<crowd-bt-model, error>;
+    load-crowd-bt: func(state: string) -> result<crowd-bt-model, error>;
+}
+
+interface rankings {
+    use types.{error, scores-bulk};
+    use datasets.{rankings-dataset};
+
+    record plackett-luce-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+
+    resource plackett-luce-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+
+    fit-plackett-luce: func(params: plackett-luce-params, data: borrow<rankings-dataset>) -> result<plackett-luce-model, error>;
+    fit-warm-plackett-luce: func(params: plackett-luce-params, data: borrow<rankings-dataset>, init: borrow<plackett-luce-model>) -> result<plackett-luce-model, error>;
+    load-plackett-luce: func(state: string) -> result<plackett-luce-model, error>;
+}
+
+interface trajectories {
+    use types.{error, scores-bulk};
+    use datasets.{trajectories-dataset};
+
+    record mc-value-params {
+        gamma: option<f64>,
+        min-observations: option<u32>,
+    }
+
+    resource mc-value-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+
+    fit-mc-value: func(params: mc-value-params, data: borrow<trajectories-dataset>) -> result<mc-value-model, error>;
+    fit-warm-mc-value: func(params: mc-value-params, data: borrow<trajectories-dataset>, init: borrow<mc-value-model>) -> result<mc-value-model, error>;
+    load-mc-value: func(state: string) -> result<mc-value-model, error>;
 }
 
 interface functions {
@@ -227,5 +456,11 @@ world propagon {
     export datasets;
     export games;
     export graph;
+    export pairwise;
+    export rewards;
+    export matchups;
+    export annotated;
+    export rankings;
+    export trajectories;
     export functions;
 }
