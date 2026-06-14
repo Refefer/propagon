@@ -52,12 +52,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clients/python
-      - name: Install build/test deps
-        run: python -m pip install --upgrade pip maturin pytest
-      - name: Build the extension into the environment
-        run: maturin develop --release
-      - name: Run the test suite
-        run: pytest -q
+      # `maturin develop` requires an active virtualenv; setup-python doesn't
+      # create one. Make a venv and activate it within the step (cross-platform
+      # via bash, which GitHub provides on Windows too) so the build installs
+      # into it and pytest imports from it.
+      - name: Build the extension and run the test suite
+        shell: bash
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
+          python -m pip install --upgrade pip maturin pytest
+          maturin develop --release
+          pytest -q
 
   wheels:
     name: wheels (${{ matrix.os }})
