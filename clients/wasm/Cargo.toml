@@ -1,0 +1,47 @@
+[package]
+name = "propagon-wasm"
+version = "2.0.0-alpha.1"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Refefer/propagon"
+description = "WebAssembly Component-Model bindings for propagon (consumed by TypeScript via jco and by other hosts via wasmtime)."
+publish = false
+
+# Self-contained sub-workspace with its own Cargo.lock, like clients/python.
+# Excluded from the root workspace so cargo-component / wit-bindgen and the
+# wasm32 target never enter the core's `cargo *--workspace` builds.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Core, built parallel-OFF: the component is single-threaded (rayon has no
+# place in a wasm component), and `io` (std::fs helpers) is unusable here.
+propagon = { path = "../../crates/propagon", default-features = false }
+wit-bindgen-rt = { version = "0.44", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "propagon:core"
+
+[package.metadata.component.target]
+path = "wit"
+world = "propagon"
+
+# The root workspace lints aren't inherited by this sub-workspace; restate the
+# no-panic-across-FFI gate the core holds itself to.
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+# Safe: every fallible API returns `result<_, error>` (values, not panics), and
+# the no-panic clippy gate is enforced above. A trap is the desired host
+# behavior on the should-never-happen path, so unwinding tables are dead weight.
+panic = "abort"

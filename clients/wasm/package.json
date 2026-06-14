@@ -1,0 +1,27 @@
+{
+  "name": "propagon",
+  "version": "2.0.0-alpha.1",
+  "description": "WebAssembly (Component Model) bindings for propagon: ranking, rating, bandit, and graph algorithms. Consumed by TypeScript via jco and by other hosts via wasmtime.",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/propagon.d.ts",
+      "import": "./dist/propagon.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:wasm": "cargo component build --release",
+    "build:js": "node scripts/transpile.mjs",
+    "build": "npm run build:wasm && npm run build:js",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@bytecodealliance/jco": "^1.4.0",
+    "@bytecodealliance/preview2-shim": "^0.17.0",
+    "vitest": "^2.1.0"
+  }
+}

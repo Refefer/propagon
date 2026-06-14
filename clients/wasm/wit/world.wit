@@ -1,0 +1,231 @@
+// Propagon WASM Component-Model interface.
+//
+// One artifact, many hosts: TypeScript consumes it via jco; other languages
+// (Rust/Python/Go) via wasmtime + their bindgen. Mirrors the Python client's
+// surface (clients/python). Datasets and fitted models are resources; algorithm
+// parameters are by-value records with `option` fields (omit a field to take the
+// core's default). Everything fallible returns `result<_, error>`.
+//
+// Phase 1 scaffold: all nine datasets + Elo (online) and PageRank (batch),
+// proving the online/batch paradigms, cross-interface borrows, resource returns,
+// and result error mapping before the surface is scaled to full parity.
+
+package propagon:core;
+
+interface types {
+    /// Mirrors `propagon::Error` (crates/propagon/src/error.rs).
+    variant error {
+        invalid-input(string),
+        empty-dataset,
+        numeric(string),
+        state(string),
+        algorithm-mismatch(mismatch),
+        param-mismatch(string),
+        version(version-mismatch),
+        parse(parse-error),
+        io(string),
+        json(string),
+    }
+    record mismatch {
+        expected: string,
+        found: string,
+    }
+    record version-mismatch {
+        found: u32,
+        supported: u32,
+    }
+    record parse-error {
+        line: u64,
+        msg: string,
+    }
+
+    /// Outcome of one game from side 1's perspective (margins are positive).
+    variant game-outcome {
+        side1-win(f64),
+        side2-win(f64),
+        tie,
+    }
+
+    /// Bulk score export: `ids[i]` is the entity for `scores[i]`. jco lowers
+    /// `list<f64>` to a Float64Array, so large models cross the boundary without
+    /// materializing a per-entity object graph.
+    record scores-bulk {
+        ids: list<string>,
+        scores: list<f64>,
+    }
+}
+
+interface datasets {
+    use types.{error, game-outcome};
+
+    /// Win/loss pairs: `winner` beat `loser`.
+    resource pairwise-dataset {
+        constructor();
+        push: func(winner: string, loser: string, weight: f64) -> result<_, error>;
+        new-period: func();
+        n-entities: func() -> u32;
+        n-periods: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// Team-vs-team game results with margins.
+    resource games-dataset {
+        constructor();
+        push-pair: func(winner: string, loser: string, weight: f64) -> result<_, error>;
+        push-game: func(side1: list<string>, side2: list<string>, outcome: game-outcome, weight: f64) -> result<_, error>;
+        new-period: func();
+        n-entities: func() -> u32;
+        n-periods: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// A directed, weighted endorsement graph (`src` endorses `dst`).
+    resource graph-dataset {
+        constructor();
+        push: func(src: string, dst: string, weight: f64) -> result<_, error>;
+        n-nodes: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// An `(arm, reward)` event log for multi-armed bandits.
+    resource rewards-dataset {
+        constructor();
+        push: func(arm: string, reward: f64) -> result<_, error>;
+        n-arms: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// An `(arm, reward, context)` event log for contextual bandits.
+    resource contextual-rewards-dataset {
+        constructor();
+        push: func(arm: string, reward: f64, x: list<f64>) -> result<_, error>;
+        n-arms: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// Multi-team match results with ranks (OpenSkill/Weng-Lin shape).
+    resource matchups-dataset {
+        constructor();
+        push-match: func(teams: list<list<string>>, ranks: list<u32>) -> result<_, error>;
+        n-entities: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// Annotator-tagged pairwise votes (the crowd shape).
+    resource annotated-pairs-dataset {
+        constructor();
+        push: func(annotator: string, winner: string, loser: string, weight: f64) -> result<_, error>;
+        n-entities: func() -> u32;
+        n-annotators: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// Best-first ballots (the rank-aggregation shape).
+    resource rankings-dataset {
+        constructor();
+        push-ranking: func(ranking: list<string>) -> result<_, error>;
+        n-entities: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+
+    /// State/reward episodes (the trajectory / value-estimation shape).
+    resource trajectories-dataset {
+        constructor();
+        push-step: func(state: string, reward: f64) -> result<_, error>;
+        end-episode: func();
+        n-entities: func() -> u32;
+        n-episodes: func() -> u32;
+        len: func() -> u32;
+        is-empty: func() -> bool;
+    }
+}
+
+interface games {
+    use types.{error, scores-bulk};
+    use datasets.{games-dataset};
+
+    record elo-params {
+        k: option<f64>,
+        initial-rating: option<f64>,
+        scale: option<f64>,
+    }
+
+    resource elo-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<games-dataset>) -> result<_, error>;
+    }
+
+    init-elo: func(params: elo-params) -> elo-model;
+    fit-elo: func(params: elo-params, data: borrow<games-dataset>) -> result<elo-model, error>;
+    load-elo: func(state: string) -> result<elo-model, error>;
+}
+
+interface graph {
+    use types.{error, scores-bulk};
+    use datasets.{graph-dataset};
+
+    enum sink {
+        reverse,
+        all,
+        uniform,
+        none,
+    }
+
+    variant teleport {
+        uniform,
+        seeds(list<tuple<string, f64>>),
+    }
+
+    record page-rank-params {
+        damping: option<f64>,
+        iterations: option<u32>,
+        sink: option<sink>,
+        teleport: option<teleport>,
+    }
+
+    resource page-rank-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+
+    fit-page-rank: func(params: page-rank-params, data: borrow<graph-dataset>) -> result<page-rank-model, error>;
+    fit-warm-page-rank: func(params: page-rank-params, data: borrow<graph-dataset>, init: borrow<page-rank-model>) -> result<page-rank-model, error>;
+    load-page-rank: func(state: string) -> result<page-rank-model, error>;
+}
+
+interface functions {
+    use types.{error};
+    use datasets.{graph-dataset};
+
+    /// Wilson score interval `(low, high)` for `successes`/`failures` at `z`.
+    wilson-interval: func(successes: f64, failures: f64, z: f64) -> tuple<f64, f64>;
+
+    /// Split a graph into connected components, dropping any with fewer than
+    /// `min-size` nodes.
+    extract-components: func(graph: borrow<graph-dataset>, min-size: u32) -> list<graph-dataset>;
+}
+
+world propagon {
+    export types;
+    export datasets;
+    export games;
+    export graph;
+    export functions;
+}
