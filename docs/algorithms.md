@@ -2,7 +2,7 @@
 
 This document surveys the algorithm landscape for **ranking entities from revealed preferences** — match outcomes, pairwise choices, multiway selections, clicks, link structure, and reward-bearing trajectories. Every method is described with its model, assumptions, estimation strategy, strengths, weaknesses, use cases, and its relationships to the other methods — what generalizes, specializes, or supersedes what.
 
-Citations appear inline as `[Author Year]` and resolve in [§16 References](#16-references).
+Citations appear inline as `[Author Year]` and resolve in [§17 References](#17-references).
 
 ## Table of Contents
 
@@ -23,9 +23,10 @@ Citations appear inline as `[Author Year]` and resolve in [§16 References](#16-
 - [§11 Bayesian & Uncertainty-Aware Inference](#11-bayesian--uncertainty-aware-inference)
 - [§12 Applied Deep-Dive: Ranking LLMs & Model Evaluation](#12-applied-deep-dive-ranking-llms--model-evaluation)
 - [§13 Value-Function & Trajectory-Based Ranking](#13-value-function--trajectory-based-ranking)
-- [§14 Cross-Cutting Topics](#14-cross-cutting-topics)
-- [§15 Method-Selection Decision Guide](#15-method-selection-decision-guide)
-- [§16 References](#16-references)
+- [§14 Market Odds, Wagering & Value-Weighted Selection](#14-market-odds-wagering--value-weighted-selection)
+- [§15 Cross-Cutting Topics](#15-cross-cutting-topics)
+- [§16 Method-Selection Decision Guide](#16-method-selection-decision-guide)
+- [§17 References](#17-references)
 
 ---
 
@@ -43,6 +44,7 @@ A **revealed preference** is any observation in which an agent's behavior disclo
 | Graph edges (links, follows, citations, purchases) | Page X links to page Y | §4 |
 | Click / interaction logs | User clicked result 3, skipped 1–2 | §10 |
 | Reward-bearing trajectories | Game states leading to a win; sessions ending in revenue | §13 |
+| Posted odds / probability forecasts | Several books' prices on the same outcomes; experts' probabilities | §14 |
 
 Across nearly all of the comparison-based families, the unifying lens is:
 
@@ -55,10 +57,11 @@ where $s_i$ is a latent score for entity $i$ and $F$ is a link function. Methods
 3. **Whether $s$ is static or time-varying** — one fixed skill per entity vs. a trajectory of skill through time.
 4. **What data shape is consumed** — pairs, sets, rankings, graphs, or trajectories.
 
-Two families deliberately stretch the lens:
+Three families deliberately stretch the lens:
 
 - **Node importance / centrality (§4)** treats the *structure* of a graph as the preference signal: a link, citation, follow, or purchase is an implicit endorsement of its target. There is no explicit "i beats j" event, yet the output is the same — a ranking. The bridge is concrete: the best-understood spectral comparison methods (Rank Centrality, Keener, random-walker rankings, §3) are *exactly* centrality computations applied to a graph whose edges are comparison outcomes.
 - **Value-function ranking (§13)** treats *trajectories with rewards* as the preference signal: states (or entities identified with states — teams, UI variants, slot machines) are ranked by expected discounted return $V(s)$. Any comparison $V(a) > V(b)$ is itself a revealed-preference edge, so this family composes with every aggregator above it.
+- **Market-odds & wagering methods (§14)** treat *a posted price* as the preference signal: a bookmaker's odds or a market quote is a crowd's revealed valuation of an outcome. Strip the house margin and it becomes a calibrated probability on the same log-odds scale as the comparison models — and, uniquely here, the family carries through to *action*, sizing how much to stake on the resulting edge.
 
 ### 0.1 The Parametric vs Non-Parametric Axis
 
@@ -123,7 +126,7 @@ Major methods get the full template below; minor or adjacent methods get a compa
 > - **Relationships** — generalizes / specializes / equivalent to / superseded by.
 > - **References.**
 
-In a hurry? Jump to the [decision guide (§15)](#15-method-selection-decision-guide).
+In a hurry? Jump to the [decision guide (§16)](#16-method-selection-decision-guide).
 
 ---
 
@@ -209,7 +212,7 @@ The classical core. One latent strength per entity, a fixed link function, a lik
 - **Model & assumptions** — $U_i = s_i + \varepsilon_i$, choose $\arg\max_i U_i$. Gumbel $\varepsilon$ ⇒ multinomial/conditional logit = Plackett-Luce [McFadden 1974]; Gaussian $\varepsilon$ ⇒ Thurstone/probit (no closed form for sets > 2); nested and mixed logit relax IIA at the cost of more parameters.
 - **Estimation & complexity** — MLE (convex for logit); simulation-based methods for probit/mixed logit; or gradient-free optimization when the likelihood is awkward (see ES-RUM below).
 - **Pros / Cons** — connects ranking directly to seventy years of econometrics (welfare analysis, elasticities, demand prediction); covariates are first-class. Cost: distributional commitments, and the flexible variants (mixed logit) are expensive and weakly identified on small data.
-- **Use cases** — purchase/choice logs; transport mode choice; assortment optimization; any "users chose X from slate S" dataset — the purest "revealed preference" setting in the economic sense (sidebar, §14).
+- **Use cases** — purchase/choice logs; transport mode choice; assortment optimization; any "users chose X from slate S" dataset — the purest "revealed preference" setting in the economic sense (sidebar, §15).
 - **Gaussian RUM via evolution strategies.** A practical gradient-free variant: each entity gets $(\mu_i, \sigma_i)$, win probability from the Gaussian difference, fit by **evolution strategies** (perturbation-based updates with regularization). Distinctive: per-entity *variance* is estimated, so an entity can be "good but erratic." Caveat: the model is identified only up to location/scale, so outputs are meaningful **relatively**, not absolutely.
 - **References** — [McFadden 1974; Train 2009; Tsukida & Gupta 2011].
 
@@ -986,9 +989,100 @@ Two bridges make this a first-class member of the survey rather than a guest:
 
 ---
 
-## 14. Cross-Cutting Topics
+## 14. Market Odds, Wagering & Value-Weighted Selection
 
-### 14.1 Identifiability & Connectivity
+The gambler's family. The preference signal here is a **posted price or a wager**: a bookmaker's odds, a prediction-market quote, a forecaster's probability. Each is a crowd's revealed valuation of an uncertain outcome — "the market would rather hold \$1 contingent on A than on B" is the same `A ≻ B` sentiment the rest of this survey consumes, except it arrives pre-quantified, as money. The catch is that a quoted price is *not* a clean probability: it carries the house's margin, each source's bias, and the favorite-longshot distortion. This section is the pipeline that cleans it and acts on it:
+
+$$\text{odds} \;\to\; \text{implied probability} \;\to\; \underset{\text{§14.1}}{\text{de-vig}} \;\to\; \underset{\text{§14.2/14.3}}{\text{consolidate}} \;\to\; \text{value/edge} \;\to\; \underset{\text{§14.4}}{\text{allocate}}$$
+
+Two bridges tie it to the rest of the document:
+
+1. **A fair probability is a Propagon strength.** Once the margin is stripped, an outcome's fair probability $\pi_i$ is a point on the same log-odds scale Bradley-Terry and Plackett-Luce already emit ($s_i = \log \pi_i$, up to the usual additive constant). So a de-vigged, consolidated price drops straight onto a leaderboard, and conversely any model's win probability can be priced and bet.
+2. **It closes the loop from estimate to action.** Every other family stops at a *score*; this one asks the next question — given the score and the odds on offer, *what do you do?* The Kelly criterion (§14.4) is the growth-optimal answer, and it sits as a thin layer over any score-emitting model in §§1–13.
+
+A note on calibration: these methods are judged on probability quality (Brier/log-loss, calibration curves, closing-line value — §14.5, §15.5), not on the order-agreement metrics the comparison families use, so they sit beside the §15.3 capability matrix rather than inside it.
+
+### 14.1 From Odds to Implied Probabilities & Devigging
+
+- **TL;DR** — Strip the bookmaker's margin out of posted odds to recover the fair probabilities of a set of mutually exclusive outcomes — a calibrated strength per outcome.
+- **Inputs / Output** — posted (decimal) odds on the outcomes of an event, possibly across many events → fair probabilities that sum to 1 per event (equivalently, log-odds strengths).
+- **Class** — Algebraic (the normalization maps) / Parametric (Shin) × Static.
+- **Model & assumptions** — decimal odds $o_i$ give a raw implied probability $r_i = 1/o_i$; their sum, the **booksum** or **overround** $B = \sum_i r_i > 1$, is inflated by the vig $B - 1$. Four maps return fair probabilities $\pi$ with $\sum_i \pi_i = 1$, differing only in *how they assume the margin is spread across outcomes*:
+  - **Multiplicative** (normalization): $\pi_i = r_i / B$. Margin proportional to probability; simple, but **underprices longshots** (it leaves the favorite-longshot bias, §14.5, in place).
+  - **Additive**: $\pi_i = r_i - (B-1)/n$. The margin split equally; can drive rank outsiders **negative**, so it is rarely used unmodified.
+  - **Power**: $\pi_i = r_i^{1/\tau}$ with the exponent $\tau \ge 1$ solved so $\sum_i \pi_i = 1$. Compresses favorites less than longshots, absorbing the favorite-longshot bias — the practitioner default.
+  - **Shin** [Shin 1992; Shin 1993]: models the margin as the bookmaker's defense against a fraction $z$ of **insider** money. The fair probability has the Jullien–Salanié closed form
+
+    $$\pi_i = \frac{\sqrt{\,z^2 + 4(1-z)\,\dfrac{r_i^2}{B}\,} \; - \; z}{2(1-z)}, \qquad r_i = 1/o_i,\; B = \textstyle\sum_j r_j,$$
+
+    with $z$ tuned (analytically for two outcomes, by iteration otherwise) so the $\pi_i$ sum to 1 [Jullien & Salanié 1994]. The recovered $z$ is itself interpretable — an estimate of the insider share.
+- **Estimation & complexity** — multiplicative/additive are $O(n)$ closed form; power and Shin each solve a one-dimensional root for the normalizer ($\tau$ or $z$) by bisection/Newton, $O(n)$ per iteration over a handful of iterations.
+- **Handles** — favorite-longshot bias ✓ (power/Shin) · multi-outcome ✓ · margin removal ✓ · uncertainty ✗ (point probabilities — pair with §14.2 / §14.5).
+- **Pros** — turns the most abundant revealed-preference signal there is (posted prices) into calibrated probabilities; power and Shin are measurably more accurate than naïve normalization on racing and sports data [Štrumbelj 2014; Clarke et al. 2017]; Shin hands back an insider-share diagnostic for free.
+- **Cons** — every method bakes in an assumption about *where* the margin sits, and they disagree most exactly where it bites (longshots); additive can produce negative probabilities; and a single book's de-vig still inherits that book's idiosyncratic bias — the cure is consolidation (§14.2).
+- **Use cases** — building a probability/strength prior from market lines; converting an odds feed into Propagon strengths; quantifying a book's margin or its implied insider share.
+- **Relationships** — the front door of this family: its output rides the same log-strength scale as Bradley-Terry / Plackett-Luce (§1), so it composes with every aggregator above it. *Propagon mapping:* a natural new `OddsDataset` input shape (rows of `{event, outcome, odds}`); de-vig is a preprocessing transform whose fair probabilities feed any §6 aggregator or the §14.2 pool. Calibration diagnostics in §14.5. Recent ML-for-betting reviews keep Shin-style de-vigging as the standard probability front-end [Galekwa et al. 2024].
+- **References** — [Shin 1992; Shin 1993; Jullien & Salanié 1994; Štrumbelj 2014; Clarke et al. 2017; Galekwa et al. 2024].
+
+### 14.2 Consolidating Multiple Books & Forecasts: Logarithmic Opinion Pools
+
+- **TL;DR** — Merge many sources' probabilities into one consensus by averaging in log-odds space (the geometric mean of the odds) — the probability-space analogue of rank aggregation.
+- **Inputs / Output** — $N$ probability vectors over the same outcomes (de-vigged book lines, model forecasts, expert judgments), with optional weights → one consensus probability vector (→ a strength ranking).
+- **Class** — Algebraic (weighted geometric mean) × Static.
+- **Model & assumptions** — the **linear** opinion pool is the weighted arithmetic mean $\bar p_j = \sum_i w_i\, p_{ij}$; the **logarithmic** opinion pool is the weighted geometric mean $p_j \propto \prod_i p_{ij}^{\,w_i}$ (renormalized over $j$), i.e. the arithmetic mean of log-odds. Weights $w_i \ge 0$, $\sum_i w_i = 1$, encode relative reliability. The log pool is the (essentially unique) **externally Bayesian** pool — pooling then updating equals updating then pooling — and corresponds one-to-one to the **log scoring rule** (§14.3, §15.5) [Genest & Zidek 1986; Dietrich & List 2016]. Averaging probabilities is biased toward the timid middle; the geometric mean of odds is sharper, and empirical **extremizing** pushes the consensus further from $\tfrac12$ to counter the shared-information under-confidence of correlated forecasters [Satopää et al. 2014]. The weights need not be static: they can be **learned online** to minimize log-loss with no-regret guarantees [Neyman & Roughgarden 2022], and the pooling rule generalizes to *any* proper scoring rule via a matching max-min-optimal aggregator [Neyman & Roughgarden 2021].
+- **Estimation & complexity** — $O(Nn)$. Weights are taken uniform or fit from past skill (e.g. inverse held-out log-loss).
+- **Handles** — heterogeneous sources ✓ · extreme probabilities ✓ (log-odds is the right geometry) · correlated sources △ (extremize or down-weight) · disagreement-as-uncertainty △ (the spread across sources is itself a signal).
+- **Pros** — the geometric mean of odds beats the arithmetic mean of probabilities both empirically and theoretically, most of all when forecasts are extreme; preserves calibration under Bayesian updating; trivially cheap and weightable.
+- **Cons** — needs a common outcome space; double-counts information shared between correlated sources unless that correlation is modeled; trustworthy weights need track records.
+- **Use cases** — fusing several sportsbooks into a sharper line; ensembling model forecasts; pooling judges' *probabilistic* ballots into a consensus.
+- **Relationships** — the probability-space twin of §6 rank aggregation (Borda/Kemeny consolidate *orders*; the log pool consolidates *probabilities*) and a cousin of §11.4's averaging over bootstrap replicates; it consumes §14.1's de-vigged outputs and feeds §14.4 the consolidated edge. *Propagon mapping:* on the log-odds scale this is literally a (weighted) mean of Propagon strengths, so it composes with every score-emitting model — a `consolidate` step over several rankers' outputs. The same machinery now consolidates *model* forecasts — median/log pooling across an LLM ensemble rivals the human crowd [Schoenegger et al. 2024], tying this family to the LLM evaluation of §12.
+- **References** — [Genest & Zidek 1986; Dietrich & List 2016; Satopää et al. 2014; Neyman & Roughgarden 2021; Neyman & Roughgarden 2022; Schoenegger et al. 2024].
+
+### 14.3 Prediction Markets & Market Scoring Rules (LMSR)
+
+- **TL;DR** — Run a proper scoring rule as a continuously traded market: the price is the crowd's stake-weighted consensus probability, nudged by every bet — gambling as voting, with money for ballots.
+- **Inputs / Output** — a stream of stake-backed belief reports (trades) on an event's outcomes → a live consensus probability per outcome (→ ranking).
+- **Class** — Mechanism / Parametric (cost-function market maker) × Online.
+- **Model & assumptions** — a **proper scoring rule** pays a forecaster the most, in expectation, for reporting their true probability [Savage 1971; Gneiting & Raftery 2007]. Hanson turns one into a market: each trader may move the current public report and pays the scoring-rule difference — a **market scoring rule** [Hanson 2003; Hanson 2007]. The logarithmic case (**LMSR**) has cost function $C(\mathbf q) = b \log \sum_i e^{q_i / b}$ over outstanding share quantities $\mathbf q$, and the instantaneous price of outcome $i$,
+
+  $$p_i = \frac{\partial C}{\partial q_i} = \frac{e^{q_i / b}}{\sum_j e^{q_j / b}},$$
+
+  is exactly the **softmax** — the market's probability. The liquidity parameter $b$ trades price responsiveness against the market maker's bounded worst-case subsidy $b \log n$.
+- **Estimation & complexity** — $O(n)$ per trade; the price vector *is* the estimate — there is no separate fit.
+- **Handles** — sequential information ✓ · incentive compatibility ✓ (myopically truthful) · liquidity/loss knob ✓ ($b$) · combinatorial outcomes △ (tractable only over structured spaces).
+- **Pros** — aggregates dispersed, privately held information from participants with skin in the game; always-on liquidity; the running price is a calibrated, decision-ready probability; bounded subsidy.
+- **Cons** — needs participants and a subsidy ($b \log n$ worst case); thin markets invite manipulation and noise; combinatorial markets are computationally hard.
+- **Use cases** — eliciting probabilities for events with no historical data; internal corporate forecasting; **futarchy**-style decision markets that choose a policy by betting on outcomes conditional on it.
+- **Relationships** — a sequential, incentive-compatible front-end that emits the same fair-probability output §14.1–14.2 extract from static prices — the online complement to §6's batch aggregation, much as an online rater (§2) complements a batch fit. The softmax price is the multinomial-logit law of Plackett-Luce (§1.4), so market prices *are* Propagon strengths by another name; its scoring rules (log, Brier) double as the §15.5 evaluation metrics. *Propagon mapping:* an online "market" ranker whose persistent state is the share vector $\mathbf q$ and whose `scores()` are the prices. Recent theory characterizes LMSR axiomatically and unifies it with the constant-function market makers of decentralized finance [Schlegel, Kwaśnicki & Mamageishvili 2023], and generalizes its single liquidity parameter $b$ toward provider-specified, adaptive liquidity [Bhaskara, Frongillo & Papireddygari 2023].
+- **References** — [Hanson 2003; Hanson 2007; Savage 1971; Gneiting & Raftery 2007; Brier 1950; Schlegel, Kwaśnicki & Mamageishvili 2023; Bhaskara, Frongillo & Papireddygari 2023].
+
+### 14.4 The Kelly Criterion & Value-Weighted Selection
+
+- **TL;DR** — Given an edge and the odds, bet the fraction of capital that maximizes long-run growth — the principled way to turn an estimated value into an action: *which* entity to back, and *how hard*.
+- **Inputs / Output** — a per-entity win probability $p$ (from any ranker) and the odds on offer → a stake fraction per entity (a value-weighted shortlist).
+- **Class** — Decision rule (growth-optimal) × Static or Online.
+- **Model & assumptions** — maximize expected log-wealth [Kelly 1956]. For a single bet at net decimal odds $b$ with win probability $p$ (and $q = 1 - p$), the optimal fraction is
+
+  $$f^\star = \frac{bp - q}{b} = \frac{p(b+1) - 1}{b} \quad (\text{= edge / odds}),$$
+
+  and you bet nothing when $f^\star \le 0$. Repeatedly staking $f^\star$ maximizes the asymptotic growth rate and almost surely outgrows any essentially different strategy [Kelly 1956; Breiman 1961]. **Fractional Kelly** — stake $\lambda f^\star$ with $\lambda \in \{\tfrac12, \tfrac14\}$ — gives up a little growth for much lower variance and drawdown, and is the standard hedge against the fact that $p$ is *estimated*, not known [MacLean, Thorp & Ziemba 2011]. The modern form of that hedge is **distributionally robust Kelly** — maximize the *worst-case* log-growth over an ambiguity set of distributions, a tractable convex program [Sun & Boyd 2018]; and empirically an *adaptive* fractional Kelly is the most reliable choice across real betting data [Uhrín et al. 2021]. **Portfolio / multi-bet Kelly** for simultaneous opportunities maximizes $\mathbb{E}\!\left[\log\!\big(1 + \sum_k f_k X_k\big)\right]$, a concave program that decouples eventwise for independent events and, under log utility, equals sequential Kelly [Thorp 2006; Busseti, Ryu & Boyd 2016].
+- **Estimation & complexity** — the single bet is closed form; the portfolio case is a small convex optimization.
+- **Handles** — bankroll/risk sizing ✓ · estimation error △ (fractional Kelly) · simultaneous bets ✓ (convex program) · correlation △ (needs the joint model).
+- **Pros** — the unique growth-optimal rule; converts any calibrated probability into a sizing decision; fractional Kelly is a one-knob robustness dial; because log utility abhors ruin, it never says "bet it all."
+- **Cons** — brutally sensitive to *over*-estimated edges — garbage $p$ leads to over-betting and eventual ruin, which is precisely why practitioners run fractional Kelly; assumes continuous re-betting/compounding; encodes only the risk preferences implied by log utility.
+- **Use cases** — the selection/sizing layer over any leaderboard — allocate budget, traffic, or attention across candidates in proportion to growth-optimal stake; bankroll and portfolio sizing.
+- **Relationships** — the *act-on-value* layer atop any score-emitting method here: feed it Bradley-Terry win probabilities (§1), value-comparison exceedance probabilities $P(V_a > V_b)$ (§13.2), or consolidated market probabilities (§14.2), and it returns allocations. It is the growth-optimal cousin of §8's bandit allocation (Thompson Sampling draws from a posterior and backs the argmax; Kelly *sizes* the stake) and inherits the same exploration-vs-exploitation tension. *Propagon mapping:* a thin function over `RankModel::scores()`, not a ranker in its own right.
+- **References** — [Kelly 1956; Breiman 1961; Thorp 2006; MacLean, Thorp & Ziemba 2011; Busseti, Ryu & Boyd 2016; Sun & Boyd 2018; Uhrín et al. 2021].
+
+### 14.5 Market-Efficiency Diagnostics: Favorite-Longshot Bias & Closing-Line Value — compact
+
+**Class: Diagnostics / evaluation × Static.** Two checks that keep the rest of this section honest. The **favorite-longshot bias** — longshots are systematically over-bet and favorites under-bet, so raw implied probabilities are miscalibrated in a predictable, monotone way [Snowberg & Wolfers 2010; Sauer 1998] — is exactly the distortion the power and Shin de-vigs (§14.1) are shaped to remove; plotting realized frequency against implied probability is the calibration test. **Closing-line value (CLV)** takes the sharp **closing** price as the best available estimate of the true probability (closing lines on liquid markets track outcomes remarkably well) and scores a ranker by whether the prices or edges it flagged *beat the close* — a forward-looking quality metric that, unlike held-out accuracy, needs no resolved outcomes, only the market's own later consensus. CLV is the betting-market analogue of the held-out Brier/log-loss and calibration checks in §15.5, and a direct test of whether a Propagon model's probabilities are sharper than the crowd's. Recent empirical work underscores the stakes: choosing models by **calibration rather than accuracy** flipped sports-betting ROI from sharply negative to positive in an NBA study [Walsh & Joshi 2024]. *Use cases: confirming that de-vigged/pooled probabilities are calibrated; benchmarking a model against the market without waiting for outcomes.* [Snowberg & Wolfers 2010; Sauer 1998; Brier 1950; Walsh & Joshi 2024].
+
+---
+
+## 15. Cross-Cutting Topics
+
+### 15.1 Identifiability & Connectivity
 
 Every latent-score method needs the comparison graph connected (strongly, in the directed sense of [Ford 1957]) for a common scale to exist; spectral methods additionally want a healthy spectral gap (§3.1). Symptoms and treatments:
 
@@ -999,7 +1093,7 @@ Every latent-score method needs the comparison graph connected (strongly, in the
 | Unstable spectral scores | Weak spectral gap (barbell schedules) | More cross-group comparisons; fall back to MLE; regularized teleportation (§4.4's trick) |
 | Scores drift across refits | Location/scale non-identifiability | Anchor (fix one entity, or zero-mean); never compare raw scores across datasets |
 
-### 14.2 Sample Complexity at a Glance
+### 15.2 Sample Complexity at a Glance
 
 Qualitative guide (n items; see sources for precise statements):
 
@@ -1012,7 +1106,7 @@ Qualitative guide (n items; see sources for precise statements):
 
 The recurring constant: $n \log n$ is the budget to think in. Dense all-pairs designs ($n^2$) buy estimation of the *full probability matrix* (§7.3), not better rankings.
 
-### 14.3 Capability Matrix
+### 15.3 Capability Matrix
 
 The main methods against the recurring requirements:
 
@@ -1037,29 +1131,31 @@ The main methods against the recurring requirements:
 
 ✓✓ core strength · ✓ supported · △ partial/convention · ext. = standard extension exists · ✗ unsupported.
 
-### 14.4 Dependence Between Comparisons
+The market-odds family (§14) is deliberately absent: de-vigging, pooling, LMSR, and Kelly are judged on probability quality (calibration, Brier/log-loss, closing-line value — §14.5, §15.5) and bankroll growth, not on the ties/margins/teams axes above, so they sit beside this matrix rather than inside it — the same exemption the centrality methods (§4) take.
+
+### 15.4 Dependence Between Comparisons
 
 Independence is the universal hidden assumption. Violations — same player's matches sharing form, multiple judgments per voter, battles sharing prompts — mostly leave *point estimates* serviceable but make *uncertainty* overconfident. Remedies: cluster bootstrap (resample players/voters/prompts, not comparisons); random-effects and pairwise-likelihood models [Cattelan 2012]; explicit covariance modeling for arena data [Ameli et al. 2025]. If your CIs decide anything, audit the resampling unit first.
 
-### 14.5 Evaluating the Rankers Themselves
+### 15.5 Evaluating the Rankers Themselves
 
 How to compare ranking methods on your data:
 
 - **Order agreement**: Kendall's τ [Kendall 1938] (pairwise-disagreement-based; matches Kemeny's objective), Spearman's ρ and footrule (displacement-based [Diaconis & Graham 1977]); weighted/top-heavy variants when only the head matters.
-- **Predictive quality** (parametric methods): held-out comparison log-loss and Brier score [Brier 1950], calibration curves, plain accuracy. *Temporal* splits for anything dynamic — random splits leak the future.
+- **Predictive quality** (parametric methods): held-out comparison log-loss and Brier score [Brier 1950], calibration curves, plain accuracy. *Temporal* splits for anything dynamic — random splits leak the future. For probabilities priced against a live market, **closing-line value** (§14.5) is a forward-looking complement that needs no resolved outcomes, and proper scoring rules (§14.3) are the elicitation-side twin of these metrics.
 - **Top-set retrieval**: precision/overlap@k; NDCG [Järvelin & Kekäläinen 2002] when graded relevance exists.
 - **Stability**: rank correlation across bootstrap resamples — a ranker that reshuffles under resampling isn't measuring anything.
 - **Rankability**: before judging rankers, judge the data — Hodge curl share (§3.6), tournament-cycle counts, [Boldi & Vigna 2014]-style axiom checks for centrality choices.
 
 Protocol note: comparing a parametric score's order against Kemeny-style consensus on the *same* data conflates model and metric (Kendall-τ-optimal is Kemeny's home turf). Use held-out prediction for parametric methods, order-agreement against ground truth (when one exists) for the rest.
 
-### 14.6 Sidebar: Economic "Revealed Preference" (Afriat / GARP)
+### 15.6 Sidebar: Economic "Revealed Preference" (Afriat / GARP)
 
 The phrase *revealed preference* originates in consumer theory: choices under budget constraints reveal preference relations, and [Afriat 1967] proved that finite expenditure data is consistent with utility maximization **iff** it satisfies cyclical consistency — operationalized as the Generalized Axiom of Revealed Preference (GARP), testable in polynomial time [Varian 1982]. This machinery *tests rationality and recovers utility bounds*; it does not produce an entity leaderboard, which is why it appears as lineage here rather than as a method entry. The conceptual through-line stands, though: this entire document is the statistical generalization of "what you chose tells us what you value" — with Afriat's cyclical consistency reappearing as stochastic transitivity (§7.3) and Hodge curl (§3.6).
 
 ---
 
-## 15. Method-Selection Decision Guide
+## 16. Method-Selection Decision Guide
 
 | Your situation | First choice | Also consider | Avoid |
 |---|---|---|---|
@@ -1082,9 +1178,12 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 | Ranking frozen models (LLM eval) | BT + bootstrap (§12.1) | + style control (§12.2), tie modeling (§12.4); social choice across suites (§12.6) | Online Elo; mean-score suite averaging |
 | Need error bars on *any* of the above | Bootstrap it (§11.4) | Bayesian BT (§11.1) | Asymptotic SEs under dependence |
 | Just need a sane baseline today | Wilson lower bound (§7.1) | Borda counting (§6.1) | Raw win % |
+| Bookmaker/model odds on the same outcomes → one fair ranking | Power or Shin de-vig + log-odds pool (§14.1–14.2) | Multiplicative de-vig for a quick pass | Averaging raw implied probabilities (ignores the vig) |
+| Have estimated edges/probabilities, must allocate stake or pick what to back | Fractional Kelly (§14.4) | Thompson Sampling (§8.1) when sequential | Full Kelly on point estimates |
+| Want a live, incentive-compatible consensus probability | LMSR prediction market (§14.3) | Batch log-odds pool (§14.2) | Polling without stakes |
 ---
 
-## 16. References
+## 17. References
 
 - Adams, R.P. & Zemel, R.S. (2011). *Ranking via Sinkhorn propagation.* [arXiv:1106.1925](https://arxiv.org/abs/1106.1925).
 - Afriat, S.N. (1967). *The construction of utility functions from expenditure data.* International Economic Review 8(1), 67–77.
@@ -1101,6 +1200,7 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - Bartholdi, J., Tovey, C.A. & Trick, M.A. (1989). *Voting schemes for which it can be difficult to tell who won the election.* Social Choice and Welfare 6(2), 157–165.
 - Bavelas, A. (1950). *Communication patterns in task-oriented groups.* Journal of the Acoustical Society of America 22(6), 725–730.
 - Bengs, V., Busa-Fekete, R., El Mesaoudi-Paul, A. & Hüllermeier, E. (2021). *Preference-based online learning with dueling bandits: A survey.* JMLR 22(7), 1–108. [arXiv:1807.11398](https://arxiv.org/abs/1807.11398).
+- Bhaskara, A., Frongillo, R. & Papireddygari, M. (2023). *A general theory of liquidity provisioning for prediction markets.* [arXiv:2311.08725](https://arxiv.org/abs/2311.08725).
 - Blondel, M., Teboul, O., Berthet, Q. & Djolonga, J. (2020). *Fast differentiable sorting and ranking.* ICML 2020. [arXiv:2002.08871](https://arxiv.org/abs/2002.08871).
 - Boldi, P. & Vigna, S. (2014). *Axioms for centrality.* Internet Mathematics 10(3–4), 222–262. [arXiv:1308.2140](https://arxiv.org/abs/1308.2140).
 - Bonacich, P. (1972). *Factoring and weighting approaches to status scores and clique identification.* Journal of Mathematical Sociology 2(1), 113–120.
@@ -1110,10 +1210,12 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - Bradley, R.A. & Terry, M.E. (1952). *Rank analysis of incomplete block designs: I. The method of paired comparisons.* Biometrika 39(3/4), 324–345.
 - Brandes, U. (2001). *A faster algorithm for betweenness centrality.* Journal of Mathematical Sociology 25(2), 163–177.
 - Braverman, M. & Mossel, E. (2008). *Noisy sorting without resampling.* SODA 2008. [arXiv:0707.1051](https://arxiv.org/abs/0707.1051).
+- Breiman, L. (1961). *Optimal gambling systems for favorable games.* Proceedings of the Fourth Berkeley Symposium on Mathematical Statistics and Probability 1, 65–78.
 - Brier, G.W. (1950). *Verification of forecasts expressed in terms of probability.* Monthly Weather Review 78(1), 1–3.
 - Brin, S. & Page, L. (1998). *The anatomy of a large-scale hypertextual Web search engine.* Computer Networks and ISDN Systems 30(1–7), 107–117.
 - Burges, C.J.C. (2010). *From RankNet to LambdaRank to LambdaMART: An overview.* Microsoft Research Technical Report MSR-TR-2010-82.
 - Burges, C.J.C., Shaked, T., Renshaw, E., Lazier, A., Deeds, M., Hamilton, N. & Hullender, G. (2005). *Learning to rank using gradient descent.* ICML 2005.
+- Busseti, E., Ryu, E.K. & Boyd, S. (2016). *Risk-constrained Kelly gambling.* The Journal of Investing 25(3), 118–134. [arXiv:1603.06183](https://arxiv.org/abs/1603.06183).
 - Callaghan, T., Mucha, P.J. & Porter, M.A. (2007). *Random walker ranking for NCAA Division I-A football.* American Mathematical Monthly 114(9), 761–777.
 - Cao, Z., Qin, T., Liu, T.-Y., Tsai, M.-F. & Li, H. (2007). *Learning to rank: From pairwise approach to listwise approach.* ICML 2007.
 - Caron, F. & Doucet, A. (2012). *Efficient Bayesian inference for generalized Bradley-Terry models.* Journal of Computational and Graphical Statistics 21(1), 174–196. [arXiv:1011.1761](https://arxiv.org/abs/1011.1761).
@@ -1126,6 +1228,7 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - Christiano, P., Leike, J., Brown, T., Martic, M., Legg, S. & Amodei, D. (2017). *Deep reinforcement learning from human preferences.* NeurIPS 2017. [arXiv:1706.03741](https://arxiv.org/abs/1706.03741).
 - Chu, W. & Ghahramani, Z. (2005). *Preference learning with Gaussian processes.* ICML 2005.
 - Chuklin, A., Markov, I. & de Rijke, M. (2015). *Click Models for Web Search.* Morgan & Claypool.
+- Clarke, S., Kovalchik, S. & Ingram, M. (2017). *Adjusting bookmaker's odds to allow for overround.* American Journal of Sports Science 5(6), 45–49.
 - Colley, W.N. (2002). *Colley's bias free college football ranking method.* Technical report, [colleyrankings.com](https://colleyrankings.com/matrate.pdf).
 - Copeland, A.H. (1951). *A "reasonable" social welfare function.* Seminar on Mathematics in Social Sciences, University of Michigan.
 - Coulom, R. (2008). *Whole-history rating: A Bayesian rating system for players of time-varying strength.* Computers and Games 2008, LNCS 5131. [Author PDF](https://www.remi-coulom.fr/WHR/WHR.pdf).
@@ -1137,6 +1240,7 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - Decroos, T., Bransen, L., Van Haaren, J. & Davis, J. (2019). *Actions speak louder than goals: Valuing player actions in soccer.* KDD 2019. [arXiv:1802.07127](https://arxiv.org/abs/1802.07127).
 - Deng, H., Lyu, M.R. & King, I. (2009). *A generalized Co-HITS algorithm and its application to bipartite graphs.* KDD 2009.
 - Diaconis, P. & Graham, R.L. (1977). *Spearman's footrule as a measure of disarray.* Journal of the Royal Statistical Society: Series B 39(2), 262–268.
+- Dietrich, F. & List, C. (2016). *Probabilistic opinion pooling.* In A. Hájek & C. Hitchcock (eds.), *The Oxford Handbook of Probability and Philosophy*, Oxford University Press.
 - Dudík, M., Langford, J. & Li, L. (2011). *Doubly robust policy evaluation and learning.* ICML 2011. [arXiv:1103.4601](https://arxiv.org/abs/1103.4601).
 - Dwork, C., Kumar, R., Naor, M. & Sivakumar, D. (2001). *Rank aggregation methods for the Web.* WWW 2001.
 - Efron, B. (1979). *Bootstrap methods: Another look at the jackknife.* Annals of Statistics 7(1), 1–26.
@@ -1150,14 +1254,19 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - Freeman, L.C. (1977). *A set of measures of centrality based on betweenness.* Sociometry 40(1), 35–41.
 - Freeman, L.C. (1979). *Centrality in social networks: Conceptual clarification.* Social Networks 1(3), 215–239.
 - Freund, Y. & Schapire, R.E. (1999). *Adaptive game playing using multiplicative weights.* Games and Economic Behavior 29(1–2), 79–103.
+- Galekwa, R.M., Tshimula, J.M., Tajeuna, E.G. & Kyandoghere, K. (2024). *A systematic review of machine learning in sports betting: Techniques, challenges, and future directions.* [arXiv:2410.21484](https://arxiv.org/abs/2410.21484).
 - Garivier, A. & Cappé, O. (2011). *The KL-UCB algorithm for bounded stochastic bandits and beyond.* COLT 2011, PMLR 19, 359–376. [proceedings.mlr.press](https://proceedings.mlr.press/v19/garivier11a.html).
 - Garivier, A. & Moulines, E. (2011). *On upper-confidence bound policies for switching bandit problems.* ALT 2011, LNCS 6925, 174–188.
+- Genest, C. & Zidek, J.V. (1986). *Combining probability distributions: A critique and an annotated bibliography.* Statistical Science 1(1), 114–135.
 - Glickman, M.E. (1999). *Parameter estimation in large dynamic paired comparison experiments.* Journal of the Royal Statistical Society: Series C 48(3), 377–394.
 - Glickman, M.E. (2001). *Dynamic paired comparison models with stochastic variances.* Journal of Applied Statistics 28(6), 673–689.
 - Glickman, M.E. (2022). *Example of the Glicko-2 system.* Technical note, [glicko.net](http://www.glicko.net/glicko/glicko2.pdf).
+- Gneiting, T. & Raftery, A.E. (2007). *Strictly proper scoring rules, prediction, and estimation.* JASA 102(477), 359–378.
 - Govan, A.Y., Langville, A.N. & Meyer, C.D. (2009). *Offense-defense approach to ranking team sports.* Journal of Quantitative Analysis in Sports 5(1).
 - Gyöngyi, Z., Garcia-Molina, H. & Pedersen, J. (2004). *Combating Web spam with TrustRank.* VLDB 2004.
 - Hamilton, I., Tawn, N. & Firth, D. (2023). *The many routes to the ubiquitous Bradley-Terry model.* [arXiv:2312.13619](https://arxiv.org/abs/2312.13619).
+- Hanson, R. (2003). *Combinatorial information market design.* Information Systems Frontiers 5(1), 107–119.
+- Hanson, R. (2007). *Logarithmic market scoring rules for modular combinatorial information aggregation.* Journal of Prediction Markets 1(1), 3–15. [Author PDF](https://mason.gmu.edu/~rhanson/mktscore.pdf).
 - Haveliwala, T.H. (2002). *Topic-sensitive PageRank.* WWW 2002.
 - He, X., Gao, M., Kan, M.-Y. & Wang, D. (2017). *BiRank: Towards ranking on bipartite graphs.* IEEE TKDE 29(1), 57–71. [arXiv:1708.04396](https://arxiv.org/abs/1708.04396).
 - Heckel, R., Shah, N.B., Ramchandran, K. & Wainwright, M.J. (2019). *Active ranking from pairwise comparisons and when parametric assumptions do not help.* Annals of Statistics 47(6), 3099–3126. [arXiv:1606.08842](https://arxiv.org/abs/1606.08842).
@@ -1171,8 +1280,10 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - Jiang, X., Lim, L.-H., Yao, Y. & Ye, Y. (2011). *Statistical ranking and combinatorial Hodge theory.* Mathematical Programming 127(1), 203–244. [arXiv:0811.1067](https://arxiv.org/abs/0811.1067).
 - Joachims, T., Swaminathan, A. & Schnabel, T. (2017). *Unbiased learning-to-rank with biased feedback.* WSDM 2017. [arXiv:1608.04468](https://arxiv.org/abs/1608.04468).
 - Joshy, V. (2024). *OpenSkill: A faster asymmetric multi-team, multiplayer rating system.* [arXiv:2401.05451](https://arxiv.org/abs/2401.05451).
+- Jullien, B. & Salanié, B. (1994). *Measuring the incidence of insider trading: A comment on Shin.* The Economic Journal 104(427), 1418–1419.
 - Katz, L. (1953). *A new status index derived from sociometric analysis.* Psychometrika 18(1), 39–43.
 - Keener, J.P. (1993). *The Perron-Frobenius theorem and the ranking of football teams.* SIAM Review 35(1), 80–93.
+- Kelly, J.L. (1956). *A new interpretation of information rate.* Bell System Technical Journal 35(4), 917–926.
 - Kemeny, J.G. (1959). *Mathematics without numbers.* Daedalus 88(4), 577–591.
 - Kendall, M.G. (1938). *A new measure of rank correlation.* Biometrika 30(1/2), 81–93.
 - Kenyon-Mathieu, C. & Schudy, W. (2007). *How to rank with few errors.* STOC 2007.
@@ -1188,6 +1299,7 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - LMSYS (2024). *Does style matter? Disentangling style and substance in Chatbot Arena.* [lmsys.org blog, 2024-08-28](https://lmsys.org/blog/2024-08-28-style-control/).
 - Lü, L., Zhang, Y.-C., Yeung, C.H. & Zhou, T. (2011). *Leaders in social networks, the Delicious case.* PLoS ONE 6(6), e21202.
 - Luce, R.D. (1959). *Individual Choice Behavior: A Theoretical Analysis.* Wiley.
+- MacLean, L.C., Thorp, E.O. & Ziemba, W.T. (eds.) (2011). *The Kelly Capital Growth Investment Criterion: Theory and Practice.* World Scientific.
 - Mallows, C.L. (1957). *Non-null ranking models. I.* Biometrika 44(1/2), 114–130.
 - Marchiori, M. & Latora, V. (2000). *Harmony in the small-world.* Physica A 285(3–4), 539–546. [arXiv:cond-mat/0008357](https://arxiv.org/abs/cond-mat/0008357).
 - Marden, J.I. (1995). *Analyzing and Modeling Rank Data.* Chapman & Hall.
@@ -1201,6 +1313,8 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - Mosteller, F. (1951). *Remarks on the method of paired comparisons: I.* Psychometrika 16(1), 3–9.
 - Negahban, S., Oh, S. & Shah, D. (2017). *Rank Centrality: Ranking from pairwise comparisons.* Operations Research 65(1), 266–287. [arXiv:1209.1688](https://arxiv.org/abs/1209.1688).
 - Newman, M.E.J. (2005). *A measure of betweenness centrality based on random walks.* Social Networks 27(1), 39–54.
+- Neyman, E. & Roughgarden, T. (2021). *From proper scoring rules to max-min optimal forecast aggregation.* EC 2021; journal version in Operations Research (2023). [arXiv:2102.07081](https://arxiv.org/abs/2102.07081).
+- Neyman, E. & Roughgarden, T. (2022). *No-regret learning with unbounded losses: The case of logarithmic pooling.* NeurIPS 2023. [arXiv:2202.11219](https://arxiv.org/abs/2202.11219).
 - Omidshafiei, S., Papadimitriou, C., Piliouras, G., Tuyls, K., Rowland, M., Lespiau, J.-B., Czarnecki, W.M., Lanctot, M., Pérolat, J. & Munos, R. (2019). *α-Rank: Multi-agent evaluation by evolution.* Scientific Reports 9, 9937. [arXiv:1903.01373](https://arxiv.org/abs/1903.01373).
 - Ouyang, L., et al. (2022). *Training language models to follow instructions with human feedback.* NeurIPS 2022. [arXiv:2203.02155](https://arxiv.org/abs/2203.02155).
 - Plackett, R.L. (1975). *The analysis of permutations.* Journal of the Royal Statistical Society: Series C 24(2), 193–202.
@@ -1213,21 +1327,34 @@ The phrase *revealed preference* originates in consumer theory: choices under bu
 - Rubin, D.B. (1981). *The Bayesian bootstrap.* Annals of Statistics 9(1), 130–134.
 - Russo, D., Van Roy, B., Kazerouni, A., Osband, I. & Wen, Z. (2018). *A tutorial on Thompson sampling.* Foundations and Trends in Machine Learning 11(1), 1–96. [arXiv:1707.02038](https://arxiv.org/abs/1707.02038).
 - Saari, D.G. & Merlin, V.R. (1996). *The Copeland method I: Relationships and the dictionary.* Economic Theory 8, 51–76.
+- Satopää, V.A., Baron, J., Foster, D.P., Mellers, B.A., Tetlock, P.E. & Ungar, L.H. (2014). *Combining multiple probability predictions using a simple logit model.* International Journal of Forecasting 30(2), 344–356.
+- Sauer, R.D. (1998). *The economics of wagering markets.* Journal of Economic Literature 36(4), 2021–2064.
+- Savage, L.J. (1971). *Elicitation of personal probabilities and expectations.* JASA 66(336), 783–801.
+- Schlegel, J.C., Kwaśnicki, M. & Mamageishvili, A. (2023). *Axioms for constant function market makers.* EC 2023. [arXiv:2210.00048](https://arxiv.org/abs/2210.00048).
+- Schoenegger, P., Tuminauskaite, I., Park, P.S., Bastos, R.V.S. & Tetlock, P.E. (2024). *Wisdom of the silicon crowd: LLM ensemble prediction capabilities rival human crowd accuracy.* Science Advances 10(45), eadp1528.
 - Schulze, M. (2011). *A new monotonic, clone-independent, reversal symmetric, and Condorcet-consistent single-winner election method.* Social Choice and Welfare 36(2), 267–303.
 - Seidman, S.B. (1983). *Network structure and minimum degree.* Social Networks 5(3), 269–287.
 - Shah, N.B. & Wainwright, M.J. (2018). *Simple, robust and optimal ranking from pairwise comparisons.* JMLR 18(199), 1–38. [arXiv:1512.08949](https://arxiv.org/abs/1512.08949).
 - Shah, N.B., Balakrishnan, S., Guntuboyina, A. & Wainwright, M.J. (2017). *Stochastically transitive models for pairwise comparisons: Statistical and computational issues.* IEEE Transactions on Information Theory 63(2), 934–959. [arXiv:1510.05610](https://arxiv.org/abs/1510.05610).
+- Shin, H.S. (1992). *Prices of state-contingent claims with insider traders, and the favourite-longshot bias.* The Economic Journal 102(411), 426–435.
+- Shin, H.S. (1993). *Measuring the incidence of insider trading in a market for state-contingent claims.* The Economic Journal 103(420), 1141–1153.
+- Snowberg, E. & Wolfers, J. (2010). *Explaining the favorite-longshot bias: Is it risk-love or misperceptions?* Journal of Political Economy 118(4), 723–746.
 - Stern, H. (1990). *Models for distributions on permutations.* JASA 85(410), 558–564.
+- Štrumbelj, E. (2014). *On determining probability forecasts from betting odds.* International Journal of Forecasting 30(4), 934–943.
 - Sun, H., Shen, Y. & Ton, J.-F. (2024). *Rethinking Bradley-Terry models in preference-based reward modeling: Foundations, theory, and alternatives.* [arXiv:2411.04991](https://arxiv.org/abs/2411.04991).
+- Sun, Q. & Boyd, S. (2018). *Distributional robust Kelly gambling: Optimal strategy under uncertainty in the long-run.* [arXiv:1812.10371](https://arxiv.org/abs/1812.10371).
 - Sutton, R.S. & Barto, A.G. (2018). *Reinforcement Learning: An Introduction* (2nd ed.). MIT Press.
 - Thompson, W.R. (1933). *On the likelihood that one unknown probability exceeds another in view of the evidence of two samples.* Biometrika 25(3/4), 285–294.
+- Thorp, E.O. (2006). *The Kelly criterion in blackjack, sports betting, and the stock market.* In *Handbook of Asset and Liability Management*, Vol. 1, North-Holland, 385–428.
 - Thurstone, L.L. (1927). *A law of comparative judgment.* Psychological Review 34(4), 273–286.
 - Tideman, T.N. (1987). *Independence of clones as a criterion for voting rules.* Social Choice and Welfare 4(3), 185–206.
 - Tong, H., Faloutsos, C. & Pan, J.-Y. (2006). *Fast random walk with restart and its applications.* ICDM 2006.
 - Torabi, F., Warnell, G. & Stone, P. (2018). *Behavioral cloning from observation.* IJCAI 2018. [arXiv:1805.01954](https://arxiv.org/abs/1805.01954).
 - Train, K.E. (2009). *Discrete Choice Methods with Simulation* (2nd ed.). Cambridge University Press.
 - Tsukida, K. & Gupta, M.R. (2011). *How to analyze paired comparison data.* University of Washington Technical Report UWEETR-2011-0004.
+- Uhrín, M., Šourek, G., Hubáček, O. & Železný, F. (2021). *Optimal sports betting strategies in practice: An experimental review.* IMA Journal of Management Mathematics 32(4), 465–489. [arXiv:2107.08827](https://arxiv.org/abs/2107.08827).
 - Varian, H.R. (1982). *The nonparametric approach to demand analysis.* Econometrica 50(4), 945–973.
+- Walsh, C. & Joshi, A. (2024). *Machine learning for sports betting: Should model selection be based on accuracy or calibration?* Machine Learning with Applications 16, 100539. [arXiv:2303.06021](https://arxiv.org/abs/2303.06021).
 - Weng, R.C. & Lin, C.-J. (2011). *A Bayesian approximation method for online ranking.* JMLR 12, 267–300. [jmlr.org](https://www.jmlr.org/papers/v12/weng11a.html).
 - Wilson, E.B. (1927). *Probable inference, the law of succession, and statistical inference.* JASA 22(158), 209–212.
 - Wu, H. & Liu, X. (2016). *Double Thompson sampling for dueling bandits.* NIPS 2016. [arXiv:1604.07101](https://arxiv.org/abs/1604.07101).
