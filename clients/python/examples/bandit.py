@@ -24,6 +24,7 @@ def main() -> None:
     day2 = propagon.RewardsDataset()
     for arm, reward in [("C", 1.0), ("C", 1.0), ("A", 0.0)]:
         day2.push(arm, reward)
+
     bandit.update(model, day2)
     print("After day 2:", model.sorted_scores())
 
