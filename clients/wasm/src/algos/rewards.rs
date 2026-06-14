@@ -1,18 +1,21 @@
-//! Algorithms over `rewards-dataset`: the multi-armed Bandit (online).
+//! Algorithms over reward logs: the multi-armed Bandit and sliding-window UCB
+//! (over `rewards-dataset`) and LinUCB (over `contextual-rewards-dataset`). All
+//! online.
 
-use std::cell::RefCell;
-
-use propagon::OnlineRanker;
-use propagon::RankModel;
-use propagon::algos::{Bandit, BanditModel as CoreBandit};
+use propagon::algos::{
+    Bandit, BanditModel as CoreBandit, LinUcb, LinUcbModel as CoreLinUcb, SlidingWindowUcb,
+    SwUcbModel as CoreSwUcb,
+};
 
 use crate::Component;
-use crate::datasets::RewardsData;
+use crate::datasets::{ContextualRewardsData, RewardsData};
 use crate::enums::bandit_policy;
-use crate::errors::MapWit;
-use crate::wit::datasets::RewardsDatasetBorrow;
-use crate::wit::rewards::{BanditModel, BanditParams, Guest, GuestBanditModel};
-use crate::wit::types::Error;
+use crate::wit::datasets::{ContextualRewardsDatasetBorrow, RewardsDatasetBorrow};
+use crate::wit::rewards::{
+    BanditModel, BanditParams, Guest, GuestBanditModel, GuestLinUcbModel,
+    GuestSlidingWindowUcbModel, LinUcbModel, LinUcbParams, SlidingWindowUcbModel,
+    SlidingWindowUcbParams,
+};
 
 online_model!(
     BanditMod,
@@ -22,8 +25,24 @@ online_model!(
     RewardsData,
     RewardsDatasetBorrow<'_>
 );
+online_model!(
+    SwUcbMod,
+    GuestSlidingWindowUcbModel,
+    SlidingWindowUcb,
+    CoreSwUcb,
+    RewardsData,
+    RewardsDatasetBorrow<'_>
+);
+online_model!(
+    LinUcbMod,
+    GuestLinUcbModel,
+    LinUcb,
+    CoreLinUcb,
+    ContextualRewardsData,
+    ContextualRewardsDatasetBorrow<'_>
+);
 
-fn bandit(p: BanditParams) -> Bandit {
+fn bandit_build(p: BanditParams) -> Bandit {
     let mut b = Bandit::default();
     if let Some(policy) = p.policy {
         b.policy = bandit_policy(policy);
@@ -33,36 +52,59 @@ fn bandit(p: BanditParams) -> Bandit {
     }
     b
 }
+fn sw_ucb_build(p: SlidingWindowUcbParams) -> SlidingWindowUcb {
+    merge_params!(
+        p,
+        SlidingWindowUcb,
+        scalar { exploration },
+        usize { window }
+    )
+}
+fn lin_ucb_build(p: LinUcbParams) -> LinUcb {
+    merge_params!(p, LinUcb, scalar { alpha, ridge })
+}
 
 impl Guest for Component {
-    type BanditModel = BanditMod;
-
-    fn init_bandit(params: BanditParams) -> BanditModel {
-        let algo = bandit(params);
-        let model = algo.init();
-        BanditModel::new(BanditMod {
-            algo,
-            model: RefCell::new(model),
-        })
-    }
-    fn fit_bandit(
-        params: BanditParams,
-        data: RewardsDatasetBorrow<'_>,
-    ) -> Result<BanditModel, Error> {
-        let algo = bandit(params);
-        let ds = data.get::<RewardsData>();
-        let mut model = algo.init();
-        algo.update(&mut model, &ds.0.borrow()).map_wit()?;
-        Ok(BanditModel::new(BanditMod {
-            algo,
-            model: RefCell::new(model),
-        }))
-    }
-    fn load_bandit(state: String) -> Result<BanditModel, Error> {
-        let model = CoreBandit::load_jsonl(state.as_bytes()).map_wit()?;
-        Ok(BanditModel::new(BanditMod {
-            algo: Bandit::default(),
-            model: RefCell::new(model),
-        }))
-    }
+    online_algo!(
+        BanditModel,
+        BanditMod,
+        CoreBandit,
+        Bandit,
+        BanditParams,
+        RewardsData,
+        RewardsDatasetBorrow<'_>,
+        BanditModel,
+        init_bandit,
+        fit_bandit,
+        load_bandit,
+        bandit_build
+    );
+    online_algo!(
+        SlidingWindowUcbModel,
+        SwUcbMod,
+        CoreSwUcb,
+        SlidingWindowUcb,
+        SlidingWindowUcbParams,
+        RewardsData,
+        RewardsDatasetBorrow<'_>,
+        SlidingWindowUcbModel,
+        init_sliding_window_ucb,
+        fit_sliding_window_ucb,
+        load_sliding_window_ucb,
+        sw_ucb_build
+    );
+    online_algo!(
+        LinUcbModel,
+        LinUcbMod,
+        CoreLinUcb,
+        LinUcb,
+        LinUcbParams,
+        ContextualRewardsData,
+        ContextualRewardsDatasetBorrow<'_>,
+        LinUcbModel,
+        init_lin_ucb,
+        fit_lin_ucb,
+        load_lin_ucb,
+        lin_ucb_build
+    );
 }

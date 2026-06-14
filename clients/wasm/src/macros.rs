@@ -92,6 +92,133 @@ macro_rules! online_model {
     };
 }
 
+/// Emit a batch algorithm's associated type + `fit`/`fit_warm`/`load` inside an
+/// `impl <iface>::Guest for Component` block. `$build` is `fn($params) ->
+/// Result<$algo, Error>` (`Ok` for infallible scalar params).
+macro_rules! batch_algo {
+    (
+        $assoc:ident, $wrap:ident, $core:ty, $params:ty, $ds_impl:ty, $ds_borrow:ty,
+        $model:ty, $model_borrow:ty, $fit:ident, $warm:ident, $load:ident, $build:path
+    ) => {
+        type $assoc = $wrap;
+
+        fn $fit(
+            params: $params,
+            data: $ds_borrow,
+        ) -> ::core::result::Result<$model, $crate::wit::types::Error> {
+            let algo = $build(params)?;
+            let ds = data.get::<$ds_impl>();
+            let m =
+                $crate::errors::MapWit::map_wit(::propagon::Ranker::fit(&algo, &ds.0.borrow()))?;
+            ::core::result::Result::Ok(<$model>::new($wrap(m)))
+        }
+
+        fn $warm(
+            params: $params,
+            data: $ds_borrow,
+            init: $model_borrow,
+        ) -> ::core::result::Result<$model, $crate::wit::types::Error> {
+            let algo = $build(params)?;
+            let ds = data.get::<$ds_impl>();
+            let init = init.get::<$wrap>();
+            let m = $crate::errors::MapWit::map_wit(::propagon::Ranker::fit_warm(
+                &algo,
+                &ds.0.borrow(),
+                &init.0,
+            ))?;
+            ::core::result::Result::Ok(<$model>::new($wrap(m)))
+        }
+
+        fn $load(
+            state: ::std::string::String,
+        ) -> ::core::result::Result<$model, $crate::wit::types::Error> {
+            let m = $crate::errors::MapWit::map_wit(<$core as ::propagon::RankModel>::load_jsonl(
+                state.as_bytes(),
+            ))?;
+            ::core::result::Result::Ok(<$model>::new($wrap(m)))
+        }
+    };
+}
+
+/// Emit a parameterless batch algorithm's associated type + `fit`/`load`.
+macro_rules! nofield_algo {
+    (
+        $assoc:ident, $wrap:ident, $core:ty, $algo:ty, $ds_impl:ty, $ds_borrow:ty,
+        $model:ty, $fit:ident, $load:ident
+    ) => {
+        type $assoc = $wrap;
+
+        fn $fit(data: $ds_borrow) -> ::core::result::Result<$model, $crate::wit::types::Error> {
+            let ds = data.get::<$ds_impl>();
+            let m = $crate::errors::MapWit::map_wit(::propagon::Ranker::fit(
+                &<$algo>::default(),
+                &ds.0.borrow(),
+            ))?;
+            ::core::result::Result::Ok(<$model>::new($wrap(m)))
+        }
+
+        fn $load(
+            state: ::std::string::String,
+        ) -> ::core::result::Result<$model, $crate::wit::types::Error> {
+            let m = $crate::errors::MapWit::map_wit(<$core as ::propagon::RankModel>::load_jsonl(
+                state.as_bytes(),
+            ))?;
+            ::core::result::Result::Ok(<$model>::new($wrap(m)))
+        }
+    };
+}
+
+/// Emit an online algorithm's associated type + `init`/`fit`/`load`. `$build` is
+/// `fn($params) -> $algo` (infallible). `update` lives on the model resource via
+/// [`online_model!`].
+macro_rules! online_algo {
+    (
+        $assoc:ident, $wrap:ident, $core:ty, $algo:ty, $params:ty, $ds_impl:ty,
+        $ds_borrow:ty, $model:ty, $init:ident, $fit:ident, $load:ident, $build:path
+    ) => {
+        type $assoc = $wrap;
+
+        fn $init(params: $params) -> $model {
+            let algo = $build(params);
+            let model = ::propagon::OnlineRanker::init(&algo);
+            <$model>::new($wrap {
+                algo,
+                model: ::std::cell::RefCell::new(model),
+            })
+        }
+
+        fn $fit(
+            params: $params,
+            data: $ds_borrow,
+        ) -> ::core::result::Result<$model, $crate::wit::types::Error> {
+            let algo = $build(params);
+            let ds = data.get::<$ds_impl>();
+            let mut model = ::propagon::OnlineRanker::init(&algo);
+            $crate::errors::MapWit::map_wit(::propagon::OnlineRanker::update(
+                &algo,
+                &mut model,
+                &ds.0.borrow(),
+            ))?;
+            ::core::result::Result::Ok(<$model>::new($wrap {
+                algo,
+                model: ::std::cell::RefCell::new(model),
+            }))
+        }
+
+        fn $load(
+            state: ::std::string::String,
+        ) -> ::core::result::Result<$model, $crate::wit::types::Error> {
+            let model = $crate::errors::MapWit::map_wit(
+                <$core as ::propagon::RankModel>::load_jsonl(state.as_bytes()),
+            )?;
+            ::core::result::Result::Ok(<$model>::new($wrap {
+                algo: <$algo>::default(),
+                model: ::std::cell::RefCell::new(model),
+            }))
+        }
+    };
+}
+
 /// Fold a params record's `option` fields onto the core algorithm's `Default`.
 macro_rules! merge_params {
     (

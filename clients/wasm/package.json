@@ -6,12 +6,14 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/propagon.d.ts",
-      "import": "./dist/propagon.js"
+      "types": "./index.d.ts",
+      "import": "./index.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "index.js",
+    "index.d.ts"
   ],
   "scripts": {
     "build:wasm": "cargo component build --release",

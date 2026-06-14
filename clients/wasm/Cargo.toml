@@ -21,6 +21,10 @@ crate-type = ["cdylib"]
 # place in a wasm component), and `io` (std::fs helpers) is unusable here.
 propagon = { path = "../../crates/propagon", default-features = false }
 wit-bindgen-rt = { version = "0.44", features = ["bitflags"] }
+# Parse unit-only param enums from kebab-case strings (mirrors the Python
+# client's `unit_enum`), so those fields cross the boundary as strings.
+serde = "1"
+serde_json = "1"
 
 [package.metadata.component]
 package = "propagon:core"

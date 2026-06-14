@@ -1,49 +1,105 @@
-//! Algorithms over `rankings-dataset`: Plackett-Luce (batch).
+//! Algorithms over `rankings-dataset`: Plackett-Luce, Footrule, Mallows, MC4.
 
-use propagon::RankModel;
-use propagon::Ranker;
-use propagon::algos::{PlackettLuce, PlackettLuceModel as CorePlackettLuce};
+use propagon::algos::{
+    Footrule, FootruleModel as CoreFootrule, Mallows, MallowsModel as CoreMallows, Mc4,
+    Mc4Model as CoreMc4, PlackettLuce, PlackettLuceModel as CorePlackettLuce,
+};
 
 use crate::Component;
 use crate::datasets::RankingsData;
-use crate::errors::MapWit;
+use crate::enums::kemeny_passes;
 use crate::wit::datasets::RankingsDatasetBorrow;
 use crate::wit::rankings::{
-    Guest, GuestPlackettLuceModel, PlackettLuceModel, PlackettLuceModelBorrow, PlackettLuceParams,
+    FootruleModel, Guest, GuestFootruleModel, GuestMallowsModel, GuestMc4Model,
+    GuestPlackettLuceModel, MallowsModel, MallowsModelBorrow, MallowsParams, Mc4Model,
+    Mc4ModelBorrow, Mc4Params, PlackettLuceModel, PlackettLuceModelBorrow, PlackettLuceParams,
 };
 use crate::wit::types::Error;
 
 batch_model!(PlackettLuceMod, GuestPlackettLuceModel, CorePlackettLuce);
+batch_model!(FootruleMod, GuestFootruleModel, CoreFootrule);
+batch_model!(MallowsMod, GuestMallowsModel, CoreMallows);
+batch_model!(Mc4Mod, GuestMc4Model, CoreMc4);
 
-fn plackett_luce(p: PlackettLuceParams) -> PlackettLuce {
-    merge_params!(p, PlackettLuce, scalar { tolerance }, usize { iterations })
+fn plackett_luce_build(p: PlackettLuceParams) -> Result<PlackettLuce, Error> {
+    Ok(merge_params!(
+        p,
+        PlackettLuce,
+        scalar { tolerance },
+        usize { iterations }
+    ))
+}
+fn mallows_build(p: MallowsParams) -> Result<Mallows, Error> {
+    let mut m = Mallows::default();
+    if let Some(passes) = p.passes {
+        m.passes = kemeny_passes(passes);
+    }
+    if let Some(seed) = p.seed {
+        m.seed = seed;
+    }
+    Ok(m)
+}
+fn mc4_build(p: Mc4Params) -> Result<Mc4, Error> {
+    Ok(merge_params!(
+        p,
+        Mc4,
+        scalar { damping, tolerance },
+        usize { iterations }
+    ))
 }
 
 impl Guest for Component {
-    type PlackettLuceModel = PlackettLuceMod;
-
-    fn fit_plackett_luce(
-        params: PlackettLuceParams,
-        data: RankingsDatasetBorrow<'_>,
-    ) -> Result<PlackettLuceModel, Error> {
-        let algo = plackett_luce(params);
-        let ds = data.get::<RankingsData>();
-        let model = algo.fit(&ds.0.borrow()).map_wit()?;
-        Ok(PlackettLuceModel::new(PlackettLuceMod(model)))
-    }
-    fn fit_warm_plackett_luce(
-        params: PlackettLuceParams,
-        data: RankingsDatasetBorrow<'_>,
-        init: PlackettLuceModelBorrow<'_>,
-    ) -> Result<PlackettLuceModel, Error> {
-        let algo = plackett_luce(params);
-        let ds = data.get::<RankingsData>();
-        let init = init.get::<PlackettLuceMod>();
-        let model = algo.fit_warm(&ds.0.borrow(), &init.0).map_wit()?;
-        Ok(PlackettLuceModel::new(PlackettLuceMod(model)))
-    }
-    fn load_plackett_luce(state: String) -> Result<PlackettLuceModel, Error> {
-        let model = CorePlackettLuce::load_jsonl(state.as_bytes()).map_wit()?;
-        Ok(PlackettLuceModel::new(PlackettLuceMod(model)))
-    }
+    batch_algo!(
+        PlackettLuceModel,
+        PlackettLuceMod,
+        CorePlackettLuce,
+        PlackettLuceParams,
+        RankingsData,
+        RankingsDatasetBorrow<'_>,
+        PlackettLuceModel,
+        PlackettLuceModelBorrow<'_>,
+        fit_plackett_luce,
+        fit_warm_plackett_luce,
+        load_plackett_luce,
+        plackett_luce_build
+    );
+    nofield_algo!(
+        FootruleModel,
+        FootruleMod,
+        CoreFootrule,
+        Footrule,
+        RankingsData,
+        RankingsDatasetBorrow<'_>,
+        FootruleModel,
+        fit_footrule,
+        load_footrule
+    );
+    batch_algo!(
+        MallowsModel,
+        MallowsMod,
+        CoreMallows,
+        MallowsParams,
+        RankingsData,
+        RankingsDatasetBorrow<'_>,
+        MallowsModel,
+        MallowsModelBorrow<'_>,
+        fit_mallows,
+        fit_warm_mallows,
+        load_mallows,
+        mallows_build
+    );
+    batch_algo!(
+        Mc4Model,
+        Mc4Mod,
+        CoreMc4,
+        Mc4Params,
+        RankingsData,
+        RankingsDatasetBorrow<'_>,
+        Mc4Model,
+        Mc4ModelBorrow<'_>,
+        fit_mc4,
+        fit_warm_mc4,
+        load_mc4,
+        mc4_build
+    );
 }

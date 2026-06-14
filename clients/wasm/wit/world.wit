@@ -49,6 +49,12 @@ interface types {
         ids: list<string>,
         scores: list<f64>,
     }
+
+    /// Refinement-pass budget for Kemeny and Mallows (shared).
+    variant kemeny-passes {
+        auto,
+        fixed(u32),
+    }
 }
 
 interface datasets {
@@ -197,6 +203,84 @@ interface games {
     init-glicko2: func(params: glicko2-params) -> glicko2-model;
     fit-glicko2: func(params: glicko2-params, data: borrow<games-dataset>) -> result<glicko2-model, error>;
     load-glicko2: func(state: string) -> result<glicko2-model, error>;
+
+    record mov-elo-params {
+        k: option<f64>,
+        initial-rating: option<f64>,
+        scale: option<f64>,
+        mov-exponent: option<f64>,
+    }
+    resource mov-elo-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<games-dataset>) -> result<_, error>;
+    }
+    init-mov-elo: func(params: mov-elo-params) -> mov-elo-model;
+    fit-mov-elo: func(params: mov-elo-params, data: borrow<games-dataset>) -> result<mov-elo-model, error>;
+    load-mov-elo: func(state: string) -> result<mov-elo-model, error>;
+
+    record m-elo-params {
+        k: option<u32>,
+        lr-rating: option<f64>,
+        lr-vector: option<f64>,
+        initial-rating: option<f64>,
+        init-scale: option<f64>,
+        seed: option<u64>,
+    }
+    resource m-elo-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<games-dataset>) -> result<_, error>;
+    }
+    init-m-elo: func(params: m-elo-params) -> m-elo-model;
+    fit-m-elo: func(params: m-elo-params, data: borrow<games-dataset>) -> result<m-elo-model, error>;
+    load-m-elo: func(state: string) -> result<m-elo-model, error>;
+
+    /// `ties`: "none" | "davidson" | "rao-kupper"; `home`: "none" | "estimate".
+    record generalized-bt-params {
+        ties: option<string>,
+        home: option<string>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource generalized-bt-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-generalized-bt: func(params: generalized-bt-params, data: borrow<games-dataset>) -> result<generalized-bt-model, error>;
+    fit-warm-generalized-bt: func(params: generalized-bt-params, data: borrow<games-dataset>, init: borrow<generalized-bt-model>) -> result<generalized-bt-model, error>;
+    load-generalized-bt: func(state: string) -> result<generalized-bt-model, error>;
+
+    /// `aggregate`: "additive" | "product"; `ties`: "error" | "discard" | "half-win".
+    record team-bradley-terry-params {
+        aggregate: option<string>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+        ties: option<string>,
+    }
+    resource team-bradley-terry-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-team-bradley-terry: func(params: team-bradley-terry-params, data: borrow<games-dataset>) -> result<team-bradley-terry-model, error>;
+    fit-warm-team-bradley-terry: func(params: team-bradley-terry-params, data: borrow<games-dataset>, init: borrow<team-bradley-terry-model>) -> result<team-bradley-terry-model, error>;
+    load-team-bradley-terry: func(state: string) -> result<team-bradley-terry-model, error>;
 }
 
 interface graph {
@@ -213,6 +297,12 @@ interface graph {
     variant teleport {
         uniform,
         seeds(list<tuple<string, f64>>),
+    }
+
+    /// Source-set budget for harmonic centrality: `sample` carries `(count, seed)`.
+    variant source-budget {
+        all,
+        sample(tuple<u32, u64>),
     }
 
     record page-rank-params {
@@ -252,11 +342,113 @@ interface graph {
     fit-hits: func(params: hits-params, data: borrow<graph-dataset>) -> result<hits-model, error>;
     fit-warm-hits: func(params: hits-params, data: borrow<graph-dataset>, init: borrow<hits-model>) -> result<hits-model, error>;
     load-hits: func(state: string) -> result<hits-model, error>;
+
+    record bi-rank-params {
+        iterations: option<u32>,
+        alpha: option<f64>,
+        beta: option<f64>,
+        seed: option<u64>,
+    }
+    resource bi-rank-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-bi-rank: func(params: bi-rank-params, data: borrow<graph-dataset>) -> result<bi-rank-model, error>;
+    fit-warm-bi-rank: func(params: bi-rank-params, data: borrow<graph-dataset>, init: borrow<bi-rank-model>) -> result<bi-rank-model, error>;
+    load-bi-rank: func(state: string) -> result<bi-rank-model, error>;
+
+    /// `direction`: "in" | "out" | "total".
+    record degree-params {
+        direction: option<string>,
+    }
+    resource degree-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-degree: func(params: degree-params, data: borrow<graph-dataset>) -> result<degree-model, error>;
+    fit-warm-degree: func(params: degree-params, data: borrow<graph-dataset>, init: borrow<degree-model>) -> result<degree-model, error>;
+    load-degree: func(state: string) -> result<degree-model, error>;
+
+    /// `direction`: "in" | "out" | "total"; `cost`: "unit" | "weight".
+    record harmonic-params {
+        direction: option<string>,
+        cost: option<string>,
+        sources: option<source-budget>,
+    }
+    resource harmonic-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-harmonic: func(params: harmonic-params, data: borrow<graph-dataset>) -> result<harmonic-model, error>;
+    fit-warm-harmonic: func(params: harmonic-params, data: borrow<graph-dataset>, init: borrow<harmonic-model>) -> result<harmonic-model, error>;
+    load-harmonic: func(state: string) -> result<harmonic-model, error>;
+
+    record katz-params {
+        alpha: option<f64>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource katz-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-katz: func(params: katz-params, data: borrow<graph-dataset>) -> result<katz-model, error>;
+    fit-warm-katz: func(params: katz-params, data: borrow<graph-dataset>, init: borrow<katz-model>) -> result<katz-model, error>;
+    load-katz: func(state: string) -> result<katz-model, error>;
+
+    resource k-core-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-k-core: func(data: borrow<graph-dataset>) -> result<k-core-model, error>;
+    load-k-core: func(state: string) -> result<k-core-model, error>;
+
+    record leader-rank-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource leader-rank-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-leader-rank: func(params: leader-rank-params, data: borrow<graph-dataset>) -> result<leader-rank-model, error>;
+    fit-warm-leader-rank: func(params: leader-rank-params, data: borrow<graph-dataset>, init: borrow<leader-rank-model>) -> result<leader-rank-model, error>;
+    load-leader-rank: func(state: string) -> result<leader-rank-model, error>;
 }
 
 interface pairwise {
-    use types.{error, scores-bulk};
+    use types.{error, scores-bulk, kemeny-passes};
     use datasets.{pairwise-dataset};
+
+    /// Comparison policy for the dueling bandit.
+    variant dueling-policy {
+        rucb(f64),
+        double-thompson(f64),
+    }
 
     record bradley-terry-mm-params {
         iterations: option<u32>,
@@ -293,11 +485,398 @@ interface pairwise {
 
     fit-borda: func(data: borrow<pairwise-dataset>) -> result<borda-model, error>;
     load-borda: func(state: string) -> result<borda-model, error>;
+
+    record bradley-terry-lr-params {
+        passes: option<u32>,
+        alpha: option<f64>,
+        decay: option<f64>,
+        thrifty: option<bool>,
+    }
+    resource bradley-terry-lr-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-bradley-terry-lr: func(params: bradley-terry-lr-params, data: borrow<pairwise-dataset>) -> result<bradley-terry-lr-model, error>;
+    fit-warm-bradley-terry-lr: func(params: bradley-terry-lr-params, data: borrow<pairwise-dataset>, init: borrow<bradley-terry-lr-model>) -> result<bradley-terry-lr-model, error>;
+    load-bradley-terry-lr: func(state: string) -> result<bradley-terry-lr-model, error>;
+
+    record bayesian-bradley-terry-params {
+        shape: option<f64>,
+        rate: option<f64>,
+        samples: option<u32>,
+        burn-in: option<u32>,
+        credible: option<f64>,
+        seed: option<u64>,
+    }
+    resource bayesian-bradley-terry-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-bayesian-bradley-terry: func(params: bayesian-bradley-terry-params, data: borrow<pairwise-dataset>) -> result<bayesian-bradley-terry-model, error>;
+    fit-warm-bayesian-bradley-terry: func(params: bayesian-bradley-terry-params, data: borrow<pairwise-dataset>, init: borrow<bayesian-bradley-terry-model>) -> result<bayesian-bradley-terry-model, error>;
+    load-bayesian-bradley-terry: func(state: string) -> result<bayesian-bradley-terry-model, error>;
+
+    record colley-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource colley-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-colley: func(params: colley-params, data: borrow<pairwise-dataset>) -> result<colley-model, error>;
+    fit-warm-colley: func(params: colley-params, data: borrow<pairwise-dataset>, init: borrow<colley-model>) -> result<colley-model, error>;
+    load-colley: func(state: string) -> result<colley-model, error>;
+
+    record massey-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource massey-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-massey: func(params: massey-params, data: borrow<pairwise-dataset>) -> result<massey-model, error>;
+    fit-warm-massey: func(params: massey-params, data: borrow<pairwise-dataset>, init: borrow<massey-model>) -> result<massey-model, error>;
+    load-massey: func(state: string) -> result<massey-model, error>;
+
+    record keener-params {
+        skew: option<bool>,
+        normalize-games: option<bool>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource keener-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-keener: func(params: keener-params, data: borrow<pairwise-dataset>) -> result<keener-model, error>;
+    fit-warm-keener: func(params: keener-params, data: borrow<pairwise-dataset>, init: borrow<keener-model>) -> result<keener-model, error>;
+    load-keener: func(state: string) -> result<keener-model, error>;
+
+    record i-lsr-params {
+        outer: option<u32>,
+        inner-steps: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource i-lsr-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-i-lsr: func(params: i-lsr-params, data: borrow<pairwise-dataset>) -> result<i-lsr-model, error>;
+    fit-warm-i-lsr: func(params: i-lsr-params, data: borrow<pairwise-dataset>, init: borrow<i-lsr-model>) -> result<i-lsr-model, error>;
+    load-i-lsr: func(state: string) -> result<i-lsr-model, error>;
+
+    record nash-averaging-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+        learning-rate: option<f64>,
+        anneal-every: option<u32>,
+    }
+    resource nash-averaging-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-nash-averaging: func(params: nash-averaging-params, data: borrow<pairwise-dataset>) -> result<nash-averaging-model, error>;
+    fit-warm-nash-averaging: func(params: nash-averaging-params, data: borrow<pairwise-dataset>, init: borrow<nash-averaging-model>) -> result<nash-averaging-model, error>;
+    load-nash-averaging: func(state: string) -> result<nash-averaging-model, error>;
+
+    record offense-defense-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource offense-defense-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-offense-defense: func(params: offense-defense-params, data: borrow<pairwise-dataset>) -> result<offense-defense-model, error>;
+    fit-warm-offense-defense: func(params: offense-defense-params, data: borrow<pairwise-dataset>, init: borrow<offense-defense-model>) -> result<offense-defense-model, error>;
+    load-offense-defense: func(state: string) -> result<offense-defense-model, error>;
+
+    record random-walker-params {
+        p: option<f64>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource random-walker-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-random-walker: func(params: random-walker-params, data: borrow<pairwise-dataset>) -> result<random-walker-model, error>;
+    fit-warm-random-walker: func(params: random-walker-params, data: borrow<pairwise-dataset>, init: borrow<random-walker-model>) -> result<random-walker-model, error>;
+    load-random-walker: func(state: string) -> result<random-walker-model, error>;
+
+    record rank-centrality-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource rank-centrality-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-rank-centrality: func(params: rank-centrality-params, data: borrow<pairwise-dataset>) -> result<rank-centrality-model, error>;
+    fit-warm-rank-centrality: func(params: rank-centrality-params, data: borrow<pairwise-dataset>, init: borrow<rank-centrality-model>) -> result<rank-centrality-model, error>;
+    load-rank-centrality: func(state: string) -> result<rank-centrality-model, error>;
+
+    record serial-rank-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+        seed: option<u64>,
+    }
+    resource serial-rank-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-serial-rank: func(params: serial-rank-params, data: borrow<pairwise-dataset>) -> result<serial-rank-model, error>;
+    fit-warm-serial-rank: func(params: serial-rank-params, data: borrow<pairwise-dataset>, init: borrow<serial-rank-model>) -> result<serial-rank-model, error>;
+    load-serial-rank: func(state: string) -> result<serial-rank-model, error>;
+
+    record thurstone-mosteller-params {
+        iterations: option<u32>,
+        tolerance: option<f64>,
+        pseudo-count: option<f64>,
+    }
+    resource thurstone-mosteller-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-thurstone-mosteller: func(params: thurstone-mosteller-params, data: borrow<pairwise-dataset>) -> result<thurstone-mosteller-model, error>;
+    fit-warm-thurstone-mosteller: func(params: thurstone-mosteller-params, data: borrow<pairwise-dataset>, init: borrow<thurstone-mosteller-model>) -> result<thurstone-mosteller-model, error>;
+    load-thurstone-mosteller: func(state: string) -> result<thurstone-mosteller-model, error>;
+
+    record whr-params {
+        w2: option<f64>,
+        prior-games: option<f64>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource whr-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-whr: func(params: whr-params, data: borrow<pairwise-dataset>) -> result<whr-model, error>;
+    fit-warm-whr: func(params: whr-params, data: borrow<pairwise-dataset>, init: borrow<whr-model>) -> result<whr-model, error>;
+    load-whr: func(state: string) -> result<whr-model, error>;
+
+    resource copeland-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-copeland: func(data: borrow<pairwise-dataset>) -> result<copeland-model, error>;
+    load-copeland: func(state: string) -> result<copeland-model, error>;
+
+    /// `bc-variant`: "inner" | "dist".
+    record blade-chest-params {
+        dims: option<u32>,
+        bc-variant: option<string>,
+        lr: option<f64>,
+        epochs: option<u32>,
+        l2: option<f64>,
+        init-scale: option<f64>,
+        seed: option<u64>,
+    }
+    resource blade-chest-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-blade-chest: func(params: blade-chest-params, data: borrow<pairwise-dataset>) -> result<blade-chest-model, error>;
+    fit-warm-blade-chest: func(params: blade-chest-params, data: borrow<pairwise-dataset>, init: borrow<blade-chest-model>) -> result<blade-chest-model, error>;
+    load-blade-chest: func(state: string) -> result<blade-chest-model, error>;
+
+    /// `distribution`: RUM noise distribution name.
+    record es-rum-params {
+        distribution: option<string>,
+        passes: option<u32>,
+        alpha: option<f64>,
+        gamma: option<f64>,
+        min-obs: option<u32>,
+        prior: option<u32>,
+        seed: option<u64>,
+    }
+    resource es-rum-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-es-rum: func(params: es-rum-params, data: borrow<pairwise-dataset>) -> result<es-rum-model, error>;
+    fit-warm-es-rum: func(params: es-rum-params, data: borrow<pairwise-dataset>, init: borrow<es-rum-model>) -> result<es-rum-model, error>;
+    load-es-rum: func(state: string) -> result<es-rum-model, error>;
+
+    /// `flow`: HodgeRank gradient-flow scaling name.
+    record hodge-rank-params {
+        flow: option<string>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource hodge-rank-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-hodge-rank: func(params: hodge-rank-params, data: borrow<pairwise-dataset>) -> result<hodge-rank-model, error>;
+    fit-warm-hodge-rank: func(params: hodge-rank-params, data: borrow<pairwise-dataset>, init: borrow<hodge-rank-model>) -> result<hodge-rank-model, error>;
+    load-hodge-rank: func(state: string) -> result<hodge-rank-model, error>;
+
+    /// `algo`: Kemeny solver name.
+    record kemeny-params {
+        passes: option<kemeny-passes>,
+        min-obs: option<u32>,
+        algo: option<string>,
+        seed: option<u64>,
+    }
+    resource kemeny-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-kemeny: func(params: kemeny-params, data: borrow<pairwise-dataset>) -> result<kemeny-model, error>;
+    fit-warm-kemeny: func(params: kemeny-params, data: borrow<pairwise-dataset>, init: borrow<kemeny-model>) -> result<kemeny-model, error>;
+    load-kemeny: func(state: string) -> result<kemeny-model, error>;
+
+    /// `estimator`: LSR estimator name.
+    record lsr-params {
+        steps: option<u32>,
+        estimator: option<string>,
+        seed: option<u64>,
+    }
+    resource lsr-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-lsr: func(params: lsr-params, data: borrow<pairwise-dataset>) -> result<lsr-model, error>;
+    fit-warm-lsr: func(params: lsr-params, data: borrow<pairwise-dataset>, init: borrow<lsr-model>) -> result<lsr-model, error>;
+    load-lsr: func(state: string) -> result<lsr-model, error>;
+
+    record covariate-bt-params {
+        features: list<tuple<string, list<f64>>>,
+        l2: option<f64>,
+        intercepts: option<bool>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource covariate-bt-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-covariate-bt: func(params: covariate-bt-params, data: borrow<pairwise-dataset>) -> result<covariate-bt-model, error>;
+    fit-warm-covariate-bt: func(params: covariate-bt-params, data: borrow<pairwise-dataset>, init: borrow<covariate-bt-model>) -> result<covariate-bt-model, error>;
+    load-covariate-bt: func(state: string) -> result<covariate-bt-model, error>;
+
+    /// `confidence`: Wilson interval confidence-level name.
+    record win-rate-params {
+        confidence: option<string>,
+    }
+    resource win-rate-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<pairwise-dataset>) -> result<_, error>;
+    }
+    init-win-rate: func(params: win-rate-params) -> win-rate-model;
+    fit-win-rate: func(params: win-rate-params, data: borrow<pairwise-dataset>) -> result<win-rate-model, error>;
+    load-win-rate: func(state: string) -> result<win-rate-model, error>;
+
+    record dueling-bandit-params {
+        policy: option<dueling-policy>,
+        seed: option<u64>,
+    }
+    resource dueling-bandit-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<pairwise-dataset>) -> result<_, error>;
+    }
+    init-dueling-bandit: func(params: dueling-bandit-params) -> dueling-bandit-model;
+    fit-dueling-bandit: func(params: dueling-bandit-params, data: borrow<pairwise-dataset>) -> result<dueling-bandit-model, error>;
+    load-dueling-bandit: func(state: string) -> result<dueling-bandit-model, error>;
 }
 
 interface rewards {
     use types.{error, scores-bulk};
-    use datasets.{rewards-dataset};
+    use datasets.{rewards-dataset, contextual-rewards-dataset};
 
     /// Arm-selection policy for the multi-armed bandit.
     variant bandit-policy {
@@ -328,6 +907,40 @@ interface rewards {
     init-bandit: func(params: bandit-params) -> bandit-model;
     fit-bandit: func(params: bandit-params, data: borrow<rewards-dataset>) -> result<bandit-model, error>;
     load-bandit: func(state: string) -> result<bandit-model, error>;
+
+    record sliding-window-ucb-params {
+        window: option<u32>,
+        exploration: option<f64>,
+    }
+    resource sliding-window-ucb-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<rewards-dataset>) -> result<_, error>;
+    }
+    init-sliding-window-ucb: func(params: sliding-window-ucb-params) -> sliding-window-ucb-model;
+    fit-sliding-window-ucb: func(params: sliding-window-ucb-params, data: borrow<rewards-dataset>) -> result<sliding-window-ucb-model, error>;
+    load-sliding-window-ucb: func(state: string) -> result<sliding-window-ucb-model, error>;
+
+    record lin-ucb-params {
+        alpha: option<f64>,
+        ridge: option<f64>,
+    }
+    resource lin-ucb-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<contextual-rewards-dataset>) -> result<_, error>;
+    }
+    init-lin-ucb: func(params: lin-ucb-params) -> lin-ucb-model;
+    fit-lin-ucb: func(params: lin-ucb-params, data: borrow<contextual-rewards-dataset>) -> result<lin-ucb-model, error>;
+    load-lin-ucb: func(state: string) -> result<lin-ucb-model, error>;
 }
 
 interface matchups {
@@ -394,7 +1007,7 @@ interface annotated {
 }
 
 interface rankings {
-    use types.{error, scores-bulk};
+    use types.{error, scores-bulk, kemeny-passes};
     use datasets.{rankings-dataset};
 
     record plackett-luce-params {
@@ -414,14 +1027,82 @@ interface rankings {
     fit-plackett-luce: func(params: plackett-luce-params, data: borrow<rankings-dataset>) -> result<plackett-luce-model, error>;
     fit-warm-plackett-luce: func(params: plackett-luce-params, data: borrow<rankings-dataset>, init: borrow<plackett-luce-model>) -> result<plackett-luce-model, error>;
     load-plackett-luce: func(state: string) -> result<plackett-luce-model, error>;
+
+    resource footrule-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-footrule: func(data: borrow<rankings-dataset>) -> result<footrule-model, error>;
+    load-footrule: func(state: string) -> result<footrule-model, error>;
+
+    record mallows-params {
+        passes: option<kemeny-passes>,
+        seed: option<u64>,
+    }
+    resource mallows-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-mallows: func(params: mallows-params, data: borrow<rankings-dataset>) -> result<mallows-model, error>;
+    fit-warm-mallows: func(params: mallows-params, data: borrow<rankings-dataset>, init: borrow<mallows-model>) -> result<mallows-model, error>;
+    load-mallows: func(state: string) -> result<mallows-model, error>;
+
+    record mc4-params {
+        damping: option<f64>,
+        iterations: option<u32>,
+        tolerance: option<f64>,
+    }
+    resource mc4-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-mc4: func(params: mc4-params, data: borrow<rankings-dataset>) -> result<mc4-model, error>;
+    fit-warm-mc4: func(params: mc4-params, data: borrow<rankings-dataset>, init: borrow<mc4-model>) -> result<mc4-model, error>;
+    load-mc4: func(state: string) -> result<mc4-model, error>;
 }
 
 interface trajectories {
     use types.{error, scores-bulk};
     use datasets.{trajectories-dataset};
 
+    /// Pooling granularity for behavior cloning: `per-state` carries the
+    /// substring separator char.
+    variant granularity {
+        global,
+        per-state(char),
+    }
+
+    /// Significance-test toggle for value comparison: `on` carries the
+    /// permutation count.
+    variant pairwise-tests {
+        off,
+        on(u32),
+    }
+
+    /// Outlier clipping for Monte-Carlo value: `percentile` carries the
+    /// two-sided fraction.
+    variant winsorize {
+        off,
+        percentile(f64),
+    }
+
     record mc-value-params {
         gamma: option<f64>,
+        visit: option<string>,
+        aggregate: option<string>,
+        winsorize: option<winsorize>,
         min-observations: option<u32>,
     }
 
@@ -437,6 +1118,65 @@ interface trajectories {
     fit-mc-value: func(params: mc-value-params, data: borrow<trajectories-dataset>) -> result<mc-value-model, error>;
     fit-warm-mc-value: func(params: mc-value-params, data: borrow<trajectories-dataset>, init: borrow<mc-value-model>) -> result<mc-value-model, error>;
     load-mc-value: func(state: string) -> result<mc-value-model, error>;
+
+    /// `granularity`: "global" or per-state; `smoothing` is additive.
+    record behavior-cloning-params {
+        granularity: option<granularity>,
+        smoothing: option<f64>,
+    }
+    resource behavior-cloning-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-behavior-cloning: func(params: behavior-cloning-params, data: borrow<trajectories-dataset>) -> result<behavior-cloning-model, error>;
+    fit-warm-behavior-cloning: func(params: behavior-cloning-params, data: borrow<trajectories-dataset>, init: borrow<behavior-cloning-model>) -> result<behavior-cloning-model, error>;
+    load-behavior-cloning: func(state: string) -> result<behavior-cloning-model, error>;
+
+    /// `visit`: "first" | "every"; `method`: resampling scheme.
+    record value-compare-params {
+        gamma: option<f64>,
+        visit: option<string>,
+        replicates: option<u32>,
+        method: option<string>,
+        credible: option<f64>,
+        pairwise: option<pairwise-tests>,
+        min-observations: option<u32>,
+        seed: option<u64>,
+    }
+    resource value-compare-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+    }
+    fit-value-compare: func(params: value-compare-params, data: borrow<trajectories-dataset>) -> result<value-compare-model, error>;
+    fit-warm-value-compare: func(params: value-compare-params, data: borrow<trajectories-dataset>, init: borrow<value-compare-model>) -> result<value-compare-model, error>;
+    load-value-compare: func(state: string) -> result<value-compare-model, error>;
+
+    record td-value-params {
+        alpha: option<f64>,
+        gamma: option<f64>,
+        passes: option<u32>,
+        initial-value: option<f64>,
+    }
+    resource td-value-model {
+        algorithm: func() -> string;
+        sorted-scores: func() -> list<tuple<string, f64>>;
+        score: func(name: string) -> option<f64>;
+        top: func(k: u32) -> list<tuple<string, f64>>;
+        scores-bulk: func() -> scores-bulk;
+        save-state: func() -> result<string, error>;
+        update: func(data: borrow<trajectories-dataset>) -> result<_, error>;
+    }
+    init-td-value: func(params: td-value-params) -> td-value-model;
+    fit-td-value: func(params: td-value-params, data: borrow<trajectories-dataset>) -> result<td-value-model, error>;
+    load-td-value: func(state: string) -> result<td-value-model, error>;
 }
 
 interface functions {

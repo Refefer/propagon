@@ -108,6 +108,8 @@ name = "propagon-wasm"
 version = "2.0.0-alpha.1"
 dependencies = [
  "propagon",
+ "serde",
+ "serde_json",
  "wit-bindgen-rt",
 ]
 
