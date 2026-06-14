@@ -4,10 +4,20 @@
 # also runs the same MSRV check as CI. The fast lint / doc subset lives in
 # `.githooks/pre-commit`.
 #
+# Client sub-workspaces (clients/python, clients/wasm) have their own CI
+# workflows; this hook mirrors them locally, but only when the push touches
+# their paths AND the needed tooling is present — otherwise it skips with a
+# note (the same graceful-skip policy as the MSRV / cargo-audit checks).
+#
 # Install once per clone:  git config core.hooksPath .githooks
 # Bypass (use sparingly):  git push --no-verify
 
 set -euo pipefail
+
+# Capture the ref updates git feeds on stdin (each line:
+# "<local ref> <local oid> <remote ref> <remote oid>") before anything else
+# consumes them, so we can tell which paths the push actually changes.
+PUSH_REFS=$(cat || true)
 
 HOOKS_PATH=$(git config --get core.hooksPath || true)
 printf '\n\033[1m[pre-push]\033[0m active hooks path: %s\n' "${HOOKS_PATH:-<unset>}"
@@ -22,6 +32,33 @@ step() {
     printf '\n\033[1m[pre-push]\033[0m %s\n' "$*"
 }
 
+skip() {
+    printf '            %s\n' "$*" >&2
+}
+
+# Paths changed across everything being pushed (union over all updated refs).
+changed_paths() {
+    local zero="0000000000000000000000000000000000000000"
+    local _lref lsha _rref rsha base
+    printf '%s\n' "$PUSH_REFS" | while read -r _lref lsha _rref rsha; do
+        [ -z "${lsha:-}" ] && continue
+        [ "$lsha" = "$zero" ] && continue # branch deletion: nothing to test
+        if [ "$rsha" = "$zero" ]; then
+            # New remote branch: diff against where it forks from master.
+            base=$(git merge-base origin/master "$lsha" 2>/dev/null || true)
+            [ -z "$base" ] && continue
+        else
+            base="$rsha"
+        fi
+        git diff --name-only "$base" "$lsha" 2>/dev/null || true
+    done | sort -u
+}
+
+CHANGED=$(changed_paths)
+touches() { printf '%s\n' "$CHANGED" | grep -q "$1"; }
+
+# --- core workspace gate ----------------------------------------------------
+
 step 'cargo test --all-features --all-targets'
 cargo test --all-features --all-targets
 
@@ -33,11 +70,11 @@ cargo check --no-default-features
 
 if ! command -v rustup >/dev/null 2>&1; then
     printf '\n\033[1m[pre-push]\033[0m rustup not installed; skipping local MSRV check.\n' >&2
-    printf '            GitHub CI still runs Rust %s.\n' "$PACKAGE_RUST_VERSION" >&2
+    skip "GitHub CI still runs Rust $PACKAGE_RUST_VERSION."
 elif ! rustup toolchain list | grep -Eq "^${PACKAGE_RUST_VERSION//./\\.}(-|[[:space:]])"; then
     printf '\n\033[1m[pre-push]\033[0m Rust %s toolchain not installed; skipping local MSRV check.\n' "$PACKAGE_RUST_VERSION" >&2
-    printf '            install with: rustup toolchain install %s\n' "$PACKAGE_RUST_VERSION" >&2
-    printf '            GitHub CI still runs Rust %s.\n' "$PACKAGE_RUST_VERSION" >&2
+    skip "install with: rustup toolchain install $PACKAGE_RUST_VERSION"
+    skip "GitHub CI still runs Rust $PACKAGE_RUST_VERSION."
 else
     step "cargo +$PACKAGE_RUST_VERSION check --all-features"
     cargo "+$PACKAGE_RUST_VERSION" check --all-features
@@ -45,9 +82,51 @@ fi
 
 if ! command -v cargo-audit >/dev/null 2>&1; then
     printf '\n\033[1m[pre-push]\033[0m cargo-audit not installed.\n' >&2
-    printf '            install with: cargo install cargo-audit --locked\n' >&2
+    skip "install with: cargo install cargo-audit --locked"
     exit 1
 fi
 
 step 'cargo audit'
 cargo audit
+
+# --- client gates (only when their paths change) ----------------------------
+# Each mirrors the client's CI workflow. Tooling absent -> skip with a note;
+# tests failing -> abort the push.
+
+if touches '^clients/python/'; then
+    step 'clients/python: maturin develop + pytest'
+    if [ ! -d clients/python/.venv ]; then
+        skip "no clients/python/.venv; skipping (python -m venv clients/python/.venv"
+        skip "  && clients/python/.venv/bin/pip install maturin pytest)"
+    else
+        (
+            cd clients/python
+            set +u
+            # shellcheck disable=SC1091
+            source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
+            set -u
+            if ! command -v maturin >/dev/null 2>&1 || ! command -v pytest >/dev/null 2>&1; then
+                skip "maturin/pytest not in .venv; skipping (pip install maturin pytest)"
+                exit 0
+            fi
+            maturin develop
+            pytest -q
+        )
+    fi
+fi
+
+if touches '^clients/wasm/'; then
+    step 'clients/wasm: cargo component build + vitest'
+    if ! command -v cargo-component >/dev/null 2>&1; then
+        skip "cargo-component not installed; skipping (cargo install cargo-component --locked)"
+    elif ! command -v npm >/dev/null 2>&1; then
+        skip "npm not installed; skipping clients/wasm checks"
+    else
+        (
+            cd clients/wasm
+            [ -d node_modules ] || npm install
+            npm run build
+            npm test
+        )
+    fi
+fi
